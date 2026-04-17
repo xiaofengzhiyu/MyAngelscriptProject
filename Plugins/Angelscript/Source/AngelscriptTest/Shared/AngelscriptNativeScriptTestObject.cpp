@@ -83,6 +83,11 @@ void UAngelscriptNativeScriptTestObject::SetPreciseValueFromDelegate(float Value
 	PreciseValue = Value;
 }
 
+void UAngelscriptNativeScriptTestObject::SetLargeCountFromDelegate(int32 Value)
+{
+	LargeCount = Value;
+}
+
 float UAngelscriptNativeScriptTestObject::GetPreciseValueFromDelegate() const
 {
 	return static_cast<float>(PreciseValue);

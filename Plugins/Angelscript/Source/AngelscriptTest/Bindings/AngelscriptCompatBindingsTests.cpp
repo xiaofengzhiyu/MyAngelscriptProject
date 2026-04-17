@@ -2,6 +2,10 @@
 #include "../Shared/AngelscriptTestMacros.h"
 #include "../Shared/AngelscriptTestEngineHelper.h"
 
+#include "Components/InputComponent.h"
+#include "Misc/Guid.h"
+#include "Misc/ScopeExit.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
@@ -12,8 +16,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptObjectCastNullAndInterfaceCompatBindingsTest,
+	"Angelscript.TestModule.Bindings.ObjectCastNullAndInterfaceCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptObjectEditorOnlyBindingsTest,
 	"Angelscript.TestModule.Bindings.ObjectEditorOnlyCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptObjectEditorOnlyParityBindingsTest,
+	"Angelscript.TestModule.Bindings.ObjectEditorOnlyParity",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -141,6 +155,156 @@ class UBindingCastComponent : UActorComponent
 	return bPassed;
 }
 
+bool FAngelscriptObjectCastNullAndInterfaceCompatBindingsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = false;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	asIScriptModule* NullModule = BuildModule(
+		*this,
+		Engine,
+		"ASObjectCastNullCompat",
+		TEXT(R"(
+int Entry()
+{
+	UObject NullObject = nullptr;
+	UPackage NullPackage = Cast<UPackage>(NullObject);
+
+	if (NullPackage != nullptr)
+		return 0;
+
+	return 1;
+}
+)"));
+	if (NullModule == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* NullFunction = GetFunctionByDecl(*this, *NullModule, TEXT("int Entry()"));
+	if (NullFunction == nullptr)
+	{
+		return false;
+	}
+
+	int32 NullResult = 0;
+	if (!ExecuteIntFunction(*this, Engine, *NullFunction, NullResult))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("Cast<T> should return null when the source object handle is null"), NullResult, 1))
+	{
+		return false;
+	}
+
+	const bool bAnnotatedCompiled = CompileAnnotatedModuleFromMemory(
+		&Engine,
+		TEXT("ASObjectCastInterfaceCompat"),
+		TEXT("ASObjectCastInterfaceCompat.as"),
+		TEXT(R"(
+UINTERFACE()
+interface UIDamageableCastCompat
+{
+	void Touch();
+}
+
+UCLASS()
+class UBindingObjectCastInterfaceImpl : UObject, UIDamageableCastCompat
+{
+	UFUNCTION()
+	void Touch() {}
+
+	UFUNCTION()
+	int ProbeSelfCast()
+	{
+		UObject Self = this;
+		UIDamageableCastCompat Casted = Cast<UIDamageableCastCompat>(Self);
+		return Casted != nullptr ? 1 : 0;
+	}
+}
+
+UCLASS()
+class UBindingObjectCastInterfaceMiss : UObject
+{
+	UFUNCTION()
+	int ProbeSelfCast()
+	{
+		UObject Self = this;
+		UIDamageableCastCompat Casted = Cast<UIDamageableCastCompat>(Self);
+		return Casted == nullptr ? 1 : 0;
+	}
+}
+
+)"));
+	if (!TestTrue(TEXT("Compile annotated object/interface cast module should succeed"), bAnnotatedCompiled))
+	{
+		return false;
+	}
+
+	UClass* InterfaceClass = FindGeneratedClass(&Engine, TEXT("UIDamageableCastCompat"));
+	UClass* ImplementerClass = FindGeneratedClass(&Engine, TEXT("UBindingObjectCastInterfaceImpl"));
+	UClass* MissClass = FindGeneratedClass(&Engine, TEXT("UBindingObjectCastInterfaceMiss"));
+	if (!TestNotNull(TEXT("Generated interface class should exist"), InterfaceClass) ||
+		!TestNotNull(TEXT("Generated implementing object class should exist"), ImplementerClass) ||
+		!TestNotNull(TEXT("Generated non-implementing object class should exist"), MissClass))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("Implementing class should report the generated interface"), ImplementerClass->ImplementsInterface(InterfaceClass)))
+	{
+		return false;
+	}
+	if (!TestFalse(TEXT("Non-implementing class should not report the generated interface"), MissClass->ImplementsInterface(InterfaceClass)))
+	{
+		return false;
+	}
+
+	UFunction* ImplementerFunction = FindGeneratedFunction(ImplementerClass, TEXT("ProbeSelfCast"));
+	UFunction* MissFunction = FindGeneratedFunction(MissClass, TEXT("ProbeSelfCast"));
+	if (!TestNotNull(TEXT("Implementing object probe function should exist"), ImplementerFunction) ||
+		!TestNotNull(TEXT("Non-implementing object probe function should exist"), MissFunction))
+	{
+		return false;
+	}
+
+	UObject* ImplementerObject = NewObject<UObject>(GetTransientPackage(), ImplementerClass);
+	UObject* MissObject = NewObject<UObject>(GetTransientPackage(), MissClass);
+	if (!TestNotNull(TEXT("Implementing object instance should be created"), ImplementerObject) ||
+		!TestNotNull(TEXT("Non-implementing object instance should be created"), MissObject))
+	{
+		return false;
+	}
+
+	int32 ImplementerResult = 0;
+	if (!TestTrue(
+		TEXT("Implementing object cast probe should execute on the game thread"),
+		ExecuteGeneratedIntEventOnGameThread(&Engine, ImplementerObject, ImplementerFunction, ImplementerResult)))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("Cast<T> should return the same object when it implements the requested interface"), ImplementerResult, 1))
+	{
+		return false;
+	}
+
+	int32 MissResult = 0;
+	if (!TestTrue(
+		TEXT("Non-implementing object cast probe should execute on the game thread"),
+		ExecuteGeneratedIntEventOnGameThread(&Engine, MissObject, MissFunction, MissResult)))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("Cast<T> should return null when the object does not implement the requested interface"), MissResult, 1))
+	{
+		return false;
+	}
+
+	bPassed = true;
+	ASTEST_END_SHARE_CLEAN
+
+	return bPassed;
+}
+
 bool FAngelscriptObjectEditorOnlyBindingsTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -179,6 +343,106 @@ int Entry()
 	TestEqual(TEXT("UObject editor-only binding should behave as expected"), Result, 1);
 	ASTEST_END_SHARE
 
+	return true;
+}
+
+bool FAngelscriptObjectEditorOnlyParityBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	const FName NonEditorOnlyName(*FString::Printf(
+		TEXT("ASObjectEditorOnlyFalse_%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Digits)));
+	const FName EditorOnlyName(*FString::Printf(
+		TEXT("ASObjectEditorOnlyTrue_%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Digits)));
+
+	UInputComponent* NonEditorOnlyComponent = NewObject<UInputComponent>(GetTransientPackage(), NonEditorOnlyName, RF_Transient);
+	UInputComponent* EditorOnlyComponent = NewObject<UInputComponent>(GetTransientPackage(), EditorOnlyName, RF_Transient);
+	if (!TestNotNull(TEXT("Non-editor-only input component should be created"), NonEditorOnlyComponent) ||
+		!TestNotNull(TEXT("Editor-only input component should be created"), EditorOnlyComponent))
+	{
+		return false;
+	}
+
+	EditorOnlyComponent->bIsEditorOnly = true;
+
+	ON_SCOPE_EXIT
+	{
+		if (EditorOnlyComponent != nullptr)
+		{
+			EditorOnlyComponent->bIsEditorOnly = false;
+			EditorOnlyComponent->MarkAsGarbage();
+		}
+
+		if (NonEditorOnlyComponent != nullptr)
+		{
+			NonEditorOnlyComponent->MarkAsGarbage();
+		}
+	};
+
+	const bool bNativeNonEditorOnly = NonEditorOnlyComponent->IsEditorOnly();
+	const bool bNativeEditorOnly = EditorOnlyComponent->IsEditorOnly();
+	if (!TestFalse(TEXT("Default transient input component should remain non-editor-only"), bNativeNonEditorOnly) ||
+		!TestTrue(TEXT("Input component with bIsEditorOnly should report editor-only natively"), bNativeEditorOnly))
+	{
+		return false;
+	}
+
+	const FString ScriptSource = FString::Printf(
+		TEXT(R"(
+int Entry()
+{
+	UObject NonEditorOnly = FindObject("%s");
+	UObject EditorOnly = FindObject("%s");
+
+	if (NonEditorOnly == null)
+		return 100;
+	if (EditorOnly == null)
+		return 200;
+
+	int Result = 0;
+	if (NonEditorOnly.IsEditorOnly())
+		Result += 2;
+	if (EditorOnly.IsEditorOnly())
+		Result += 1;
+
+	return Result;
+}
+)"),
+		*NonEditorOnlyComponent->GetPathName().ReplaceCharWithEscapedChar(),
+		*EditorOnlyComponent->GetPathName().ReplaceCharWithEscapedChar());
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASObjectEditorOnlyParity",
+		ScriptSource);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	const int32 ExpectedResult = (bNativeNonEditorOnly ? 2 : 0) + (bNativeEditorOnly ? 1 : 0);
+	if (!TestEqual(TEXT("Script IsEditorOnly() should match native results for both transient components"), Result, ExpectedResult))
+	{
+		return false;
+	}
+
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 

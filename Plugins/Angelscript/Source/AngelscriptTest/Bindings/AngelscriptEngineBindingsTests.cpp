@@ -1,6 +1,8 @@
 #include "../Shared/AngelscriptTestUtilities.h"
 #include "../Shared/AngelscriptTestMacros.h"
 
+#include "Misc/ScopeExit.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
@@ -13,6 +15,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptFNameArrayCompatBindingsTest,
 	"Angelscript.TestModule.Bindings.FNameArrayCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptFNameArrayIndexWriteBackCompatBindingsTest,
+	"Angelscript.TestModule.Bindings.FNameArrayIndexWriteBackCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -154,6 +161,77 @@ int Entry()
 	}
 
 	TestEqual(TEXT("FName arrays should support copy, index, alias, and add operations"), Result, 1);
+	ASTEST_END_SHARE
+
+	return true;
+}
+
+bool FAngelscriptFNameArrayIndexWriteBackCompatBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(TEXT("ASFNameArrayIndexWriteBackCompat"));
+	};
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASFNameArrayIndexWriteBackCompat",
+		TEXT(R"(
+int Entry()
+{
+	FName[] AliasValues;
+	AliasValues.Add(n"Alpha");
+	AliasValues.Add(n"Beta");
+
+	TArray<FName> ExplicitValues;
+	ExplicitValues.Add(n"Gamma");
+
+	FName Copy = AliasValues[0];
+
+	AliasValues[0] = n"Omega";
+	ExplicitValues[0] = n"Sigma";
+
+	if (!(Copy == n"Alpha"))
+		return 10;
+	if (AliasValues.Num() != 2)
+		return 20;
+	if (ExplicitValues.Num() != 1)
+		return 30;
+	if (!(AliasValues[0] == n"Omega"))
+		return 40;
+	if (!(AliasValues[1] == n"Beta"))
+		return 50;
+	if (!(ExplicitValues[0] == n"Sigma"))
+		return 60;
+	if (!AliasValues.Contains(n"Omega") || AliasValues.Contains(n"Alpha"))
+		return 70;
+	if (!ExplicitValues.Contains(n"Sigma") || ExplicitValues.Contains(n"Gamma"))
+		return 80;
+
+	return 1;
+}
+)"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("FName arrays should write back through opIndex without aliasing copied values"), Result, 1);
 	ASTEST_END_SHARE
 
 	return true;

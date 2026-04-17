@@ -54,6 +54,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptScenarioInterfaceInheritedMethodDispatchChildSurfaceIncludesParentMethodsTest,
+	"Angelscript.TestModule.Interface.InheritedMethodDispatch.ChildSurfaceIncludesParentMethods",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceMultipleInheritanceChainTest,
 	"Angelscript.TestModule.Interface.MultipleInheritanceChain",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -585,6 +590,206 @@ class AScenarioInterfaceInheritedDispatch : AActor, UIKillableDispatch
 	TestEqual(TEXT("Child interface cast should succeed for inherited script interface"), ChildCastWorked, 1);
 	TestEqual(TEXT("Parent interface method should dispatch through inherited interface reference"), ParentResult, 3);
 	TestEqual(TEXT("Child interface method should dispatch through child interface reference"), ChildResult, 5);
+	ASTEST_END_SHARE_FRESH
+
+	return true;
+}
+
+bool FAngelscriptScenarioInterfaceInheritedMethodDispatchChildSurfaceIncludesParentMethodsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
+	ASTEST_BEGIN_SHARE_FRESH
+	static const FName ChildModuleName(TEXT("ScenarioInterfaceInheritedDispatchChildSurface"));
+	static const FName LeafModuleName(TEXT("ScenarioInterfaceMultiDispatchChildSurface"));
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(*LeafModuleName.ToString());
+		Engine.DiscardModule(*ChildModuleName.ToString());
+		ResetSharedCloneEngine(Engine);
+	};
+
+	UClass* ChildScriptClass = CompileScriptModule(
+		*this,
+		Engine,
+		ChildModuleName,
+		TEXT("ScenarioInterfaceInheritedDispatchChildSurface.as"),
+		TEXT(R"AS(
+UINTERFACE()
+interface UIDamageableDispatchChildSurface
+{
+	int GetDamageLevel();
+}
+
+UINTERFACE()
+interface UIKillableDispatchChildSurface : UIDamageableDispatchChildSurface
+{
+	int GetKillCount();
+}
+
+UCLASS()
+class AScenarioInterfaceInheritedDispatchChildSurface : AActor, UIKillableDispatchChildSurface
+{
+	UPROPERTY()
+	int ChildCastWorked = 0;
+
+	UPROPERTY()
+	int ChildParentResult = 0;
+
+	UPROPERTY()
+	int ChildResult = 0;
+
+	UFUNCTION()
+	int GetDamageLevel()
+	{
+		return 3;
+	}
+
+	UFUNCTION()
+	int GetKillCount()
+	{
+		return 5;
+	}
+
+	UFUNCTION(BlueprintOverride)
+	void BeginPlay()
+	{
+		UObject Self = this;
+		UIKillableDispatchChildSurface ChildRef = Cast<UIKillableDispatchChildSurface>(Self);
+		if (ChildRef != nullptr)
+		{
+			ChildCastWorked = 1;
+			ChildParentResult = ChildRef.GetDamageLevel();
+			ChildResult = ChildRef.GetKillCount();
+		}
+	}
+}
+)AS"),
+		TEXT("AScenarioInterfaceInheritedDispatchChildSurface"));
+	if (ChildScriptClass == nullptr)
+	{
+		return false;
+	}
+
+	UClass* LeafScriptClass = CompileScriptModule(
+		*this,
+		Engine,
+		LeafModuleName,
+		TEXT("ScenarioInterfaceMultiDispatchChildSurface.as"),
+		TEXT(R"AS(
+UINTERFACE()
+interface UIBaseDispatchChainChildSurface
+{
+	int BaseValue();
+}
+
+UINTERFACE()
+interface UIMidDispatchChainChildSurface : UIBaseDispatchChainChildSurface
+{
+	int MidValue();
+}
+
+UINTERFACE()
+interface UILeafDispatchChainChildSurface : UIMidDispatchChainChildSurface
+{
+	int LeafValue();
+}
+
+UCLASS()
+class AScenarioInterfaceMultiDispatchChildSurface : AActor, UILeafDispatchChainChildSurface
+{
+	UPROPERTY()
+	int LeafCastWorked = 0;
+
+	UPROPERTY()
+	int LeafBaseResult = 0;
+
+	UPROPERTY()
+	int LeafMidResult = 0;
+
+	UPROPERTY()
+	int LeafResult = 0;
+
+	UFUNCTION()
+	int BaseValue()
+	{
+		return 2;
+	}
+
+	UFUNCTION()
+	int MidValue()
+	{
+		return 4;
+	}
+
+	UFUNCTION()
+	int LeafValue()
+	{
+		return 8;
+	}
+
+	UFUNCTION(BlueprintOverride)
+	void BeginPlay()
+	{
+		UObject Self = this;
+		UILeafDispatchChainChildSurface LeafRef = Cast<UILeafDispatchChainChildSurface>(Self);
+		if (LeafRef != nullptr)
+		{
+			LeafCastWorked = 1;
+			LeafBaseResult = LeafRef.BaseValue();
+			LeafMidResult = LeafRef.MidValue();
+			LeafResult = LeafRef.LeafValue();
+		}
+	}
+}
+)AS"),
+		TEXT("AScenarioInterfaceMultiDispatchChildSurface"));
+	if (LeafScriptClass == nullptr)
+	{
+		return false;
+	}
+
+	FActorTestSpawner Spawner;
+	Spawner.InitializeGameSubsystems();
+
+	AActor* ChildActor = SpawnScriptActor(*this, Spawner, ChildScriptClass);
+	AActor* LeafActor = SpawnScriptActor(*this, Spawner, LeafScriptClass);
+	if (ChildActor == nullptr || LeafActor == nullptr)
+	{
+		return false;
+	}
+
+	BeginPlayActor(*ChildActor);
+	BeginPlayActor(*LeafActor);
+
+	int32 ChildCastWorked = 0;
+	int32 ChildParentResult = 0;
+	int32 ChildResult = 0;
+	if (!ReadPropertyValue<FIntProperty>(*this, ChildActor, TEXT("ChildCastWorked"), ChildCastWorked)
+		|| !ReadPropertyValue<FIntProperty>(*this, ChildActor, TEXT("ChildParentResult"), ChildParentResult)
+		|| !ReadPropertyValue<FIntProperty>(*this, ChildActor, TEXT("ChildResult"), ChildResult))
+	{
+		return false;
+	}
+
+	int32 LeafCastWorked = 0;
+	int32 LeafBaseResult = 0;
+	int32 LeafMidResult = 0;
+	int32 LeafResult = 0;
+	if (!ReadPropertyValue<FIntProperty>(*this, LeafActor, TEXT("LeafCastWorked"), LeafCastWorked)
+		|| !ReadPropertyValue<FIntProperty>(*this, LeafActor, TEXT("LeafBaseResult"), LeafBaseResult)
+		|| !ReadPropertyValue<FIntProperty>(*this, LeafActor, TEXT("LeafMidResult"), LeafMidResult)
+		|| !ReadPropertyValue<FIntProperty>(*this, LeafActor, TEXT("LeafResult"), LeafResult))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Most-derived child interface cast should succeed"), ChildCastWorked, 1);
+	TestEqual(TEXT("Child interface ref should inherit parent methods"), ChildParentResult, 3);
+	TestEqual(TEXT("Child interface ref should retain child methods"), ChildResult, 5);
+	TestEqual(TEXT("Most-derived leaf interface cast should succeed"), LeafCastWorked, 1);
+	TestEqual(TEXT("Leaf interface ref should inherit base methods"), LeafBaseResult, 2);
+	TestEqual(TEXT("Leaf interface ref should inherit mid methods"), LeafMidResult, 4);
+	TestEqual(TEXT("Leaf interface ref should retain leaf methods"), LeafResult, 8);
 	ASTEST_END_SHARE_FRESH
 
 	return true;

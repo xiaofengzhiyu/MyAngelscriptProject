@@ -1,6 +1,9 @@
 #include "Angelscript/AngelscriptTestSupport.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "Core/AngelscriptSettings.h"
+#include "Misc/ScopeExit.h"
+
 // Test Layer: Runtime Integration
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -8,6 +11,132 @@ using namespace AngelscriptTestSupport;
 
 namespace
 {
+	FString BuildAutoInferenceMatrixScript(const bool bFloatUsesFloat64)
+	{
+		return bFloatUsesFloat64
+			? TEXT(R"AS(
+enum EKind
+{
+	A,
+	B
+}
+
+int Which(int Value) { return 1; }
+int Which(double Value) { return 2; }
+int Which(EKind Value) { return 3; }
+
+int Run()
+{
+	auto IntValue = 42;
+	auto FloatValue = 1.5;
+	auto EnumValue = EKind::B;
+	return Which(IntValue) * 100 + Which(FloatValue) * 10 + Which(EnumValue);
+}
+)AS")
+			: TEXT(R"AS(
+enum EKind
+{
+	A,
+	B
+}
+
+int Which(int Value) { return 1; }
+int Which(float Value) { return 2; }
+int Which(EKind Value) { return 3; }
+
+int Run()
+{
+	auto IntValue = 42;
+	auto FloatValue = 1.5f;
+	auto EnumValue = EKind::B;
+	return Which(IntValue) * 100 + Which(FloatValue) * 10 + Which(EnumValue);
+}
+)AS");
+	}
+
+	FString BuildImplicitCastNegativeAndParamWideningScript(const bool bFloatUsesFloat64)
+	{
+		return bFloatUsesFloat64
+			? TEXT(R"AS(
+double Accept(double Value)
+{
+	return Value;
+}
+
+int Run()
+{
+	int Negative = -7;
+	double Assigned = Negative;
+	double Forwarded = Accept(Negative);
+	return (Assigned < 0.0 ? 1 : 0) * 100 + (int(Assigned) == -7 ? 1 : 0) * 10 + (int(Forwarded) == -7 ? 1 : 0);
+}
+)AS")
+			: TEXT(R"AS(
+float Accept(float Value)
+{
+	return Value;
+}
+
+int Run()
+{
+	int Negative = -7;
+	float Assigned = Negative;
+	float Forwarded = Accept(Negative);
+	return (Assigned < 0.0f ? 1 : 0) * 100 + (int(Assigned) == -7 ? 1 : 0) * 10 + (int(Forwarded) == -7 ? 1 : 0);
+}
+)AS");
+	}
+
+	FString BuildNegativeAndFractionalFloatScript(const bool bFloatUsesFloat64)
+	{
+		return bFloatUsesFloat64
+			? TEXT(R"AS(
+double Run()
+{
+	double A = -1.25;
+	double B = 0.5;
+	double C = 2.0;
+	return (A + B) * C;
+}
+)AS")
+			: TEXT(R"AS(
+float Run()
+{
+	float A = -1.25f;
+	float B = 0.5f;
+	float C = 2.0f;
+	return (A + B) * C;
+}
+)AS");
+	}
+
+	FString BuildFloatConfigurationModesScript(const bool bFloatUsesFloat64)
+	{
+		return bFloatUsesFloat64
+			? TEXT(R"AS(
+float Run()
+{
+	float A = -1.25;
+	float B = 2.5;
+	return A + B;
+}
+)AS")
+			: TEXT(R"AS(
+float Run()
+{
+	float A = -1.25f;
+	float B = 2.5f;
+	return A + B;
+}
+)AS");
+	}
+
+	asIScriptFunction* FindFunctionByDeclExact(asIScriptModule& Module, const FString& Declaration)
+	{
+		FTCHARToUTF8 DeclarationUtf8(*Declaration);
+		return Module.GetFunctionByDecl(DeclarationUtf8.Get());
+	}
+
 	bool ReadExpectedFloatResult(FAutomationTestBase& Test, FAngelscriptEngine& Engine, asIScriptFunction& Function, double ExpectedValue)
 	{
 		asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
@@ -100,6 +229,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Angelscript.Types.Bool",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeBoolLogicMatrixTest,
+	"Angelscript.TestModule.Angelscript.Types.Bool.LogicMatrix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptTypeBoolTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -116,6 +250,22 @@ bool FAngelscriptTypeBoolTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+bool FAngelscriptTypeBoolLogicMatrixTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(Engine, "ASTypeBoolLogicMatrix",
+		TEXT("int Run() { bool A = true; bool B = false; return (A && B ? 1000 : 0) + (A || B ? 100 : 0) + (!A ? 10 : 0) + (!B ? 1 : 0); }"),
+		TEXT("int Run()"), Result);
+
+	TestEqual(TEXT("Bool logic matrix should preserve &&, ||, and ! semantics across the false path"), Result, 101);
+
+	ASTEST_END_SHARE
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTypeFloatTest,
 	"Angelscript.TestModule.Angelscript.Types.Float",
@@ -124,6 +274,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTypeFloatDebuggerFormattingTest,
 	"Angelscript.TestModule.Angelscript.Types.FloatDebuggerFormatting",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeFloatNegativeAndFractionalMatrixTest,
+	"Angelscript.TestModule.Angelscript.Types.Float.NegativeAndFractionalMatrix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeFloatConfigurationModesTest,
+	"Angelscript.TestModule.Angelscript.Types.Float.ConfigurationModes",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptTypeFloatTest::RunTest(const FString& Parameters)
@@ -159,6 +319,151 @@ bool FAngelscriptTypeFloatTest::RunTest(const FString& Parameters)
 	bPassed = ReadExpectedFloatResult(*this, Engine, *Function, 6.28);
 
 	ASTEST_END_SHARE
+	return bPassed;
+}
+
+bool FAngelscriptTypeFloatConfigurationModesTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+	ASTEST_BEGIN_FULL
+
+	UAngelscriptSettings* Settings = GetMutableDefault<UAngelscriptSettings>();
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should access mutable angelscript settings"), Settings))
+	{
+		return false;
+	}
+
+	const bool PreviousFloatIsFloat64 = Settings->bScriptFloatIsFloat64;
+	const bool PreviousDeprecateDoubleType = Settings->bDeprecateDoubleType;
+	ON_SCOPE_EXIT
+	{
+		Settings->bScriptFloatIsFloat64 = PreviousFloatIsFloat64;
+		Settings->bDeprecateDoubleType = PreviousDeprecateDoubleType;
+	};
+
+	auto ApplyFloatSettings = [Settings](const bool bFloatUsesFloat64)
+	{
+		Settings->bScriptFloatIsFloat64 = bFloatUsesFloat64;
+		Settings->bDeprecateDoubleType = false;
+	};
+
+	const FAngelscriptEngineConfig Config;
+	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
+
+	ApplyFloatSettings(false);
+	TUniquePtr<FAngelscriptEngine> Float32Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should create a float32 testing engine"), Float32Engine.Get()))
+	{
+		return false;
+	}
+
+	asIScriptEngine* AmbientScriptEngine = Engine.GetScriptEngine();
+	asIScriptEngine* Float32ScriptEngine = Float32Engine->GetScriptEngine();
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should expose the ambient full engine"), AmbientScriptEngine)
+		|| !TestNotNull(TEXT("Types.Float.ConfigurationModes should expose a float32 script engine"), Float32ScriptEngine))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should force the float32 testing engine into Full mode"),
+		Float32Engine->GetCreationMode(),
+		EAngelscriptEngineCreationMode::Full);
+	bPassed &= TestNull(
+		TEXT("Types.Float.ConfigurationModes should not attach a source engine in explicit Full mode for the float32 engine"),
+		Float32Engine->GetSourceEngine());
+	bPassed &= TestTrue(
+		TEXT("Types.Float.ConfigurationModes should create a dedicated float32 script engine instead of reusing the ambient full engine"),
+		Float32ScriptEngine != AmbientScriptEngine);
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should wire float32 mode to asEP_FLOAT_IS_FLOAT64=0"),
+		static_cast<int32>(Float32ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64)),
+		0);
+
+	asIScriptModule* Float32Module = BuildModule(*this, *Float32Engine, "ASTypeFloatConfigurationModes32", BuildFloatConfigurationModesScript(false));
+	if (Float32Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Float32Function = FindFunctionByDeclExact(*Float32Module, TEXT("float32 Run()"));
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should resolve float32 Run() in float32 mode"), Float32Function))
+	{
+		return false;
+	}
+
+	bPassed &= TestNull(
+		TEXT("Types.Float.ConfigurationModes should not resolve float64 Run() in float32 mode"),
+		FindFunctionByDeclExact(*Float32Module, TEXT("float64 Run()")));
+	bPassed &= ReadExpectedFloatResult(*this, *Float32Engine, *Float32Function, 1.25);
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should keep the float32 engine property stable after float32 compilation"),
+		static_cast<int32>(Float32ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64)),
+		0);
+
+	ApplyFloatSettings(true);
+	TUniquePtr<FAngelscriptEngine> Float64Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should create a float64 testing engine"), Float64Engine.Get()))
+	{
+		return false;
+	}
+
+	asIScriptEngine* Float64ScriptEngine = Float64Engine->GetScriptEngine();
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should expose a float64 script engine"), Float64ScriptEngine))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should force the float64 testing engine into Full mode"),
+		Float64Engine->GetCreationMode(),
+		EAngelscriptEngineCreationMode::Full);
+	bPassed &= TestNull(
+		TEXT("Types.Float.ConfigurationModes should not attach a source engine in explicit Full mode for the float64 engine"),
+		Float64Engine->GetSourceEngine());
+	bPassed &= TestTrue(
+		TEXT("Types.Float.ConfigurationModes should create a dedicated float64 script engine instead of reusing the ambient full engine"),
+		Float64ScriptEngine != AmbientScriptEngine);
+	bPassed &= TestTrue(
+		TEXT("Types.Float.ConfigurationModes should keep the float32 and float64 testing engines independent"),
+		Float32ScriptEngine != Float64ScriptEngine);
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should wire float64 mode to asEP_FLOAT_IS_FLOAT64=1"),
+		static_cast<int32>(Float64ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64)),
+		1);
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should keep the float32 engine property isolated after creating the float64 engine"),
+		static_cast<int32>(Float32ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64)),
+		0);
+	bPassed &= ReadExpectedFloatResult(*this, *Float32Engine, *Float32Function, 1.25);
+
+	asIScriptModule* Float64Module = BuildModule(*this, *Float64Engine, "ASTypeFloatConfigurationModes64", BuildFloatConfigurationModesScript(true));
+	if (Float64Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Float64Function = FindFunctionByDeclExact(*Float64Module, TEXT("float64 Run()"));
+	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should resolve float64 Run() in float64 mode"), Float64Function))
+	{
+		return false;
+	}
+
+	bPassed &= TestNull(
+		TEXT("Types.Float.ConfigurationModes should not resolve float32 Run() in float64 mode"),
+		FindFunctionByDeclExact(*Float64Module, TEXT("float32 Run()")));
+	bPassed &= ReadExpectedFloatResult(*this, *Float64Engine, *Float64Function, 1.25);
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should keep the float64 engine property stable after float64 compilation"),
+		static_cast<int32>(Float64ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64)),
+		1);
+	bPassed &= TestEqual(
+		TEXT("Types.Float.ConfigurationModes should keep the float32 engine property isolated after switching settings for the float64 engine"),
+		static_cast<int32>(Float32ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64)),
+		0);
+
+	ASTEST_END_FULL
 	return bPassed;
 }
 
@@ -204,9 +509,48 @@ bool FAngelscriptTypeFloatDebuggerFormattingTest::RunTest(const FString& Paramet
 	return bUsesScientificNotation;
 }
 
+bool FAngelscriptTypeFloatNegativeAndFractionalMatrixTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = false;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	if (!TestNotNull(TEXT("Types.Float.NegativeAndFractionalMatrix should expose a script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	const bool bFloatUsesFloat64 = ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64) != 0;
+	const FString Script = BuildNegativeAndFractionalFloatScript(bFloatUsesFloat64);
+	const FString Declaration = bFloatUsesFloat64 ? TEXT("double Run()") : TEXT("float Run()");
+
+	asIScriptModule* Module = BuildModule(*this, Engine, "ASTypeFloatNegativeAndFractionalMatrix", Script);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, Declaration);
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	bPassed = ReadExpectedFloatResult(*this, Engine, *Function, -1.5);
+
+	ASTEST_END_SHARE
+	return bPassed;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTypeInt8Test,
 	"Angelscript.TestModule.Angelscript.Types.Int8",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeInt8SignAndBoundsTest,
+	"Angelscript.TestModule.Angelscript.Types.Int8.SignAndBounds",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptTypeInt8Test::RunTest(const FString& Parameters)
@@ -220,6 +564,22 @@ bool FAngelscriptTypeInt8Test::RunTest(const FString& Parameters)
 		TEXT("int Run()"), Result);
 
 	TestEqual(TEXT("Int8 arithmetic should survive promotion back to int"), Result, 150);
+
+	ASTEST_END_SHARE
+	return true;
+}
+
+bool FAngelscriptTypeInt8SignAndBoundsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(Engine, "ASTypeInt8SignAndBounds",
+		TEXT("int Run() { int8 Negative = -1; int8 MinValue = -128; int8 MaxValue = 127; return (Negative < 0 ? 1000 : 0) + (int(Negative) == -1 ? 100 : 0) + (int(MinValue) == -128 ? 10 : 0) + (int(MaxValue) == 127 ? 1 : 0); }"),
+		TEXT("int Run()"), Result);
+
+	TestEqual(TEXT("Int8 negative literals and boundary promotions should preserve signed semantics"), Result, 1111);
 
 	ASTEST_END_SHARE
 	return true;
@@ -250,6 +610,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTypeEnumTest,
 	"Angelscript.TestModule.Angelscript.Types.Enum",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeEnumExplicitValueMatrixTest,
+	"Angelscript.TestModule.Angelscript.Types.Enum.ExplicitValueMatrix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptTypeEnumTest::RunTest(const FString& Parameters)
 {
@@ -266,10 +630,27 @@ bool FAngelscriptTypeEnumTest::RunTest(const FString& Parameters)
 	ASTEST_END_SHARE
 	return true;
 }
+bool FAngelscriptTypeEnumExplicitValueMatrixTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(Engine, "ASTypeEnumExplicitValueMatrix",
+		TEXT("enum Status { Negative = -4, Sparse = 20, SparsePlusOne = 21, AliasSparse = 20, FlagA = 1, FlagB = 4 } int Run() { return (int(Status::Sparse) + int(Status::SparsePlusOne) - int(Status::Negative)) * 100 + int(Status::AliasSparse) + (int(Status::FlagA) | int(Status::FlagB)); }"),
+		TEXT("int Run()"), Result);
+	TestEqual(TEXT("Explicit enum values should preserve negative, sparse, alias, and bitwise-composed constants"), Result, 4525);
+	ASTEST_END_SHARE
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTypeAutoTest,
 	"Angelscript.TestModule.Angelscript.Types.Auto",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeAutoInferenceMatrixTest,
+	"Angelscript.TestModule.Angelscript.Types.AutoInferenceMatrix",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptTypeAutoTest::RunTest(const FString& Parameters)
@@ -283,6 +664,37 @@ bool FAngelscriptTypeAutoTest::RunTest(const FString& Parameters)
 		TEXT("int Run()"), Result);
 
 	TestEqual(TEXT("Auto should infer integer literal types"), Result, 42);
+
+	ASTEST_END_SHARE
+	return true;
+}
+
+bool FAngelscriptTypeAutoInferenceMatrixTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	if (!TestNotNull(TEXT("Types.AutoInferenceMatrix should expose a script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	const bool bFloatUsesFloat64 = ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64) != 0;
+	const FString Script = BuildAutoInferenceMatrixScript(bFloatUsesFloat64);
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(
+		Engine,
+		"ASTypeAutoInferenceMatrix",
+		Script,
+		TEXT("int Run()"),
+		Result);
+
+	TestEqual(
+		TEXT("Auto inference matrix should route int, float or double, and enum auto variables to the expected overloads"),
+		Result,
+		123);
 
 	ASTEST_END_SHARE
 	return true;
@@ -357,6 +769,42 @@ bool FAngelscriptTypeImplicitCastTest::RunTest(const FString& Parameters)
 
 	ASTEST_END_SHARE
 	return bPassed;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTypeImplicitCastNegativeAndParamWideningTest,
+	"Angelscript.TestModule.Angelscript.Types.ImplicitCast.NegativeAndParamWidening",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptTypeImplicitCastNegativeAndParamWideningTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	if (!TestNotNull(TEXT("Types.ImplicitCast.NegativeAndParamWidening should expose a script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	const bool bFloatUsesFloat64 = ScriptEngine->GetEngineProperty(asEP_FLOAT_IS_FLOAT64) != 0;
+	const FString Script = BuildImplicitCastNegativeAndParamWideningScript(bFloatUsesFloat64);
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(
+		Engine,
+		"ASTypeImplicitCastNegativeAndParamWidening",
+		Script,
+		TEXT("int Run()"),
+		Result);
+
+	TestEqual(
+		TEXT("Implicit widening should preserve the negative sign across assignment and parameter forwarding"),
+		Result,
+		111);
+
+	ASTEST_END_SHARE
+	return true;
 }
 
 #endif

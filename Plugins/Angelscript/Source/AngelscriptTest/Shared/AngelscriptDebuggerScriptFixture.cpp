@@ -61,15 +61,20 @@ namespace AngelscriptTestSupport
 
 	FAngelscriptDebuggerScriptFixture FAngelscriptDebuggerScriptFixture::CreateBreakpointFixture()
 	{
-		return MakeFixture(
+		return CreateNamedBreakpointFixture(
 			TEXT("DebuggerBreakpointFixture"),
-			NAME_None,
-			NAME_None,
-			TEXT("int RunScenario()"),
 			TEXT("DebuggerBreakpointFixture.as"),
- 			TEXT(R"AS(int Helper(int Input)
+			5);
+	}
+
+	FAngelscriptDebuggerScriptFixture FAngelscriptDebuggerScriptFixture::CreateNamedBreakpointFixture(
+		FName ModuleName,
+		const FString& Filename,
+		int32 StoredValue)
+	{
+		const FString ScriptSource = FString::Printf(TEXT(R"AS(int Helper(int Input)
 {
-	int StoredValue = 5;
+	int StoredValue = %d;
 
 	/*MARK:BreakpointHelperLine*/ int LocalValue = Input + StoredValue;
 	return LocalValue;
@@ -85,7 +90,15 @@ namespace AngelscriptTestSupport
 
 		/*MARK:BreakpointInactiveBranchLine*/ return Helper(-1);
 	}
-)AS"),
+)AS"), StoredValue);
+
+		return MakeFixture(
+			ModuleName,
+			NAME_None,
+			NAME_None,
+			TEXT("int RunScenario()"),
+			Filename,
+			ScriptSource,
 			{
 				{TEXT("LocalValuePath"), TEXT("0:LocalValue")},
 				{TEXT("ThisStoredValuePath"), TEXT("0:this.StoredValue")},
@@ -114,13 +127,40 @@ namespace AngelscriptTestSupport
 	{
 		/*MARK:StepCallLine*/ int Result = Inner(4);
 		/*MARK:StepAfterCallLine*/ Result += 1;
-		return Result;
+		int FinalResult = Result;
+		return FinalResult;
 	}
 )AS"),
 			{
 				{TEXT("InnerValuePath"), TEXT("0:InnerValue")},
 				{TEXT("ResultPath"), TEXT("0:Result")}
 			},
+			false);
+	}
+
+	FAngelscriptDebuggerScriptFixture FAngelscriptDebuggerScriptFixture::CreatePauseFixture()
+	{
+		return MakeFixture(
+			TEXT("DebuggerPauseFixture"),
+			NAME_None,
+			NAME_None,
+			TEXT("int RunScenario()"),
+			TEXT("DebuggerPauseFixture.as"),
+			TEXT(R"AS(int RunScenario()
+{
+	/*MARK:PauseReadyLine*/ int Total = 1;
+	for (int Outer = 0; Outer < 50; ++Outer)
+	{
+		for (int Inner = 0; Inner < 100; ++Inner)
+		{
+			/*MARK:PauseLoopLine*/ Total += 1;
+		}
+	}
+
+	return Total;
+}
+)AS"),
+			{},
 			false);
 	}
 
@@ -132,7 +172,7 @@ namespace AngelscriptTestSupport
 			TEXT("Entry"),
 			TEXT("int Entry()"),
 			TEXT("DebuggerCallstackFixture.as"),
-			TEXT(R"AS(int GlobalCounter = 7;
+			TEXT(R"AS(const int GlobalCounter = 7;
 
 UCLASS()
 class UDebuggerCallstackFixture : UObject
@@ -149,14 +189,14 @@ class UDebuggerCallstackFixture : UObject
 
 	UFUNCTION()
 	int Middle(int LocalValue)
-	{
-		/*MARK:CallstackMiddleLine*/ return Leaf(LocalValue + 1);
+	/*MARK:CallstackMiddleLine*/ {
+		return Leaf(LocalValue + 1);
 	}
 
 	UFUNCTION()
 	int Entry()
-	{
-		/*MARK:CallstackEntryLine*/ return Middle(3);
+	/*MARK:CallstackEntryLine*/ {
+		return Middle(3);
 	}
 }
 )AS"),
@@ -164,6 +204,7 @@ class UDebuggerCallstackFixture : UObject
 				{TEXT("LeafLocalValuePath"), TEXT("0:LocalValue")},
 				{TEXT("LeafCombinedPath"), TEXT("0:Combined")},
 				{TEXT("ThisMemberValuePath"), TEXT("0:this.MemberValue")},
+				{TEXT("ThisScopePath"), TEXT("0:%this%")},
 				{TEXT("ModuleGlobalCounterPath"), TEXT("0:%module%.GlobalCounter")},
 				{TEXT("LocalScopePath"), TEXT("0:%local%")},
 				{TEXT("ModuleScopePath"), TEXT("0:%module%")}
@@ -183,20 +224,20 @@ class UDebuggerBindingFixture : UObject
 {
 	UFUNCTION()
 	void TriggerDebugBreak()
-	{
-		/*MARK:BindingDebugBreakLine*/ DebugBreak();
+	/*MARK:BindingDebugBreakLine*/ {
+		DebugBreak();
 	}
 
 	UFUNCTION()
 	bool TriggerEnsure(bool Condition, const FString& Message)
-	{
-		/*MARK:BindingEnsureLine*/ return ensure(Condition, Message);
+	/*MARK:BindingEnsureLine*/ {
+		return ensure(Condition, Message);
 	}
 
 	UFUNCTION()
 	void TriggerCheck(bool Condition, const FString& Message)
-	{
-		/*MARK:BindingCheckLine*/ check(Condition, Message);
+	/*MARK:BindingCheckLine*/ {
+		check(Condition, Message);
 	}
 
 	UFUNCTION()
@@ -209,6 +250,35 @@ class UDebuggerBindingFixture : UObject
 			{
 				{TEXT("ThisScopePath"), TEXT("0:%this%")}
 			});
+	}
+
+	FAngelscriptDebuggerScriptFixture FAngelscriptDebuggerScriptFixture::CreateBlueprintFrameFixture()
+	{
+		return MakeFixture(
+			TEXT("DebuggerBlueprintFrameFixture"),
+			TEXT("UDebuggerBlueprintFrameFixture"),
+			NAME_None,
+			TEXT(""),
+			TEXT("DebuggerBlueprintFrameFixture.as"),
+			TEXT(R"AS(UCLASS()
+class UDebuggerBlueprintFrameFixture : UObject
+{
+	UPROPERTY()
+	int ScriptValue = 5;
+
+	UPROPERTY()
+	int LastBreakResult = -1;
+
+	UFUNCTION(BlueprintCallable)
+	int BreakInScript(int Input)
+	{
+		/*MARK:BlueprintScriptBreakLine*/ int Result = Input + ScriptValue;
+		LastBreakResult = Result;
+		return Result;
+	}
+}
+)AS"),
+			{});
 	}
 
 	bool FAngelscriptDebuggerScriptFixture::Compile(FAngelscriptEngine& Engine) const

@@ -8,9 +8,46 @@
 
 using namespace AngelscriptTestSupport;
 
+namespace
+{
+	FString FormatScriptFloatLiteral(const double Value)
+	{
+		FString Literal = FString::Printf(TEXT("%.9g"), Value);
+		if (!Literal.Contains(TEXT(".")) && !Literal.Contains(TEXT("e")) && !Literal.Contains(TEXT("E")))
+		{
+			Literal += TEXT(".0");
+		}
+
+		return Literal;
+	}
+
+	FString FormatScriptVectorLiteral(const FVector& Value)
+	{
+		return FString::Printf(
+			TEXT("FVector(%s, %s, %s)"),
+			*FormatScriptFloatLiteral(Value.X),
+			*FormatScriptFloatLiteral(Value.Y),
+			*FormatScriptFloatLiteral(Value.Z));
+	}
+
+	FString FormatScriptRotatorLiteral(const FRotator& Value)
+	{
+		return FString::Printf(
+			TEXT("FRotator(%s, %s, %s)"),
+			*FormatScriptFloatLiteral(Value.Pitch),
+			*FormatScriptFloatLiteral(Value.Yaw),
+			*FormatScriptFloatLiteral(Value.Roll));
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptMathExtendedBindingsTest,
 	"Angelscript.TestModule.Bindings.MathExtendedCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptMathDeterministicBindingsTest,
+	"Angelscript.TestModule.Bindings.MathDeterministicCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -155,6 +192,96 @@ int Entry()
 	ASTEST_END_SHARE
 
 	return true;
+}
+
+bool FAngelscriptMathDeterministicBindingsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	constexpr float Tolerance = 0.001f;
+	const float ExpectedClampAngle = FMath::ClampAngle(370.0f, -180.0f, 180.0f);
+	const float ExpectedDeltaAngle = FMath::FindDeltaAngleDegrees(10.0f, 20.0f);
+	const float ExpectedUnwind = FMath::UnwindDegrees(370.0f);
+	const FVector ExpectedReflection = FMath::GetReflectionVector(FVector(1.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f));
+	const FVector ExpectedVectorInterp = FMath::VInterpTo(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 0.1f, 5.0f);
+	const FRotator ExpectedRotatorInterp = FMath::RInterpTo(FRotator::ZeroRotator, FRotator(0.0f, 90.0f, 0.0f), 0.1f, 5.0f);
+	const float ExpectedScalarInterp = FMath::FInterpTo(0.0f, 100.0f, 0.1f, 5.0f);
+
+	bPassed &= TestTrue(
+		TEXT("Native GetReflectionVector baseline should reflect X across the opposing normal into (-1, 0, 0)"),
+		ExpectedReflection.Equals(FVector(-1.0f, 0.0f, 0.0f), 0.0f));
+	bPassed &= TestTrue(
+		TEXT("Native VInterpTo baseline should advance toward the target on X only"),
+		ExpectedVectorInterp.Equals(FVector(ExpectedVectorInterp.X, 0.0f, 0.0f), 0.0f));
+	bPassed &= TestTrue(
+		TEXT("Native RInterpTo baseline should only accumulate yaw for this setup"),
+		ExpectedRotatorInterp.Equals(FRotator(0.0f, ExpectedRotatorInterp.Yaw, 0.0f), 0.0f));
+	if (!bPassed)
+	{
+		return false;
+	}
+
+	FString Script = TEXT(R"(
+int Entry()
+{
+	if (!Math::IsNearlyEqual(Math::ClampAngle(370.0f, -180.0f, 180.0f), $EXPECTED_CLAMP_ANGLE$, $TOLERANCE$))
+		return 10;
+
+	if (!Math::IsNearlyEqual(Math::FindDeltaAngleDegrees(10.0f, 20.0f), $EXPECTED_DELTA_ANGLE$, $TOLERANCE$))
+		return 20;
+
+	if (!Math::IsNearlyEqual(Math::UnwindDegrees(370.0f), $EXPECTED_UNWIND$, $TOLERANCE$))
+		return 30;
+
+	const FVector Reflected = Math::GetReflectionVector(FVector(1.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f));
+	if (!Reflected.Equals(FVector(-1.0f, 0.0f, 0.0f), 0.0f))
+		return 40;
+
+	if (!Math::VInterpTo(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 0.1f, 5.0f).Equals($EXPECTED_VECTOR_INTERP$, $TOLERANCE$))
+		return 50;
+
+	if (!Math::RInterpTo(FRotator::ZeroRotator, FRotator(0.0f, 90.0f, 0.0f), 0.1f, 5.0f).Equals($EXPECTED_ROTATOR_INTERP$, $TOLERANCE$))
+		return 60;
+
+	if (!Math::IsNearlyEqual(Math::FInterpTo(0.0f, 100.0f, 0.1f, 5.0f), $EXPECTED_SCALAR_INTERP$, $TOLERANCE$))
+		return 70;
+
+	return 1;
+}
+)");
+
+	Script.ReplaceInline(TEXT("$TOLERANCE$"), *FormatScriptFloatLiteral(Tolerance));
+	Script.ReplaceInline(TEXT("$EXPECTED_CLAMP_ANGLE$"), *FormatScriptFloatLiteral(ExpectedClampAngle));
+	Script.ReplaceInline(TEXT("$EXPECTED_DELTA_ANGLE$"), *FormatScriptFloatLiteral(ExpectedDeltaAngle));
+	Script.ReplaceInline(TEXT("$EXPECTED_UNWIND$"), *FormatScriptFloatLiteral(ExpectedUnwind));
+	Script.ReplaceInline(TEXT("$EXPECTED_VECTOR_INTERP$"), *FormatScriptVectorLiteral(ExpectedVectorInterp));
+	Script.ReplaceInline(TEXT("$EXPECTED_ROTATOR_INTERP$"), *FormatScriptRotatorLiteral(ExpectedRotatorInterp));
+	Script.ReplaceInline(TEXT("$EXPECTED_SCALAR_INTERP$"), *FormatScriptFloatLiteral(ExpectedScalarInterp));
+
+	asIScriptModule* Module = BuildModule(*this, Engine, "ASMathDeterministicCompat", Script);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(TEXT("Deterministic Math helpers should match the native baseline"), Result, 1);
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
 }
 
 bool FAngelscriptPlatformProcessBindingsTest::RunTest(const FString& Parameters)

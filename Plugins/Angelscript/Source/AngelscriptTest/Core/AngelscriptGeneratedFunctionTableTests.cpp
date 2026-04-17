@@ -57,6 +57,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptGeneratedFunctionTableSkippedCsvOutputTest,
+	"Angelscript.TestModule.Engine.GeneratedFunctionTable.SkippedCsvOutput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptGeneratedFunctionTableSkippedReasonSummaryCsvOutputTest,
+	"Angelscript.TestModule.Engine.GeneratedFunctionTable.SkippedReasonSummaryCsvOutput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptGeneratedFunctionTableMacroQualifiedDirectBindingsTest,
 	"Angelscript.TestModule.Engine.GeneratedFunctionTable.MacroQualifiedDirectBindings",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -653,6 +663,89 @@ bool FAngelscriptGeneratedFunctionTableCsvOutputTest::RunTest(const FString& Par
 	}
 
 	TestTrue(TEXT("Generated function table csv test should locate RunBehaviorTree in the entry csv"), bFoundRunBehaviorTreeCsv);
+	return true;
+}
+
+bool FAngelscriptGeneratedFunctionTableSkippedCsvOutputTest::RunTest(const FString& Parameters)
+{
+	const FString GeneratedDirectory = FPaths::Combine(
+		FPaths::ProjectPluginsDir(),
+		TEXT("Angelscript"),
+		TEXT("Intermediate/Build/Win64/UnrealEditor/Inc/AngelscriptRuntime/UHT"));
+	const FString SkippedCsvPath = FPaths::Combine(GeneratedDirectory, TEXT("AS_FunctionTable_SkippedEntries.csv"));
+
+	const TArray<FString> SkippedLines = LoadNonEmptyFileLines(SkippedCsvPath);
+	if (!TestTrue(TEXT("Generated function table skipped csv test should write the skipped entry csv"), SkippedLines.Num() > 0))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Generated function table skipped csv test should write the expected skipped csv header"), SkippedLines[0], TEXT("ModuleName,ClassName,FunctionName,FailureReason"));
+	TestTrue(TEXT("Generated function table skipped csv test should contain at least one skipped function row"), SkippedLines.Num() > 1);
+
+	bool bFoundFailureReason = false;
+	for (int32 LineIndex = 1; LineIndex < SkippedLines.Num(); ++LineIndex)
+	{
+		TArray<FString> Columns;
+		SkippedLines[LineIndex].ParseIntoArray(Columns, TEXT(","), false);
+		if (!TestTrue(TEXT("Generated function table skipped csv rows should expose four columns"), Columns.Num() == 4))
+		{
+			return false;
+		}
+
+		if (!Columns[3].IsEmpty())
+		{
+			bFoundFailureReason = true;
+		}
+	}
+
+	TestTrue(TEXT("Generated function table skipped csv rows should include non-empty failure reasons"), bFoundFailureReason);
+	return true;
+}
+
+bool FAngelscriptGeneratedFunctionTableSkippedReasonSummaryCsvOutputTest::RunTest(const FString& Parameters)
+{
+	const FString GeneratedDirectory = FPaths::Combine(
+		FPaths::ProjectPluginsDir(),
+		TEXT("Angelscript"),
+		TEXT("Intermediate/Build/Win64/UnrealEditor/Inc/AngelscriptRuntime/UHT"));
+	const FString SkippedCsvPath = FPaths::Combine(GeneratedDirectory, TEXT("AS_FunctionTable_SkippedEntries.csv"));
+	const FString ReasonSummaryCsvPath = FPaths::Combine(GeneratedDirectory, TEXT("AS_FunctionTable_SkippedReasonSummary.csv"));
+
+	const TArray<FString> SkippedLines = LoadNonEmptyFileLines(SkippedCsvPath);
+	if (!TestTrue(TEXT("Generated function table skipped reason summary test should find the skipped entry csv"), SkippedLines.Num() > 0))
+	{
+		return false;
+	}
+
+	const TArray<FString> SummaryLines = LoadNonEmptyFileLines(ReasonSummaryCsvPath);
+	if (!TestTrue(TEXT("Generated function table skipped reason summary test should write the skipped reason summary csv"), SummaryLines.Num() > 0))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Generated function table skipped reason summary test should write the expected summary csv header"), SummaryLines[0], TEXT("FailureReason,SkippedCount"));
+	TestTrue(TEXT("Generated function table skipped reason summary test should contain at least one reason row"), SummaryLines.Num() > 1);
+
+	int32 SummedSkippedCount = 0;
+	for (int32 LineIndex = 1; LineIndex < SummaryLines.Num(); ++LineIndex)
+	{
+		TArray<FString> Columns;
+		SummaryLines[LineIndex].ParseIntoArray(Columns, TEXT(","), false);
+		if (!TestTrue(TEXT("Generated function table skipped reason summary rows should expose two columns"), Columns.Num() == 2))
+		{
+			return false;
+		}
+
+		if (!TestTrue(TEXT("Generated function table skipped reason summary rows should include a non-empty reason"), !Columns[0].IsEmpty()))
+		{
+			return false;
+		}
+
+		SummedSkippedCount += FCString::Atoi(*Columns[1]);
+	}
+
+	TestEqual(TEXT("Generated function table skipped reason summary test should keep aggregate counts aligned with the skipped entry csv"), SummedSkippedCount, SkippedLines.Num() - 1);
 	return true;
 }
 

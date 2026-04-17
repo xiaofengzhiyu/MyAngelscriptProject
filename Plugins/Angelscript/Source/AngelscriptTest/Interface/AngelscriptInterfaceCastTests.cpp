@@ -1,7 +1,11 @@
 #include "Shared/AngelscriptScenarioTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "Core/AngelscriptType.h"
+#include "ClassGenerator/ASClass.h"
+
 #include "Components/ActorTestSpawner.h"
+#include "Containers/StringConv.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
@@ -13,6 +17,43 @@ using namespace AngelscriptScenarioTestUtils;
 
 namespace
 {
+	asITypeInfo* FindBoundScriptTypeInfo(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		UClass* Class,
+		const TCHAR* Label)
+	{
+		if (!Test.TestNotNull(
+			*FString::Printf(TEXT("%s generated class should exist"), Label),
+			Class))
+		{
+			return nullptr;
+		}
+
+		asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+		if (!Test.TestNotNull(TEXT("Scenario script engine should exist"), ScriptEngine))
+		{
+			return nullptr;
+		}
+
+		asITypeInfo* TypeInfo = nullptr;
+		if (const UASClass* ScriptClass = Cast<UASClass>(Class))
+		{
+			TypeInfo = static_cast<asITypeInfo*>(ScriptClass->ScriptTypePtr);
+		}
+
+		if (TypeInfo == nullptr)
+		{
+			const FString TypeName = FAngelscriptType::GetBoundClassName(Class);
+			const FTCHARToUTF8 TypeNameUtf8(*TypeName);
+			TypeInfo = ScriptEngine->GetTypeInfoByName(TypeNameUtf8.Get());
+			Test.TestNotNull(
+				*FString::Printf(TEXT("%s script type '%s' should exist"), Label, *TypeName),
+				TypeInfo);
+		}
+
+		return TypeInfo;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -28,6 +69,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceMethodCallTest,
 	"Angelscript.TestModule.Interface.MethodCall",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptScenarioInterfaceCastFastPathGuardsAndPositivePathTest,
+	"Angelscript.TestModule.Interface.CastFastPath.GuardsAndPositivePath",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptScenarioInterfaceCastSuccessTest::RunTest(const FString& Parameters)
@@ -258,6 +304,104 @@ class AScenarioInterfaceMethodCall : AActor, UIDamageableMethodCall
 		return false;
 	}
 	TestEqual(TEXT("Method should have been called via interface reference"), MethodCalled, 1);
+
+	ASTEST_END_SHARE_FRESH
+
+	return true;
+}
+
+bool FAngelscriptScenarioInterfaceCastFastPathGuardsAndPositivePathTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
+	ASTEST_BEGIN_SHARE_FRESH
+	static const FName ModuleName(TEXT("ScenarioInterfaceCastFastPath"));
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(*ModuleName.ToString());
+		ResetSharedCloneEngine(Engine);
+	};
+
+	UClass* ImplementingClass = CompileScriptModule(
+		*this,
+		Engine,
+		ModuleName,
+		TEXT("ScenarioInterfaceCastFastPath.as"),
+		TEXT(R"AS(
+UINTERFACE()
+interface UIDamageableCastFastPath
+{
+	void TakeDamage(float Amount);
+}
+
+UCLASS()
+class AScenarioInterfaceCastFastPath : AActor, UIDamageableCastFastPath
+{
+	UFUNCTION()
+	void TakeDamage(float Amount)
+	{
+	}
+}
+
+UCLASS()
+class AScenarioInterfaceCastPlain : AActor
+{
+}
+)AS"),
+		TEXT("AScenarioInterfaceCastFastPath"));
+	if (ImplementingClass == nullptr)
+	{
+		return false;
+	}
+
+	UClass* PlainClass = FindGeneratedClass(&Engine, TEXT("AScenarioInterfaceCastPlain"));
+	if (!TestNotNull(TEXT("Plain cast target class should exist"), PlainClass))
+	{
+		return false;
+	}
+
+	UClass* InterfaceClass = FindGeneratedClass(&Engine, TEXT("UIDamageableCastFastPath"));
+	if (!TestNotNull(TEXT("Generated interface class should exist"), InterfaceClass))
+	{
+		return false;
+	}
+
+	TestTrue(
+		TEXT("Implementing class should satisfy the generated interface"),
+		ImplementingClass->ImplementsInterface(InterfaceClass));
+	TestFalse(
+		TEXT("Plain class should not satisfy the generated interface"),
+		PlainClass->ImplementsInterface(InterfaceClass));
+
+	asITypeInfo* ImplementingType = FindBoundScriptTypeInfo(*this, Engine, ImplementingClass, TEXT("Implementing actor"));
+	asITypeInfo* PlainType = FindBoundScriptTypeInfo(*this, Engine, PlainClass, TEXT("Plain actor"));
+	asITypeInfo* InterfaceType = FindBoundScriptTypeInfo(*this, Engine, InterfaceClass, TEXT("Interface"));
+	if (ImplementingType == nullptr || PlainType == nullptr || InterfaceType == nullptr)
+	{
+		return false;
+	}
+
+	FActorTestSpawner Spawner;
+	Spawner.InitializeGameSubsystems();
+
+	AActor* ImplementingActor = SpawnScriptActor(*this, Spawner, ImplementingClass);
+	AActor* PlainActor = SpawnScriptActor(*this, Spawner, PlainClass);
+	if (ImplementingActor == nullptr || PlainActor == nullptr)
+	{
+		return false;
+	}
+
+	TestTrue(
+		TEXT("Fast path should accept an implementing actor when the target is an interface"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(ImplementingType, InterfaceType, ImplementingActor));
+	TestFalse(
+		TEXT("Fast path should reject a plain actor when the target is an interface"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(PlainType, InterfaceType, PlainActor));
+	TestFalse(
+		TEXT("Fast path should reject non-interface target types"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(ImplementingType, PlainType, ImplementingActor));
+	TestFalse(
+		TEXT("Fast path should reject null object pointers"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(ImplementingType, InterfaceType, nullptr));
 
 	ASTEST_END_SHARE_FRESH
 

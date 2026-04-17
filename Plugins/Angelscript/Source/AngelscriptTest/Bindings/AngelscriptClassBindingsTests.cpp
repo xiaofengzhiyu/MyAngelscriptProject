@@ -2,9 +2,144 @@
 #include "../Shared/AngelscriptTestMacros.h"
 #include "../Shared/AngelscriptTestEngineHelper.h"
 
+#include "GameFramework/Actor.h"
+#include "Misc/ScopeExit.h"
+#include "Templates/Function.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+
+namespace
+{
+	static constexpr ANSICHAR TSubclassOfRejectsUnrelatedClassModuleName[] = "ASTSubclassOfRejectsUnrelatedClass";
+
+	bool SetArgAddressChecked(
+		FAutomationTestBase& Test,
+		asIScriptContext& Context,
+		asUINT ArgumentIndex,
+		void* Address,
+		const TCHAR* ContextLabel)
+	{
+		return Test.TestEqual(
+			*FString::Printf(TEXT("%s should bind address argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
+			Context.SetArgAddress(ArgumentIndex, Address),
+			static_cast<int32>(asSUCCESS));
+	}
+
+	bool SetArgObjectChecked(
+		FAutomationTestBase& Test,
+		asIScriptContext& Context,
+		asUINT ArgumentIndex,
+		void* Object,
+		const TCHAR* ContextLabel)
+	{
+		return Test.TestEqual(
+			*FString::Printf(TEXT("%s should bind object argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
+			Context.SetArgObject(ArgumentIndex, Object),
+			static_cast<int32>(asSUCCESS));
+	}
+
+	bool ExecuteFunctionExpectingSuccess(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		asIScriptModule& Module,
+		const TCHAR* FunctionDecl,
+		TFunctionRef<bool(asIScriptContext&)> BindArguments,
+		const TCHAR* ContextLabel)
+	{
+		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
+		if (Function == nullptr)
+		{
+			return false;
+		}
+
+		FAngelscriptEngineScope EngineScope(Engine);
+		asIScriptContext* Context = Engine.CreateContext();
+		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
+		{
+			return false;
+		}
+
+		ON_SCOPE_EXIT
+		{
+			Context->Release();
+		};
+
+		const int PrepareResult = Context->Prepare(Function);
+		if (!Test.TestEqual(
+			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
+			PrepareResult,
+			static_cast<int32>(asSUCCESS)))
+		{
+			return false;
+		}
+
+		if (!BindArguments(*Context))
+		{
+			return false;
+		}
+
+		return Test.TestEqual(
+			*FString::Printf(TEXT("%s should execute successfully"), ContextLabel),
+			Context->Execute(),
+			static_cast<int32>(asEXECUTION_FINISHED));
+	}
+
+	bool ExecuteFunctionExpectingException(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		asIScriptModule& Module,
+		const TCHAR* FunctionDecl,
+		TFunctionRef<bool(asIScriptContext&)> BindArguments,
+		const TCHAR* ContextLabel,
+		FString& OutExceptionString)
+	{
+		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
+		if (Function == nullptr)
+		{
+			return false;
+		}
+
+		FAngelscriptEngineScope EngineScope(Engine);
+		asIScriptContext* Context = Engine.CreateContext();
+		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
+		{
+			return false;
+		}
+
+		ON_SCOPE_EXIT
+		{
+			Context->Release();
+		};
+
+		const int PrepareResult = Context->Prepare(Function);
+		if (!Test.TestEqual(
+			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
+			PrepareResult,
+			static_cast<int32>(asSUCCESS)))
+		{
+			return false;
+		}
+
+		if (!BindArguments(*Context))
+		{
+			return false;
+		}
+
+		const int ExecuteResult = Context->Execute();
+		if (!Test.TestEqual(
+			*FString::Printf(TEXT("%s should fail with a script exception"), ContextLabel),
+			ExecuteResult,
+			static_cast<int32>(asEXECUTION_EXCEPTION)))
+		{
+			return false;
+		}
+
+		OutExceptionString = Context->GetExceptionString() != nullptr ? UTF8_TO_TCHAR(Context->GetExceptionString()) : TEXT("");
+		return true;
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptClassLookupBindingsTest,
@@ -14,6 +149,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTSubclassOfBindingsTest,
 	"Angelscript.TestModule.Bindings.TSubclassOfCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest,
+	"Angelscript.TestModule.Bindings.TSubclassOfRejectsUnrelatedClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -181,6 +321,123 @@ int Entry()
 	ASTEST_END_SHARE
 
 	return true;
+}
+
+bool FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	AddExpectedError(TEXT("Class set to TSubclassOf<> was not a child of templated class."), EAutomationExpectedErrorFlags::Contains, 2);
+	AddExpectedError(TEXT("ASTSubclassOfRejectsUnrelatedClass"), EAutomationExpectedErrorFlags::Contains, 0);
+	AddExpectedError(TEXT("TriggerInvalidImplicitCtor"), EAutomationExpectedErrorFlags::Contains, 0);
+	AddExpectedError(TEXT("AssignClass"), EAutomationExpectedErrorFlags::Contains, 0);
+
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(TEXT("ASTSubclassOfRejectsUnrelatedClass"));
+	};
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		TSubclassOfRejectsUnrelatedClassModuleName,
+		TEXT(R"(
+void TriggerInvalidImplicitCtor()
+{
+	TSubclassOf<AActor> Invalid = UPackage::StaticClass();
+}
+
+void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)
+{
+	OutValue = NewClass;
+}
+)"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	TSubclassOf<AActor> ResetTarget = AActor::StaticClass();
+	if (!ExecuteFunctionExpectingSuccess(
+		*this,
+		Engine,
+		*Module,
+		TEXT("void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)"),
+		[this, &ResetTarget](asIScriptContext& Context)
+		{
+			return SetArgAddressChecked(*this, Context, 0, &ResetTarget, TEXT("AssignClass(null)"))
+				&& SetArgObjectChecked(*this, Context, 1, nullptr, TEXT("AssignClass(null)"));
+		},
+		TEXT("AssignClass(null)")))
+	{
+		return false;
+	}
+
+	bPassed &= TestFalse(
+		TEXT("TSubclassOf assignment from a null UClass should reset the destination to an invalid state"),
+		ResetTarget.Get() != nullptr);
+	bPassed &= TestNull(
+		TEXT("TSubclassOf assignment from a null UClass should clear the stored class pointer"),
+		ResetTarget.Get());
+	bPassed &= TestNull(
+		TEXT("TSubclassOf assignment from a null UClass should clear the default object path"),
+		ResetTarget.GetDefaultObject());
+
+	FString InvalidCtorExceptionString;
+	if (!ExecuteFunctionExpectingException(
+		*this,
+		Engine,
+		*Module,
+		TEXT("void TriggerInvalidImplicitCtor()"),
+		[](asIScriptContext& Context)
+		{
+			return true;
+		},
+		TEXT("TriggerInvalidImplicitCtor"),
+		InvalidCtorExceptionString))
+	{
+		return false;
+	}
+
+	bPassed &= TestTrue(
+		TEXT("TSubclassOf implicit construction from an unrelated UClass should report the expected diagnostic"),
+		InvalidCtorExceptionString.Contains(TEXT("Class set to TSubclassOf<> was not a child of templated class.")));
+
+	TSubclassOf<AActor> AssignmentTarget = AActor::StaticClass();
+	FString InvalidAssignmentExceptionString;
+	if (!ExecuteFunctionExpectingException(
+		*this,
+		Engine,
+		*Module,
+		TEXT("void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)"),
+		[this, &AssignmentTarget](asIScriptContext& Context)
+		{
+			return SetArgAddressChecked(*this, Context, 0, &AssignmentTarget, TEXT("AssignClass(invalid)"))
+				&& SetArgObjectChecked(*this, Context, 1, UPackage::StaticClass(), TEXT("AssignClass(invalid)"));
+		},
+		TEXT("AssignClass(invalid)"),
+		InvalidAssignmentExceptionString))
+	{
+		return false;
+	}
+
+	bPassed &= TestTrue(
+		TEXT("TSubclassOf assignment from an unrelated UClass should report the expected diagnostic"),
+		InvalidAssignmentExceptionString.Contains(TEXT("Class set to TSubclassOf<> was not a child of templated class.")));
+	bPassed &= TestFalse(
+		TEXT("TSubclassOf assignment from an unrelated UClass should reset the destination to an invalid state"),
+		AssignmentTarget.Get() != nullptr);
+	bPassed &= TestNull(
+		TEXT("TSubclassOf assignment from an unrelated UClass should clear the stored class pointer"),
+		AssignmentTarget.Get());
+	bPassed &= TestNull(
+		TEXT("TSubclassOf assignment from an unrelated UClass should clear the default object path"),
+		AssignmentTarget.GetDefaultObject());
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
 }
 
 bool FAngelscriptTSoftClassPtrBindingsTest::RunTest(const FString& Parameters)

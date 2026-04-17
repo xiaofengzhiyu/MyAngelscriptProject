@@ -157,5 +157,8 @@ public:
 	void SetPreciseValueFromDelegate(float Value);
 
 	UFUNCTION()
+	void SetLargeCountFromDelegate(int32 Value);
+
+	UFUNCTION()
 	float GetPreciseValueFromDelegate() const;
 };

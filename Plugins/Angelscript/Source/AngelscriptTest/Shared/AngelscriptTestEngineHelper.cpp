@@ -9,14 +9,19 @@
 #include "Preprocessor/AngelscriptPreprocessor.h"
 #include "Misc/Crc.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
+#include "StaticJIT/PrecompiledData.h"
+#include "StaticJIT/AngelscriptStaticJIT.h"
 #include "UObject/UObjectGlobals.h"
 
 namespace AngelscriptTestSupport
 {
 	namespace
 	{
+		static const TCHAR* EmptySourceDiagnostic = TEXT("Script file contains no code to compile.");
+
 		TSharedRef<FAngelscriptModuleDesc> MakeModuleDesc(FName ModuleName, FString Filename, FString Script);
 
 		void AddUniqueAbsoluteFilename(TArray<FString>& AbsoluteFilenames, const FString& AbsoluteFilename)
@@ -47,12 +52,40 @@ namespace AngelscriptTestSupport
 			}
 		}
 
+		FString ResolveAutomationAbsoluteFilename(const FString& Filename)
+		{
+			if (FPaths::IsRelative(Filename))
+			{
+				return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), Filename);
+			}
+
+			return Filename;
+		}
+
+		bool IsEffectivelyEmptyScript(const FString& Script)
+		{
+			return Script.TrimStartAndEnd().IsEmpty();
+		}
+
+		void EmitCompileTraceError(FAngelscriptEngine& Engine, const FString& AbsoluteFilename, const FString& Message)
+		{
+			FAngelscriptEngine::FDiagnostic Diagnostic;
+			Diagnostic.Message = Message;
+			Diagnostic.Row = 1;
+			Diagnostic.Column = 1;
+			Diagnostic.bIsError = true;
+			Diagnostic.bIsInfo = false;
+
+			Engine.ScriptCompileError(AbsoluteFilename, Diagnostic);
+		}
+
 		bool BuildModulesForSummary(FName ModuleName, FString Filename, FString Script, bool bUsePreprocessor, TArray<TSharedRef<FAngelscriptModuleDesc>>& OutModules, TArray<FString>& OutAbsoluteFilenames)
 		{
 			if (bUsePreprocessor)
 			{
 				const FString AutomationDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"));
-				const FString AbsoluteFilename = FPaths::Combine(AutomationDirectory, Filename);
+				const FString AbsoluteFilename = ResolveAutomationAbsoluteFilename(Filename);
+				AddUniqueAbsoluteFilename(OutAbsoluteFilenames, AbsoluteFilename);
 				IFileManager::Get().MakeDirectory(*AutomationDirectory, true);
 				if (!FFileHelper::SaveStringToFile(Script, *AbsoluteFilename))
 				{
@@ -195,6 +228,16 @@ namespace AngelscriptTestSupport
 				AbsoluteFilename = Filename;
 			}
 
+			if (IsEffectivelyEmptyScript(Script))
+			{
+				EmitCompileTraceError(*Engine, AbsoluteFilename, EmptySourceDiagnostic);
+				if (OutCompileResult != nullptr)
+				{
+					*OutCompileResult = ECompileResult::Error;
+				}
+				return false;
+			}
+
 			FAngelscriptPreprocessor Preprocessor;
 			Preprocessor.AddFile(Filename, AbsoluteFilename);
 			if (!Preprocessor.Preprocess())
@@ -297,6 +340,16 @@ namespace AngelscriptTestSupport
 		Engine->LastEmittedDiagnostics.Empty();
 		Engine->bDiagnosticsDirty = false;
 
+		if (bUsePreprocessor && IsEffectivelyEmptyScript(Script))
+		{
+			const FString AbsoluteFilename = ResolveAutomationAbsoluteFilename(Filename);
+			AddUniqueAbsoluteFilename(OutSummary.AbsoluteFilenames, AbsoluteFilename);
+			EmitCompileTraceError(*Engine, AbsoluteFilename, EmptySourceDiagnostic);
+			OutSummary.CompileResult = ECompileResult::Error;
+			CollectCompileTraceDiagnostics(*Engine, OutSummary.AbsoluteFilenames, OutSummary.Diagnostics);
+			return false;
+		}
+
 		TArray<TSharedRef<FAngelscriptModuleDesc>> ModulesToCompile;
 		if (!BuildModulesForSummary(ModuleName, Filename, Script, bUsePreprocessor, ModulesToCompile, OutSummary.AbsoluteFilenames))
 		{
@@ -350,6 +403,84 @@ namespace AngelscriptTestSupport
 		}
 	}
 
+	bool CompileModuleFromDiskPath(FAngelscriptEngine* Engine, FName ModuleName, const FString& AbsolutePath)
+	{
+		if (Engine == nullptr || AbsolutePath.IsEmpty())
+		{
+			return false;
+		}
+
+		const FString NormalizedAbsolutePath = FPaths::ConvertRelativePathToFull(AbsolutePath);
+		const FString RootPath = FPaths::GetPath(NormalizedAbsolutePath);
+		const TArray<FString> PreviousRoots = Engine->AllRootPaths;
+		ON_SCOPE_EXIT
+		{
+			Engine->AllRootPaths = PreviousRoots;
+		};
+
+		Engine->AllRootPaths = { RootPath };
+
+		TArray<FAngelscriptEngine::FFilenamePair> DiskFiles;
+		Engine->FindAllScriptFilenames(DiskFiles);
+
+		const FAngelscriptEngine::FFilenamePair* TargetFile = DiskFiles.FindByPredicate(
+			[&NormalizedAbsolutePath](const FAngelscriptEngine::FFilenamePair& FilenamePair)
+			{
+				return FilenamePair.AbsolutePath.Equals(NormalizedAbsolutePath, ESearchCase::IgnoreCase);
+			});
+		if (TargetFile == nullptr)
+		{
+			return false;
+		}
+
+		FAngelscriptPreprocessor Preprocessor;
+		Preprocessor.AddFile(TargetFile->RelativePath, TargetFile->AbsolutePath);
+		if (!Preprocessor.Preprocess())
+		{
+			return false;
+		}
+
+		TArray<TSharedRef<FAngelscriptModuleDesc>> ModulesToCompile = Preprocessor.GetModulesToCompile();
+		if (ModulesToCompile.Num() == 0)
+		{
+			return false;
+		}
+
+		TArray<TSharedRef<FAngelscriptModuleDesc>> CompiledModules;
+		TGuardValue<bool> AutomaticImportGuard(Engine->bUseAutomaticImportMethod, false);
+		FScopedAutomaticImportsOverride AutomaticImportsOverride(Engine->GetScriptEngine());
+		FAngelscriptEngineScope EngineScope(*Engine);
+		const ECompileResult CompileResult = Engine->CompileModules(ECompileType::SoftReloadOnly, ModulesToCompile, CompiledModules);
+		if (CompileResult != ECompileResult::FullyHandled && CompileResult != ECompileResult::PartiallyHandled)
+		{
+			return false;
+		}
+
+		return Engine->GetModuleByFilenameOrModuleName(TargetFile->AbsolutePath, ModuleName.ToString()).IsValid();
+	}
+
+	FScopedTempPrecompiledCacheFile::FScopedTempPrecompiledCacheFile(FString InLabel)
+	{
+		if (InLabel.IsEmpty())
+		{
+			InLabel = TEXT("PrecompiledData");
+		}
+
+		const FString CacheDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), TEXT("StaticJIT"));
+		IFileManager::Get().MakeDirectory(*CacheDirectory, true);
+
+		const FString UniqueSuffix = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+		Filename = FPaths::Combine(CacheDirectory, FString::Printf(TEXT("%s_%s.Cache"), *InLabel, *UniqueSuffix));
+	}
+
+	FScopedTempPrecompiledCacheFile::~FScopedTempPrecompiledCacheFile()
+	{
+		if (!Filename.IsEmpty())
+		{
+			IFileManager::Get().Delete(*Filename, false, true, true);
+		}
+	}
+
 	bool CompileModuleFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script)
 	{
 		return CompileModuleInternal(Engine, ECompileType::SoftReloadOnly, ModuleName, MoveTemp(Filename), MoveTemp(Script));
@@ -362,6 +493,87 @@ namespace AngelscriptTestSupport
 			return false;
 		}
 		return PreprocessAndCompile(Engine, ECompileType::FullReload, MoveTemp(Filename), MoveTemp(Script));
+	}
+
+	bool SaveAndReloadPrecompiledData(FAngelscriptEngine* Engine, FAngelscriptPrecompiledData& SourceData, const FString& Filename, TUniquePtr<FAngelscriptPrecompiledData>& OutLoadedData, FString* OutError)
+	{
+		OutLoadedData.Reset();
+
+		if (Engine == nullptr)
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = TEXT("SaveAndReloadPrecompiledData failed: engine was null.");
+			}
+			return false;
+		}
+
+		if (Filename.IsEmpty())
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = TEXT("SaveAndReloadPrecompiledData failed: filename was empty.");
+			}
+			return false;
+		}
+
+		asIScriptEngine* ScriptEngine = Engine->GetScriptEngine();
+		if (ScriptEngine == nullptr)
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = TEXT("SaveAndReloadPrecompiledData failed: script engine was null.");
+			}
+			return false;
+		}
+
+		SourceData.Save(Filename);
+		if (!IFileManager::Get().FileExists(*Filename))
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = FString::Printf(TEXT("SaveAndReloadPrecompiledData failed: cache file was not created at '%s'."), *Filename);
+			}
+			return false;
+		}
+
+		OutLoadedData = MakeUnique<FAngelscriptPrecompiledData>(ScriptEngine);
+		OutLoadedData->Load(Filename);
+		return true;
+	}
+
+	bool GenerateStaticJITSourceText(FAngelscriptEngine* Engine, FName ModuleName, FString& OutSourceText, bool bEmitDebugMetadata, FString* OutError)
+	{
+		OutSourceText.Reset();
+		if (Engine == nullptr)
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = TEXT("GenerateStaticJITSourceText failed: engine was null.");
+			}
+			return false;
+		}
+
+#if WITH_DEV_AUTOMATION_TESTS && AS_CAN_GENERATE_JIT
+		TSharedPtr<FAngelscriptModuleDesc> ModuleDesc = Engine->GetModuleByModuleName(ModuleName.ToString());
+		if (!ModuleDesc.IsValid() || ModuleDesc->ScriptModule == nullptr)
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = FString::Printf(TEXT("GenerateStaticJITSourceText failed: module '%s' was not compiled."), *ModuleName.ToString());
+			}
+			return false;
+		}
+
+		FAngelscriptEngineScope EngineScope(*Engine);
+		return GenerateStaticJITSourceTextForTesting(ModuleDesc->ScriptModule, OutSourceText, bEmitDebugMetadata, OutError);
+#else
+		if (OutError != nullptr)
+		{
+			*OutError = TEXT("GenerateStaticJITSourceText is unavailable when AS_CAN_GENERATE_JIT or WITH_DEV_AUTOMATION_TESTS is disabled.");
+		}
+		return false;
+#endif
 	}
 
 	bool ExecuteIntFunction(FAngelscriptEngine* Engine, FName ModuleName, FString Decl, int32& OutResult)

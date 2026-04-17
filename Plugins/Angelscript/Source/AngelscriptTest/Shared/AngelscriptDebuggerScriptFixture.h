@@ -9,10 +9,12 @@ namespace AngelscriptTestSupport
 	struct FAngelscriptDebuggerScriptFixture
 	{
 		static FAngelscriptDebuggerScriptFixture CreateBreakpointFixture();
+		static FAngelscriptDebuggerScriptFixture CreateNamedBreakpointFixture(FName ModuleName, const FString& Filename, int32 StoredValue);
 		static FAngelscriptDebuggerScriptFixture CreateSteppingFixture();
+		static FAngelscriptDebuggerScriptFixture CreatePauseFixture();
 		static FAngelscriptDebuggerScriptFixture CreateCallstackFixture();
 		static FAngelscriptDebuggerScriptFixture CreateBindingFixture();
-
+		static FAngelscriptDebuggerScriptFixture CreateBlueprintFrameFixture();
 		bool Compile(FAngelscriptEngine& Engine) const;
 		int32 GetLine(FName Marker) const;
 		FString GetEvalPath(FName Marker) const;

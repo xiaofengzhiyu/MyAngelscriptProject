@@ -8,6 +8,24 @@
 
 using namespace AngelscriptTestSupport;
 
+namespace
+{
+	const FAngelscriptCompileTraceDiagnosticSummary* FindDiagnosticContaining(
+		const FAngelscriptCompileTraceSummary& Summary,
+		const FString& Needle)
+	{
+		for (const FAngelscriptCompileTraceDiagnosticSummary& Diagnostic : Summary.Diagnostics)
+		{
+			if (Diagnostic.Message.Contains(Needle))
+			{
+				return &Diagnostic;
+			}
+		}
+
+		return nullptr;
+	}
+}
+
 namespace AngelscriptTestSupport
 {
 	bool CompileModuleWithResult(FAngelscriptEngine* Engine, ECompileType CompileType, FName ModuleName, FString Filename, FString Script, ECompileResult& OutCompileResult);
@@ -55,6 +73,215 @@ bool FAngelscriptFunctionNamedArgumentsTest::RunTest(const FString& Parameters)
 		Result);
 
 	TestEqual(TEXT("Named arguments should bind to the intended parameters"), Result, 321);
+	ASTEST_END_SHARE
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptFunctionNamedArgumentsMixedPartialOrderTest,
+	"Angelscript.TestModule.Angelscript.Functions.NamedArguments.MixedPartialOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptFunctionNamedArgumentsMixedPartialOrderTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(Engine,
+		"ASFunctionNamedArgumentsMixedPartialOrder",
+		TEXT(R"(
+int Mix(int A, int B, int C)
+{
+	return A * 100 + B * 10 + C;
+}
+
+int RunMixed()
+{
+	return Mix(4, C: 6, B: 5);
+}
+
+int RunPartial()
+{
+	return Mix(A: 7, C: 9, B: 8);
+}
+
+int Run()
+{
+	return RunMixed() * 1000 + RunPartial();
+}
+)"),
+		TEXT("int Run()"),
+		Result);
+
+	TestEqual(TEXT("Mixed positional and named arguments should keep parameter-name binding for the reordered suffix"), Result, 456789);
+	ASTEST_END_SHARE
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptFunctionNamedArgumentsInvalidNameDiagnosticsTest,
+	"Angelscript.TestModule.Angelscript.Functions.NamedArguments.InvalidNameDiagnostics",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptFunctionNamedArgumentsInvalidNameDiagnosticsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	auto VerifyInvalidNamedArguments = [this, &Engine, &bPassed](
+		const FName ModuleName,
+		const FString& ScriptFilename,
+		const FString& ScriptSource,
+		const FString& ScenarioLabel,
+		const FString& ExpectedMessage)
+	{
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::SoftReloadOnly,
+			ModuleName,
+			ScriptFilename,
+			ScriptSource,
+			false,
+			Summary,
+			true);
+		const FAngelscriptCompileTraceDiagnosticSummary* Diagnostic = FindDiagnosticContaining(Summary, ExpectedMessage);
+		asIScriptModule* FailedModule = Engine.GetScriptEngine()->GetModule(TCHAR_TO_UTF8(*ModuleName.ToString()), asGM_ONLY_IF_EXISTS);
+		asIScriptFunction* RunFunction = FailedModule != nullptr ? FailedModule->GetFunctionByDecl("int Run()") : nullptr;
+
+		bPassed &= TestFalse(
+			*FString::Printf(TEXT("%s should fail to compile"), *ScenarioLabel),
+			bCompiled);
+		bPassed &= TestFalse(
+			*FString::Printf(TEXT("%s should report bCompileSucceeded=false"), *ScenarioLabel),
+			Summary.bCompileSucceeded);
+		bPassed &= TestEqual(
+			*FString::Printf(TEXT("%s should surface ECompileResult::Error"), *ScenarioLabel),
+			Summary.CompileResult,
+			ECompileResult::Error);
+		bPassed &= TestTrue(
+			*FString::Printf(TEXT("%s should collect at least one diagnostic"), *ScenarioLabel),
+			Summary.Diagnostics.Num() > 0);
+		bPassed &= TestNotNull(
+			*FString::Printf(TEXT("%s should emit a diagnostic containing '%s'"), *ScenarioLabel, *ExpectedMessage),
+			Diagnostic);
+		if (Diagnostic != nullptr)
+		{
+			bPassed &= TestTrue(
+				*FString::Printf(TEXT("%s should report a non-zero diagnostic row"), *ScenarioLabel),
+				Diagnostic->Row > 0);
+			bPassed &= TestTrue(
+				*FString::Printf(TEXT("%s should report a non-zero diagnostic column"), *ScenarioLabel),
+				Diagnostic->Column > 0);
+		}
+		bPassed &= TestNull(
+			*FString::Printf(TEXT("%s should not leave an executable Run() behind after compile failure"), *ScenarioLabel),
+			RunFunction);
+	};
+
+	VerifyInvalidNamedArguments(
+		TEXT("ASFunctionNamedArgumentsDuplicateDiagnostic"),
+		FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("NegativeCompileIsolation"), TEXT("ASFunctionNamedArgumentsDuplicateDiagnostic.as")),
+		TEXT(R"(
+int Mix(int A, int B, int C)
+{
+	return 0;
+}
+
+int Run()
+{
+	return Mix(A: 1, A: 2, C: 3);
+}
+)"),
+		TEXT("Duplicate named argument"),
+		TEXT("Duplicate named argument"));
+
+	VerifyInvalidNamedArguments(
+		TEXT("ASFunctionNamedArgumentsUnknownDiagnostic"),
+		FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("NegativeCompileIsolation"), TEXT("ASFunctionNamedArgumentsUnknownDiagnostic.as")),
+		TEXT(R"(
+int Mix(int A, int B, int C)
+{
+	return 0;
+}
+
+int Run()
+{
+	return Mix(A: 1, D: 2, C: 3);
+}
+)"),
+		TEXT("Unknown named argument"),
+		TEXT("Unknown parameter 'D'"));
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptFunctionDefaultArgumentsOverrideAndNamedMixTest,
+	"Angelscript.TestModule.Angelscript.Functions.DefaultArguments.OverrideAndNamedMix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptFunctionDefaultArgumentsOverrideAndNamedMixTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASFunctionDefaultArgumentsOverrideAndNamedMix",
+		TEXT(R"(
+int Format(int A, int B = 5, int C = 9)
+{
+	return A * 100 + B * 10 + C;
+}
+
+int RunDefault()
+{
+	return Format(1);
+}
+
+int RunOverride()
+{
+	return Format(1, 2);
+}
+
+int RunNamedPartial()
+{
+	return Format(A: 1, C: 3);
+}
+)"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* DefaultFunction = GetFunctionByDecl(*this, *Module, TEXT("int RunDefault()"));
+	asIScriptFunction* OverrideFunction = GetFunctionByDecl(*this, *Module, TEXT("int RunOverride()"));
+	asIScriptFunction* NamedPartialFunction = GetFunctionByDecl(*this, *Module, TEXT("int RunNamedPartial()"));
+	if (DefaultFunction == nullptr || OverrideFunction == nullptr || NamedPartialFunction == nullptr)
+	{
+		return false;
+	}
+
+	int32 DefaultResult = 0;
+	int32 OverrideResult = 0;
+	int32 NamedPartialResult = 0;
+	if (!ExecuteIntFunction(*this, Engine, *DefaultFunction, DefaultResult)
+		|| !ExecuteIntFunction(*this, Engine, *OverrideFunction, OverrideResult)
+		|| !ExecuteIntFunction(*this, Engine, *NamedPartialFunction, NamedPartialResult))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Default arguments should fill both omitted trailing parameters"), DefaultResult, 159);
+	TestEqual(TEXT("Explicit arguments should override the middle default while preserving the trailing default"), OverrideResult, 129);
+	TestEqual(TEXT("Named arguments should override only the addressed default parameter"), NamedPartialResult, 153);
 	ASTEST_END_SHARE
 
 	return true;

@@ -25,6 +25,8 @@ namespace UnrealBuildTool.Rules
 				"Core",
 				"CoreUObject",
 				"Engine",
+				"GameplayAbilities",
+				"GameplayTasks",
 				"GameplayTags",
 				"Json",
 				"JsonUtilities",
@@ -41,6 +43,7 @@ namespace UnrealBuildTool.Rules
 			{
 				PrivateDependencyModuleNames.AddRange(new string[]
 				{
+					"BlueprintGraph",
 					"CQTest",
 					"Networking",
 					"Sockets",

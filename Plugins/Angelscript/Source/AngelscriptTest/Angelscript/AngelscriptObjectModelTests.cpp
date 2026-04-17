@@ -168,4 +168,27 @@ bool FAngelscriptObjectZeroSizeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptObjectZeroSizeByValueAndLocalLayoutTest,
+	"Angelscript.TestModule.Angelscript.Objects.ZeroSize.ByValueAndLocalLayout",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptObjectZeroSizeByValueAndLocalLayoutTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(Engine,
+		"ASObjectZeroSizeByValueAndLocalLayout",
+		TEXT("class EmptyObject {} int Accept(EmptyObject Value) { return 2; } int Run() { int Prefix = 5; EmptyObject First; int Middle = 6; EmptyObject Second; return Prefix * 1000 + Middle * 100 + Accept(First) * 10 + Accept(Second); }"),
+		TEXT("int Run()"),
+		Result);
+
+	TestEqual(TEXT("Zero-size script objects should preserve adjacent locals and pass by value twice"), Result, 5622);
+	ASTEST_END_SHARE
+
+	return true;
+}
+
 #endif

@@ -1,0 +1,479 @@
+#include "../Shared/AngelscriptTestEngineHelper.h"
+#include "../Shared/AngelscriptTestMacros.h"
+
+#include "Core/AngelscriptEngine.h"
+#include "Preprocessor/AngelscriptPreprocessor.h"
+
+#include "HAL/FileManager.h"
+#include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Misc/ScopeExit.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+using namespace AngelscriptTestSupport;
+
+namespace CompilerPipelineImportTest
+{
+	static const FName ProviderModuleName(TEXT("Tests.Compiler.ImportSource"));
+	static const FName ConsumerModuleName(TEXT("Tests.Compiler.ImportConsumer"));
+	static const FString ProviderRelativeScriptPath(TEXT("Tests/Compiler/ImportSource.as"));
+	static const FString ConsumerRelativeScriptPath(TEXT("Tests/Compiler/ImportConsumer.as"));
+	static const FString EntryFunctionDeclaration(TEXT("int Entry()"));
+	static const FString ImportedFunctionDeclaration(TEXT("int SharedValue()"));
+	static const FName MissingSourceModuleName(TEXT("Tests.Compiler.MissingSource"));
+	static const FName MissingSourceConsumerModuleName(TEXT("Tests.Compiler.ImportConsumerMissingSource"));
+	static const FString MissingSourceConsumerRelativeScriptPath(TEXT("Tests/Compiler/ImportConsumerMissingSource.as"));
+	static const FName SignatureMismatchProviderModuleName(TEXT("Tests.Compiler.ImportSourceSignatureMismatch"));
+	static const FName SignatureMismatchConsumerModuleName(TEXT("Tests.Compiler.ImportConsumerSignatureMismatch"));
+	static const FString SignatureMismatchProviderRelativeScriptPath(TEXT("Tests/Compiler/ImportSourceSignatureMismatch.as"));
+	static const FString SignatureMismatchConsumerRelativeScriptPath(TEXT("Tests/Compiler/ImportConsumerSignatureMismatch.as"));
+
+	FString GetFixtureRoot()
+	{
+		return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), TEXT("CompilerImportFixtures"));
+	}
+
+	FString WriteFixture(const FString& RelativePath, const FString& Contents)
+	{
+		const FString AbsolutePath = FPaths::Combine(GetFixtureRoot(), RelativePath);
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(AbsolutePath), true);
+		FFileHelper::SaveStringToFile(Contents, *AbsolutePath);
+		return AbsolutePath;
+	}
+
+	TArray<FString> CollectDiagnosticMessages(
+		const FAngelscriptEngine& Engine,
+		const TArray<FString>& AbsoluteFilenames,
+		int32& OutErrorCount)
+	{
+		TArray<FString> Messages;
+		OutErrorCount = 0;
+
+		for (const FString& AbsoluteFilename : AbsoluteFilenames)
+		{
+			const FAngelscriptEngine::FDiagnostics* Diagnostics = Engine.Diagnostics.Find(AbsoluteFilename);
+			if (Diagnostics == nullptr)
+			{
+				continue;
+			}
+
+			for (const FAngelscriptEngine::FDiagnostic& Diagnostic : Diagnostics->Diagnostics)
+			{
+				Messages.Add(Diagnostic.Message);
+				if (Diagnostic.bIsError)
+				{
+					++OutErrorCount;
+				}
+			}
+		}
+
+		return Messages;
+	}
+
+	const FAngelscriptModuleDesc* FindModuleByName(
+		const TArray<TSharedRef<FAngelscriptModuleDesc>>& Modules,
+		const FString& ModuleName)
+	{
+		for (const TSharedRef<FAngelscriptModuleDesc>& Module : Modules)
+		{
+			if (Module->ModuleName == ModuleName)
+			{
+				return &Module.Get();
+			}
+		}
+
+		return nullptr;
+	}
+
+	FString JoinModuleNames(const TArray<TSharedRef<FAngelscriptModuleDesc>>& Modules)
+	{
+		return FString::JoinBy(
+			Modules,
+			TEXT(" -> "),
+			[](const TSharedRef<FAngelscriptModuleDesc>& Module)
+			{
+				return Module->ModuleName;
+			});
+	}
+
+	const FAngelscriptEngine::FDiagnostic* FindMatchingErrorDiagnostic(
+		const FAngelscriptEngine& Engine,
+		const FString& AbsoluteFilename,
+		const FString& MessageFragment)
+	{
+		const FAngelscriptEngine::FDiagnostics* Diagnostics = Engine.Diagnostics.Find(AbsoluteFilename);
+		if (Diagnostics == nullptr)
+		{
+			return nullptr;
+		}
+
+		return Diagnostics->Diagnostics.FindByPredicate(
+			[&MessageFragment](const FAngelscriptEngine::FDiagnostic& Diagnostic)
+			{
+				return Diagnostic.bIsError && Diagnostic.Message.Contains(MessageFragment);
+			});
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCompilerDeclaredFunctionImportRoundTripTest,
+	"Angelscript.TestModule.Compiler.EndToEnd.DeclaredFunctionImportRoundTrip",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptCompilerDeclaredFunctionImportRoundTripTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+
+	const FString ProviderScriptSource = TEXT(R"AS(
+int SharedValue()
+{
+	return 77;
+}
+)AS");
+
+	const FString ConsumerScriptSource = TEXT(R"AS(
+import int SharedValue() from "Tests.Compiler.ImportSource";
+
+int Entry()
+{
+	return SharedValue();
+}
+)AS");
+
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	const FString ProviderAbsoluteScriptPath = CompilerPipelineImportTest::WriteFixture(
+		CompilerPipelineImportTest::ProviderRelativeScriptPath,
+		ProviderScriptSource);
+	const FString ConsumerAbsoluteScriptPath = CompilerPipelineImportTest::WriteFixture(
+		CompilerPipelineImportTest::ConsumerRelativeScriptPath,
+		ConsumerScriptSource);
+
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(*CompilerPipelineImportTest::ConsumerModuleName.ToString());
+		Engine.DiscardModule(*CompilerPipelineImportTest::ProviderModuleName.ToString());
+		IFileManager::Get().Delete(*ConsumerAbsoluteScriptPath, false, true);
+		IFileManager::Get().Delete(*ProviderAbsoluteScriptPath, false, true);
+	};
+
+	Engine.ResetDiagnostics();
+
+	TGuardValue<bool> AutomaticImportGuard(Engine.bUseAutomaticImportMethod, false);
+	FScopedAutomaticImportsOverride AutomaticImportsOverride(Engine.GetScriptEngine());
+
+	FAngelscriptPreprocessor Preprocessor;
+	Preprocessor.AddFile(CompilerPipelineImportTest::ProviderRelativeScriptPath, ProviderAbsoluteScriptPath);
+	Preprocessor.AddFile(CompilerPipelineImportTest::ConsumerRelativeScriptPath, ConsumerAbsoluteScriptPath);
+
+	const bool bPreprocessSucceeded = Preprocessor.Preprocess();
+	const TArray<TSharedRef<FAngelscriptModuleDesc>> ModulesToCompile = Preprocessor.GetModulesToCompile();
+
+	int32 PreprocessErrorCount = 0;
+	const TArray<FString> PreprocessMessages = CompilerPipelineImportTest::CollectDiagnosticMessages(
+		Engine,
+		{ProviderAbsoluteScriptPath, ConsumerAbsoluteScriptPath},
+		PreprocessErrorCount);
+	const FString PreprocessDiagnostics = FString::Join(PreprocessMessages, TEXT("\n"));
+
+	bPassed &= TestTrue(
+		TEXT("Declared import round-trip should preprocess successfully"),
+		bPreprocessSucceeded);
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should keep preprocessing diagnostics empty"),
+		PreprocessErrorCount,
+		0);
+	bPassed &= TestTrue(
+		TEXT("Declared import round-trip should not accumulate preprocessing messages"),
+		PreprocessDiagnostics.IsEmpty());
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should produce exactly two module descriptors"),
+		ModulesToCompile.Num(),
+		2);
+	if (!bPreprocessSucceeded || ModulesToCompile.Num() != 2)
+	{
+		return false;
+	}
+
+	const FString ModuleOrder = CompilerPipelineImportTest::JoinModuleNames(ModulesToCompile);
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should keep provider before consumer in compile order"),
+		ModuleOrder,
+		FString(TEXT("Tests.Compiler.ImportSource -> Tests.Compiler.ImportConsumer")));
+
+	const FAngelscriptModuleDesc* ProviderModuleDesc = CompilerPipelineImportTest::FindModuleByName(
+		ModulesToCompile,
+		CompilerPipelineImportTest::ProviderModuleName.ToString());
+	const FAngelscriptModuleDesc* ConsumerModuleDesc = CompilerPipelineImportTest::FindModuleByName(
+		ModulesToCompile,
+		CompilerPipelineImportTest::ConsumerModuleName.ToString());
+	if (!TestNotNull(
+			TEXT("Declared import round-trip should emit the provider module descriptor"),
+			ProviderModuleDesc)
+		|| !TestNotNull(
+			TEXT("Declared import round-trip should emit the consumer module descriptor"),
+			ConsumerModuleDesc))
+	{
+		return false;
+	}
+
+	Engine.ResetDiagnostics();
+
+	TArray<TSharedRef<FAngelscriptModuleDesc>> CompiledModules;
+	const ECompileResult CompileResult = Engine.CompileModules(
+		ECompileType::SoftReloadOnly,
+		ModulesToCompile,
+		CompiledModules);
+
+	int32 CompileErrorCount = 0;
+	const TArray<FString> CompileMessages = CompilerPipelineImportTest::CollectDiagnosticMessages(
+		Engine,
+		{ProviderAbsoluteScriptPath, ConsumerAbsoluteScriptPath},
+		CompileErrorCount);
+	const FString CompileDiagnostics = FString::Join(CompileMessages, TEXT("\n"));
+	if (!CompileDiagnostics.IsEmpty())
+	{
+		AddInfo(FString::Printf(TEXT("Declared import diagnostics: %s"), *CompileDiagnostics));
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should compile as FullyHandled"),
+		CompileResult,
+		ECompileResult::FullyHandled);
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should keep compile diagnostics empty"),
+		CompileErrorCount,
+		0);
+	bPassed &= TestTrue(
+		TEXT("Declared import round-trip should not accumulate compile messages"),
+		CompileDiagnostics.IsEmpty());
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should materialize exactly two compiled modules"),
+		CompiledModules.Num(),
+		2);
+	if (CompileResult != ECompileResult::FullyHandled || CompiledModules.Num() != 2)
+	{
+		return false;
+	}
+
+	TSharedPtr<FAngelscriptModuleDesc> CompiledProvider = Engine.GetModule(CompilerPipelineImportTest::ProviderModuleName.ToString());
+	TSharedPtr<FAngelscriptModuleDesc> CompiledConsumer = Engine.GetModule(CompilerPipelineImportTest::ConsumerModuleName.ToString());
+	if (!TestTrue(
+			TEXT("Declared import round-trip should register the compiled provider module on the engine"),
+			CompiledProvider.IsValid())
+		|| !TestTrue(
+			TEXT("Declared import round-trip should register the compiled consumer module on the engine"),
+			CompiledConsumer.IsValid()))
+	{
+		return false;
+	}
+
+	asIScriptModule* ConsumerScriptModule = CompiledConsumer->ScriptModule;
+	if (!TestNotNull(
+		TEXT("Declared import round-trip should expose a backing script module for the consumer"),
+		ConsumerScriptModule))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Declared import round-trip should preserve exactly one declared imported function"),
+		static_cast<int32>(ConsumerScriptModule->GetImportedFunctionCount()),
+		1);
+	if (ConsumerScriptModule->GetImportedFunctionCount() > 0)
+	{
+		bPassed &= TestEqual(
+			TEXT("Declared import round-trip should preserve the imported function source module"),
+			FString(UTF8_TO_TCHAR(ConsumerScriptModule->GetImportedFunctionSourceModule(0))),
+			CompilerPipelineImportTest::ProviderModuleName.ToString());
+		bPassed &= TestEqual(
+			TEXT("Declared import round-trip should preserve the imported function declaration"),
+			FString(UTF8_TO_TCHAR(ConsumerScriptModule->GetImportedFunctionDeclaration(0))),
+			CompilerPipelineImportTest::ImportedFunctionDeclaration);
+	}
+
+	int32 EntryResult = 0;
+	const bool bExecuted = ExecuteIntFunction(
+		&Engine,
+		CompilerPipelineImportTest::ConsumerRelativeScriptPath,
+		CompilerPipelineImportTest::ConsumerModuleName,
+		CompilerPipelineImportTest::EntryFunctionDeclaration,
+		EntryResult);
+	bPassed &= TestTrue(
+		TEXT("Declared import round-trip should execute the consumer entry point"),
+		bExecuted);
+	if (bExecuted)
+	{
+		bPassed &= TestEqual(
+			TEXT("Declared import round-trip should route execution through the bound imported function"),
+			EntryResult,
+			77);
+	}
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCompilerDeclaredFunctionImportErrorsReportPreciseDiagnosticsTest,
+	"Angelscript.TestModule.Compiler.EndToEnd.DeclaredFunctionImportErrorsReportPreciseDiagnostics",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptCompilerDeclaredFunctionImportErrorsReportPreciseDiagnosticsTest::RunTest(const FString& Parameters)
+{
+	struct FDeclaredImportErrorScenario
+	{
+		const TCHAR* Label = TEXT("");
+		FName ProviderModuleName;
+		FName ConsumerModuleName;
+		FString ProviderRelativeScriptPath;
+		FString ConsumerRelativeScriptPath;
+		FString ProviderScriptSource;
+		FString ConsumerScriptSource;
+		FString ExpectedDiagnosticFragment;
+		int32 ExpectedModuleDescCount = 0;
+		int32 ExpectedCompiledModuleCount = 0;
+		int32 ExpectedDiagnosticRow = 0;
+	};
+
+	const TArray<FDeclaredImportErrorScenario> Scenarios =
+	{
+		{TEXT("Missing module"), CompilerPipelineImportTest::MissingSourceModuleName, CompilerPipelineImportTest::MissingSourceConsumerModuleName, FString(), CompilerPipelineImportTest::MissingSourceConsumerRelativeScriptPath, FString(), TEXT("import int SharedValue() from \"Tests.Compiler.MissingSource\";\n\nint Entry()\n{\n\treturn SharedValue();\n}\n"), TEXT("could not find module Tests.Compiler.MissingSource to import from."), 1, 1, 1},
+		{TEXT("Signature mismatch"), CompilerPipelineImportTest::SignatureMismatchProviderModuleName, CompilerPipelineImportTest::SignatureMismatchConsumerModuleName, CompilerPipelineImportTest::SignatureMismatchProviderRelativeScriptPath, CompilerPipelineImportTest::SignatureMismatchConsumerRelativeScriptPath, TEXT("int SharedValue(int Extra)\n{\n\treturn Extra;\n}\n"), TEXT("import int SharedValue() from \"Tests.Compiler.ImportSourceSignatureMismatch\";\n\nint Entry()\n{\n\treturn SharedValue();\n}\n"), TEXT("could not find function with this signature in module Tests.Compiler.ImportSourceSignatureMismatch."), 2, 2, 1}
+	};
+
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	AddExpectedError(TEXT("Hot reload failed due to script compile errors. Keeping all old script code."), EAutomationExpectedErrorFlags::Contains, 2);
+
+	const FString SignatureMismatchProviderAbsoluteScriptPath = CompilerPipelineImportTest::WriteFixture(
+		CompilerPipelineImportTest::SignatureMismatchProviderRelativeScriptPath,
+		Scenarios[1].ProviderScriptSource);
+	const FString MissingSourceConsumerAbsoluteScriptPath = CompilerPipelineImportTest::WriteFixture(
+		CompilerPipelineImportTest::MissingSourceConsumerRelativeScriptPath,
+		Scenarios[0].ConsumerScriptSource);
+	const FString SignatureMismatchConsumerAbsoluteScriptPath = CompilerPipelineImportTest::WriteFixture(
+		CompilerPipelineImportTest::SignatureMismatchConsumerRelativeScriptPath,
+		Scenarios[1].ConsumerScriptSource);
+
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(*CompilerPipelineImportTest::MissingSourceConsumerModuleName.ToString());
+		Engine.DiscardModule(*CompilerPipelineImportTest::SignatureMismatchConsumerModuleName.ToString());
+		Engine.DiscardModule(*CompilerPipelineImportTest::SignatureMismatchProviderModuleName.ToString());
+		IFileManager::Get().Delete(*MissingSourceConsumerAbsoluteScriptPath, false, true);
+		IFileManager::Get().Delete(*SignatureMismatchConsumerAbsoluteScriptPath, false, true);
+		IFileManager::Get().Delete(*SignatureMismatchProviderAbsoluteScriptPath, false, true);
+	};
+
+	for (const FDeclaredImportErrorScenario& Scenario : Scenarios)
+	{
+		const FString ConsumerAbsoluteScriptPath = FPaths::Combine(
+			CompilerPipelineImportTest::GetFixtureRoot(),
+			Scenario.ConsumerRelativeScriptPath);
+		const FString ProviderAbsoluteScriptPath = Scenario.ProviderRelativeScriptPath.IsEmpty()
+			? FString()
+			: FPaths::Combine(CompilerPipelineImportTest::GetFixtureRoot(), Scenario.ProviderRelativeScriptPath);
+
+		Engine.ResetDiagnostics();
+
+		TGuardValue<bool> AutomaticImportGuard(Engine.bUseAutomaticImportMethod, false);
+		FScopedAutomaticImportsOverride AutomaticImportsOverride(Engine.GetScriptEngine());
+
+		FAngelscriptPreprocessor Preprocessor;
+		if (!Scenario.ProviderRelativeScriptPath.IsEmpty()) { Preprocessor.AddFile(Scenario.ProviderRelativeScriptPath, ProviderAbsoluteScriptPath); }
+		Preprocessor.AddFile(Scenario.ConsumerRelativeScriptPath, ConsumerAbsoluteScriptPath);
+
+		const bool bPreprocessSucceeded = Preprocessor.Preprocess();
+		const TArray<TSharedRef<FAngelscriptModuleDesc>> ModulesToCompile = Preprocessor.GetModulesToCompile();
+
+		const TArray<FString> DiagnosticFiles = Scenario.ProviderRelativeScriptPath.IsEmpty()
+			? TArray<FString>{ConsumerAbsoluteScriptPath}
+			: TArray<FString>{ProviderAbsoluteScriptPath, ConsumerAbsoluteScriptPath};
+
+		int32 PreprocessErrorCount = 0;
+		const TArray<FString> PreprocessMessages = CompilerPipelineImportTest::CollectDiagnosticMessages(
+			Engine,
+			DiagnosticFiles,
+			PreprocessErrorCount);
+		const FString PreprocessDiagnostics = FString::Join(PreprocessMessages, TEXT("\n"));
+
+		bPassed &= TestTrue(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should preprocess successfully"), Scenario.Label),
+			bPreprocessSucceeded);
+		bPassed &= TestEqual(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should keep preprocessing diagnostics empty"), Scenario.Label),
+			PreprocessErrorCount,
+			0);
+		bPassed &= TestEqual(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should produce the expected module descriptor count"), Scenario.Label),
+			ModulesToCompile.Num(),
+			Scenario.ExpectedModuleDescCount);
+		if (!PreprocessDiagnostics.IsEmpty()) { AddInfo(FString::Printf(TEXT("%s preprocessor diagnostics: %s"), Scenario.Label, *PreprocessDiagnostics)); }
+		if (!bPreprocessSucceeded || ModulesToCompile.Num() != Scenario.ExpectedModuleDescCount) { return false; }
+
+		Engine.ResetDiagnostics();
+		AddExpectedError(*Scenario.ExpectedDiagnosticFragment, EAutomationExpectedErrorFlags::Contains, 1);
+
+		TArray<TSharedRef<FAngelscriptModuleDesc>> CompiledModules;
+		const ECompileResult CompileResult = Engine.CompileModules(
+			ECompileType::SoftReloadOnly,
+			ModulesToCompile,
+			CompiledModules);
+
+		int32 CompileErrorCount = 0;
+		const TArray<FString> CompileMessages = CompilerPipelineImportTest::CollectDiagnosticMessages(
+			Engine,
+			DiagnosticFiles,
+			CompileErrorCount);
+		const FString CompileDiagnostics = FString::Join(CompileMessages, TEXT("\n"));
+		if (!CompileDiagnostics.IsEmpty()) { AddInfo(FString::Printf(TEXT("%s compile diagnostics: %s"), Scenario.Label, *CompileDiagnostics)); }
+
+		bPassed &= TestEqual(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should fail compilation"), Scenario.Label),
+			CompileResult,
+			ECompileResult::Error);
+		bPassed &= TestEqual(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should keep the expected number of compiled module descriptors"), Scenario.Label),
+			CompiledModules.Num(),
+			Scenario.ExpectedCompiledModuleCount);
+		bPassed &= TestTrue(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should capture at least one compile error"), Scenario.Label),
+			CompileErrorCount > 0);
+		bPassed &= TestFalse(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should keep the consumer module inactive after the failed compile"), Scenario.Label),
+			Engine.GetModule(Scenario.ConsumerModuleName.ToString()).IsValid());
+		if (!Scenario.ProviderRelativeScriptPath.IsEmpty())
+			bPassed &= TestFalse(
+				FString::Printf(TEXT("%s declared-import diagnostics scenario should avoid swapping in the provider when the batch fails"), Scenario.Label),
+				Engine.GetModule(Scenario.ProviderModuleName.ToString()).IsValid());
+
+		const FAngelscriptEngine::FDiagnostic* MatchingDiagnostic = CompilerPipelineImportTest::FindMatchingErrorDiagnostic(
+			Engine,
+			ConsumerAbsoluteScriptPath,
+			Scenario.ExpectedDiagnosticFragment);
+		bPassed &= TestNotNull(
+			FString::Printf(TEXT("%s declared-import diagnostics scenario should attach the expected error to the consumer file"), Scenario.Label),
+			MatchingDiagnostic);
+		if (MatchingDiagnostic != nullptr)
+		{
+			bPassed &= TestEqual(
+				FString::Printf(TEXT("%s declared-import diagnostics scenario should keep the diagnostic row pinned to the import line"), Scenario.Label),
+				MatchingDiagnostic->Row,
+				Scenario.ExpectedDiagnosticRow);
+			bPassed &= TestEqual(
+				FString::Printf(TEXT("%s declared-import diagnostics scenario should keep the diagnostic column pinned to the import line start"), Scenario.Label),
+				MatchingDiagnostic->Column,
+				1);
+		}
+	}
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+#endif

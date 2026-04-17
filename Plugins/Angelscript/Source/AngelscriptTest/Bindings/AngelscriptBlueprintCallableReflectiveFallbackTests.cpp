@@ -1,6 +1,7 @@
 #include "../Shared/AngelscriptTestUtilities.h"
 #include "../Shared/AngelscriptTestMacros.h"
 #include "../Shared/AngelscriptTestEngineHelper.h"
+#include "AngelscriptBlueprintCallableReflectiveFallbackTestTypes.h"
 #include "../../AngelscriptRuntime/Binds/BlueprintCallableReflectiveFallback.h"
 #include "../../AngelscriptRuntime/Binds/Helper_FunctionSignature.h"
 
@@ -33,6 +34,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptBlueprintCallableReflectiveFallbackEligibilityTest,
 	"Angelscript.TestModule.Bindings.BlueprintCallableReflectiveFallback.Eligibility",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptBlueprintCallableReflectiveFallbackEligibilityMatrixTest,
+	"Angelscript.TestModule.Bindings.BlueprintCallableReflectiveFallback.EligibilityMatrix",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptBlueprintCallableReflectiveFallbackUmgTest::RunTest(const FString& Parameters)
@@ -250,6 +256,72 @@ bool FAngelscriptBlueprintCallableReflectiveFallbackEligibilityTest::RunTest(con
 		EAngelscriptReflectiveFallbackEligibility::RejectedCustomThunk);
 
 	return true;
+}
+
+bool FAngelscriptBlueprintCallableReflectiveFallbackEligibilityMatrixTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bEligibleOk = false;
+	bool bNullOk = false;
+	bool bMissingOwnerOk = false;
+	bool bTooManyArgsOk = false;
+	ASTEST_BEGIN_SHARE_CLEAN
+	(void)Engine;
+
+	const UFunction* EligibleFunction = UAngelscriptBlueprintCallableReflectiveFallbackTestLibrary::StaticClass()->FindFunctionByName(TEXT("EligibleCallable"));
+	const UFunction* TooManyArgumentsFunction = UAngelscriptBlueprintCallableReflectiveFallbackTestLibrary::StaticClass()->FindFunctionByName(TEXT("TooManyArgumentsCallable"));
+	if (!TestNotNull(TEXT("Reflective fallback eligibility matrix test should locate the eligible sample function"), EligibleFunction)
+		|| !TestNotNull(TEXT("Reflective fallback eligibility matrix test should locate the too-many-arguments sample function"), TooManyArgumentsFunction))
+	{
+		return false;
+	}
+
+	UFunction* MissingOwningClassFunction = NewObject<UFunction>(GetTransientPackage(), NAME_None, RF_Transient);
+	if (!TestNotNull(TEXT("Reflective fallback eligibility matrix test should create a transient UFunction without an owning class"), MissingOwningClassFunction))
+	{
+		return false;
+	}
+
+	auto CheckEligibility = [this](
+		const UFunction* Function,
+		EAngelscriptReflectiveFallbackEligibility ExpectedEligibility,
+		bool bExpectedShouldBind,
+		const TCHAR* Context) -> bool
+	{
+		const bool bEligibilityMatches = TestEqual(
+			*FString::Printf(TEXT("%s should report the expected eligibility enum"), Context),
+			EvaluateReflectiveFallbackEligibility(Function),
+			ExpectedEligibility);
+		const bool bShouldBindMatches = TestEqual(
+			*FString::Printf(TEXT("%s should keep ShouldBindBlueprintCallableReflectiveFallback in sync with the eligibility enum"), Context),
+			ShouldBindBlueprintCallableReflectiveFallback(Function),
+			bExpectedShouldBind);
+		return bEligibilityMatches && bShouldBindMatches;
+	};
+
+	bEligibleOk = CheckEligibility(
+		EligibleFunction,
+		EAngelscriptReflectiveFallbackEligibility::Eligible,
+		true,
+		TEXT("Reflective fallback eligibility matrix test eligible sample"));
+	bNullOk = CheckEligibility(
+		nullptr,
+		EAngelscriptReflectiveFallbackEligibility::RejectedNullFunction,
+		false,
+		TEXT("Reflective fallback eligibility matrix test null sample"));
+	bMissingOwnerOk = CheckEligibility(
+		MissingOwningClassFunction,
+		EAngelscriptReflectiveFallbackEligibility::RejectedMissingOwningClass,
+		false,
+		TEXT("Reflective fallback eligibility matrix test missing-owning-class sample"));
+	bTooManyArgsOk = CheckEligibility(
+		TooManyArgumentsFunction,
+		EAngelscriptReflectiveFallbackEligibility::RejectedTooManyArguments,
+		false,
+		TEXT("Reflective fallback eligibility matrix test too-many-arguments sample"));
+
+	ASTEST_END_SHARE_CLEAN
+	return bEligibleOk && bNullOk && bMissingOwnerOk && bTooManyArgsOk;
 }
 
 #endif

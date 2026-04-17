@@ -37,12 +37,28 @@ namespace
 	bool GUpgradeMessageCallbackInvoked = false;
 	FString GUpgradeMessageText;
 	asEMsgType GUpgradeMessageType = asMSGTYPE_INFORMATION;
+	int32 GUpgradeMessageCallbackACount = 0;
+	int32 GUpgradeMessageCallbackBCount = 0;
+	FString GUpgradeMessageCallbackAText;
+	FString GUpgradeMessageCallbackBText;
 
 	void CaptureUpgradeMessage(asSMessageInfo* Message)
 	{
 		GUpgradeMessageCallbackInvoked = true;
 		GUpgradeMessageText = UTF8_TO_TCHAR(Message->message);
 		GUpgradeMessageType = Message->type;
+	}
+
+	void CaptureUpgradeMessageA(asSMessageInfo* Message)
+	{
+		++GUpgradeMessageCallbackACount;
+		GUpgradeMessageCallbackAText = UTF8_TO_TCHAR(Message->message);
+	}
+
+	void CaptureUpgradeMessageB(asSMessageInfo* Message)
+	{
+		++GUpgradeMessageCallbackBCount;
+		GUpgradeMessageCallbackBText = UTF8_TO_TCHAR(Message->message);
 	}
 }
 
@@ -108,8 +124,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptUpgradeEnginePropertyCallStackLimitOverflowTest,
+	"Angelscript.TestModule.Angelscript.Upgrade.EngineProperties.CallStackLimitOverflow",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptUpgradeMessageCallbackCompatibilityTest,
 	"Angelscript.TestModule.Angelscript.Upgrade.MessageCallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptUpgradeMessageCallbackClearAndReRegisterCompatibilityTest,
+	"Angelscript.TestModule.Angelscript.Upgrade.MessageCallback.ClearAndReRegister",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -201,6 +227,79 @@ bool FAngelscriptUpgradeEnginePropertyCompatibilityTest::RunTest(const FString& 
 	return bCustomPropertiesStillWork;
 }
 
+bool FAngelscriptUpgradeEnginePropertyCallStackLimitOverflowTest::RunTest(const FString& Parameters)
+{
+	TUniquePtr<FAngelscriptEngine> IsolatedEngine = CreateIsolatedCloneEngine();
+	if (!TestNotNull(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should create an isolated clone engine"), IsolatedEngine.Get()))
+	{
+		return false;
+	}
+
+	FAngelscriptEngine& Engine = *IsolatedEngine;
+	FAngelscriptEngineScope EngineScope(Engine);
+
+	const FString RecursiveScript =
+		TEXT("void Recursive(int Depth)\n")
+		TEXT("{\n")
+		TEXT("    if (Depth > 0)\n")
+		TEXT("    {\n")
+		TEXT("        Recursive(Depth - 1);\n")
+		TEXT("    }\n")
+		TEXT("}\n");
+
+	asIScriptModule* Module = BuildModule(*this, Engine, "UpgradeCallStackLimit", RecursiveScript);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* RunFunction = GetFunctionByDecl(*this, *Module, TEXT("void Recursive(int)"));
+	if (RunFunction == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	if (!TestNotNull(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should expose the backing script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	asIScriptContext* Context = Engine.CreateContext();
+	if (!TestNotNull(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should create an execution context"), Context))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		Context->Release();
+	};
+
+	ScriptEngine->SetEngineProperty(asEP_INIT_CALL_STACK_SIZE, 1);
+	ScriptEngine->SetEngineProperty(asEP_MAX_CALL_STACK_SIZE, 1);
+	ScriptEngine->SetEngineProperty(asEP_MAX_NESTED_CALLS, 1);
+
+	const int PrepareResult = Context->Prepare(RunFunction);
+	if (!TestEqual(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should prepare the recursive entry point"), PrepareResult, static_cast<int32>(asSUCCESS)))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should bind the recursive depth argument"), Context->SetArgDWord(0, 1000), static_cast<int32>(asSUCCESS)))
+	{
+		return false;
+	}
+
+	AddExpectedError(TEXT("Stack overflow: potential infinite recursion detected?"), EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("UpgradeCallStackLimit"), EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("void Recursive(int) | Line"), EAutomationExpectedErrorFlags::Contains, -1);
+
+	const int ExecuteResult = Context->Execute();
+	const char* ExceptionStringAnsi = Context->GetExceptionString();
+	const FString ExceptionString = ExceptionStringAnsi != nullptr ? UTF8_TO_TCHAR(ExceptionStringAnsi) : FString();
+	return TestEqual(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should raise an execution exception once the migrated call-stack properties are enforced"), ExecuteResult, static_cast<int32>(asEXECUTION_EXCEPTION))
+		&& TestFalse(TEXT("Upgrade.EngineProperties.CallStackLimitOverflow should expose a non-empty exception string after the overflow"), ExceptionString.IsEmpty());
+}
+
 bool FAngelscriptUpgradeMessageCallbackCompatibilityTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -243,6 +342,111 @@ bool FAngelscriptUpgradeMessageCallbackCompatibilityTest::RunTest(const FString&
 	return TestTrue(TEXT("The registered upgrade callback should receive WriteMessage diagnostics"), GUpgradeMessageCallbackInvoked)
 		&& TestEqual(TEXT("The registered upgrade callback should receive the expected message text"), GUpgradeMessageText, FString(TEXT("CallbackRoundtrip")))
 		&& TestEqual(TEXT("The registered upgrade callback should receive the expected message type"), static_cast<int32>(GUpgradeMessageType), static_cast<int32>(asMSGTYPE_WARNING));
+}
+
+bool FAngelscriptUpgradeMessageCallbackClearAndReRegisterCompatibilityTest::RunTest(const FString& Parameters)
+{
+	TUniquePtr<FAngelscriptEngine> IsolatedEngine = CreateIsolatedCloneEngine();
+	if (!TestNotNull(TEXT("Upgrade.MessageCallback.ClearAndReRegister should create an isolated clone engine"), IsolatedEngine.Get()))
+	{
+		return false;
+	}
+
+	FAngelscriptEngine& Engine = *IsolatedEngine;
+	FAngelscriptEngineScope EngineScope(Engine);
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	if (!TestNotNull(TEXT("Upgrade.MessageCallback.ClearAndReRegister should expose the backing script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	GUpgradeMessageCallbackACount = 0;
+	GUpgradeMessageCallbackBCount = 0;
+	GUpgradeMessageCallbackAText.Reset();
+	GUpgradeMessageCallbackBText.Reset();
+
+	ON_SCOPE_EXIT
+	{
+		ScriptEngine->ClearMessageCallback();
+	};
+
+	bool bPassed = true;
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should register callback A"),
+		ScriptEngine->SetMessageCallback(asFUNCTION(CaptureUpgradeMessageA), nullptr, asCALL_CDECL),
+		asSUCCESS);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should dispatch the first message successfully"),
+		ScriptEngine->WriteMessage("Upgrade", 1, 1, asMSGTYPE_WARNING, "CallbackA"),
+		asSUCCESS);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should deliver the first message to callback A exactly once"),
+		GUpgradeMessageCallbackACount,
+		1);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should preserve the first callback payload"),
+		GUpgradeMessageCallbackAText,
+		FString(TEXT("CallbackA")));
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should keep callback B untouched before re-registration"),
+		GUpgradeMessageCallbackBCount,
+		0);
+
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should clear the active callback successfully"),
+		ScriptEngine->ClearMessageCallback(),
+		asSUCCESS);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should allow WriteMessage after the callback is cleared"),
+		ScriptEngine->WriteMessage("Upgrade", 1, 1, asMSGTYPE_WARNING, "CallbackAfterClear"),
+		asSUCCESS);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should keep callback A count unchanged after ClearMessageCallback"),
+		GUpgradeMessageCallbackACount,
+		1);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should keep callback B count unchanged while no callback is registered"),
+		GUpgradeMessageCallbackBCount,
+		0);
+
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should register callback B after the clear"),
+		ScriptEngine->SetMessageCallback(asFUNCTION(CaptureUpgradeMessageB), nullptr, asCALL_CDECL),
+		asSUCCESS);
+
+	asSFuncPtr CallbackPtr = {};
+	void* CallbackObject = nullptr;
+	asDWORD CallConv = 0;
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should report a registered callback after re-registration"),
+		ScriptEngine->GetMessageCallback(&CallbackPtr, &CallbackObject, &CallConv),
+		asSUCCESS);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should preserve the callback B call convention"),
+		static_cast<int32>(CallConv),
+		static_cast<int32>(asCALL_CDECL));
+	bPassed &= TestNull(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should not attach an object instance when re-registering a free function"),
+		CallbackObject);
+
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should dispatch the third message successfully"),
+		ScriptEngine->WriteMessage("Upgrade", 1, 1, asMSGTYPE_WARNING, "CallbackB"),
+		asSUCCESS);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should keep callback A count frozen after callback B takes over"),
+		GUpgradeMessageCallbackACount,
+		1);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should deliver the third message to callback B exactly once"),
+		GUpgradeMessageCallbackBCount,
+		1);
+	bPassed &= TestEqual(
+		TEXT("Upgrade.MessageCallback.ClearAndReRegister should preserve the re-registered callback payload"),
+		GUpgradeMessageCallbackBText,
+		FString(TEXT("CallbackB")));
+
+	return bPassed;
 }
 
 bool FAngelscriptUpgradeRegisterObjectTypeFlagCompatibilityTest::RunTest(const FString& Parameters)

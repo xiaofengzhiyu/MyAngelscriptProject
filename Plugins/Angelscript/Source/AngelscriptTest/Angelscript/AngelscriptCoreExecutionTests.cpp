@@ -1,11 +1,67 @@
 #include "Angelscript/AngelscriptTestSupport.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 // Test Layer: Runtime Integration
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+
+namespace
+{
+	struct FCoreEngineContextStackGuard
+	{
+		TArray<FAngelscriptEngine*> SavedStack;
+
+		FCoreEngineContextStackGuard()
+		{
+			SavedStack = FAngelscriptEngineContextStack::SnapshotAndClear();
+		}
+
+		~FCoreEngineContextStackGuard()
+		{
+			FAngelscriptEngineContextStack::RestoreSnapshot(MoveTemp(SavedStack));
+		}
+
+		void DiscardSavedStack()
+		{
+			SavedStack.Reset();
+		}
+	};
+
+	const FAngelscriptEngine::FDiagnostics* FindDiagnosticsByFilenameSuffix(const FAngelscriptEngine& Engine, const FString& FilenameSuffix)
+	{
+		for (const TPair<FString, FAngelscriptEngine::FDiagnostics>& Pair : Engine.Diagnostics)
+		{
+			if (Pair.Key.EndsWith(FilenameSuffix))
+			{
+				return &Pair.Value;
+			}
+		}
+
+		return nullptr;
+	}
+
+	const FAngelscriptEngine::FDiagnostic* FindFirstErrorDiagnostic(const FAngelscriptEngine::FDiagnostics* FileDiagnostics)
+	{
+		if (FileDiagnostics == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (const FAngelscriptEngine::FDiagnostic& Diagnostic : FileDiagnostics->Diagnostics)
+		{
+			if (Diagnostic.bIsError)
+			{
+				return &Diagnostic;
+			}
+		}
+
+		return nullptr;
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptCoreCreateCompileExecuteTest,
@@ -26,6 +82,120 @@ bool FAngelscriptCoreCreateCompileExecuteTest::RunTest(const FString& Parameters
 	ASTEST_END_SHARE
 
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCoreCreateCompileExecuteFreshEngineBootstrapTest,
+	"Angelscript.TestModule.Angelscript.Core.CreateCompileExecute.FreshEngineBootstrap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptCoreCreateCompileExecuteFreshEngineBootstrapTest::RunTest(const FString& Parameters)
+{
+	static constexpr ANSICHAR ModuleNameAnsi[] = "ASCoreFreshBootstrap";
+	static const FName ModuleName(TEXT("ASCoreFreshBootstrap"));
+	static const FString Script = TEXT("int DoubleValue(int Value) { return Value * 2; } int Run() { return DoubleValue(21); }");
+
+	FCoreEngineContextStackGuard ContextGuard;
+
+	const FAngelscriptEngineConfig Config;
+	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
+	TUniquePtr<FAngelscriptEngine> LocalEngine = FAngelscriptEngine::CreateForTesting(
+		Config,
+		Dependencies,
+		EAngelscriptEngineCreationMode::Full);
+	if (!TestNotNull(TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should create a fresh full test engine"), LocalEngine.Get()))
+	{
+		return false;
+	}
+
+	bool bPassed = true;
+	bPassed &= TestNotNull(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should initialize an underlying script engine"),
+		LocalEngine->GetScriptEngine());
+	bPassed &= TestEqual(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should start with zero active modules"),
+		LocalEngine->GetActiveModules().Num(),
+		0);
+
+	FAngelscriptEngineScope EngineScope(*LocalEngine);
+	bPassed &= TestTrue(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should use the fresh engine as the active scope"),
+		FAngelscriptEngine::TryGetCurrentEngine() == LocalEngine.Get());
+
+	asIScriptModule* Module = BuildModule(*this, *LocalEngine, ModuleNameAnsi, Script);
+	if (!TestNotNull(TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should compile the first module on the fresh engine"), Module))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should register exactly one active module after compile"),
+		LocalEngine->GetActiveModules().Num(),
+		1);
+	bPassed &= TestTrue(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should expose the compiled module through module lookup"),
+		LocalEngine->GetModuleByModuleName(ModuleName.ToString()).IsValid());
+
+	asIScriptFunction* RunFunction = GetFunctionByDecl(*this, *Module, TEXT("int Run()"));
+	if (RunFunction == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptContext* Context = LocalEngine->CreateContext();
+	if (!TestNotNull(TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should create the first execution context on the fresh engine"), Context))
+	{
+		return false;
+	}
+
+	ON_SCOPE_EXIT
+	{
+		if (Context != nullptr)
+		{
+			Context->Release();
+		}
+	};
+
+	const int PrepareResult = Context->Prepare(RunFunction);
+	bPassed &= TestEqual(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should prepare the first context successfully"),
+		PrepareResult,
+		asSUCCESS);
+	if (PrepareResult != asSUCCESS)
+	{
+		return false;
+	}
+
+	const int ExecuteResult = Context->Execute();
+	bPassed &= TestEqual(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should execute the first context successfully"),
+		ExecuteResult,
+		asEXECUTION_FINISHED);
+	if (ExecuteResult != asEXECUTION_FINISHED)
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should return the expected bootstrap result"),
+		static_cast<int32>(Context->GetReturnDWord()),
+		42);
+
+	Context->Release();
+	Context = nullptr;
+
+	bPassed &= TestTrue(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should discard the bootstrap module"),
+		LocalEngine->DiscardModule(*ModuleName.ToString()));
+	bPassed &= TestEqual(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should return to zero active modules after discard"),
+		LocalEngine->GetActiveModules().Num(),
+		0);
+	bPassed &= TestFalse(
+		TEXT("Core.CreateCompileExecute.FreshEngineBootstrap should clear module lookup after discard"),
+		LocalEngine->GetModuleByModuleName(ModuleName.ToString()).IsValid());
+
+	return bPassed;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -78,6 +248,272 @@ bool FAngelscriptCoreCreateEngineTest::RunTest(const FString& Parameters)
 
 	TestEqual(TEXT("Core.CreateEngine should preserve the embedded AngelScript version"), ANGELSCRIPT_VERSION, 23300);
 	return ScriptEngineA != nullptr && ScriptEngineB != nullptr;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCoreCreateEngineRequestedModeTest,
+	"Angelscript.TestModule.Angelscript.Core.CreateEngine.RespectsRequestedMode",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptCoreCreateEngineRequestedModeTest::RunTest(const FString& Parameters)
+{
+	FCoreEngineContextStackGuard ContextGuard;
+	DestroySharedTestEngine();
+	if (FAngelscriptEngine::IsInitialized())
+	{
+		FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
+	}
+	ContextGuard.DiscardSavedStack();
+	ON_SCOPE_EXIT
+	{
+		if (FAngelscriptEngine::IsInitialized())
+		{
+			FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
+		}
+		DestroySharedTestEngine();
+	};
+
+	const FAngelscriptEngineConfig Config;
+	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
+
+	TUniquePtr<FAngelscriptEngine> SourceEngine = CreateFullTestEngine();
+	if (!TestNotNull(TEXT("Core.CreateEngine.RespectsRequestedMode should create a source full engine"), SourceEngine.Get()))
+	{
+		return false;
+	}
+
+	TUniquePtr<FAngelscriptEngine> FallbackCloneRequest = FAngelscriptEngine::CreateForTesting(
+		Config,
+		Dependencies,
+		EAngelscriptEngineCreationMode::Clone);
+	if (!TestNotNull(TEXT("Core.CreateEngine.RespectsRequestedMode should create an engine for an unscoped clone request"), FallbackCloneRequest.Get()))
+	{
+		return false;
+	}
+
+	bool bPassed = true;
+	bPassed &= TestEqual(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should fall back to Full when Clone is requested without a current engine"),
+		FallbackCloneRequest->GetCreationMode(),
+		EAngelscriptEngineCreationMode::Full);
+	bPassed &= TestNotNull(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should initialize a script engine for the fallback full instance"),
+		FallbackCloneRequest->GetScriptEngine());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should create a distinct wrapper for the fallback full instance"),
+		FallbackCloneRequest.Get() != SourceEngine.Get());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should give the fallback full instance a distinct script engine"),
+		FallbackCloneRequest->GetScriptEngine() != SourceEngine->GetScriptEngine());
+
+	TUniquePtr<FAngelscriptEngine> ScopedCloneRequest;
+	TUniquePtr<FAngelscriptEngine> ExplicitFullRequest;
+	{
+		FAngelscriptEngineScope SourceScope(*SourceEngine);
+		if (!TestTrue(
+				TEXT("Core.CreateEngine.RespectsRequestedMode should expose the host full engine as the current scope"),
+				FAngelscriptEngine::TryGetCurrentEngine() == SourceEngine.Get()))
+		{
+			return false;
+		}
+
+		ScopedCloneRequest = FAngelscriptEngine::CreateForTesting(
+			Config,
+			Dependencies,
+			EAngelscriptEngineCreationMode::Clone);
+		ExplicitFullRequest = FAngelscriptEngine::CreateForTesting(
+			Config,
+			Dependencies,
+			EAngelscriptEngineCreationMode::Full);
+	}
+
+	if (!TestNotNull(TEXT("Core.CreateEngine.RespectsRequestedMode should create a scoped clone engine"), ScopedCloneRequest.Get()))
+	{
+		return false;
+	}
+	if (!TestNotNull(TEXT("Core.CreateEngine.RespectsRequestedMode should create an explicit full engine"), ExplicitFullRequest.Get()))
+	{
+		return false;
+	}
+
+	bPassed &= TestNull(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should clear the current engine after leaving the source scope"),
+		FAngelscriptEngine::TryGetCurrentEngine());
+	bPassed &= TestEqual(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should preserve Clone mode when a source scope exists"),
+		ScopedCloneRequest->GetCreationMode(),
+		EAngelscriptEngineCreationMode::Clone);
+	bPassed &= TestEqual(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should preserve explicit Full mode even when a source scope exists"),
+		ExplicitFullRequest->GetCreationMode(),
+		EAngelscriptEngineCreationMode::Full);
+	bPassed &= TestNotNull(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should initialize a script engine for the scoped clone"),
+		ScopedCloneRequest->GetScriptEngine());
+	bPassed &= TestNotNull(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should initialize a script engine for the explicit full engine"),
+		ExplicitFullRequest->GetScriptEngine());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should keep the scoped clone wrapper distinct from the source engine"),
+		ScopedCloneRequest.Get() != SourceEngine.Get());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should keep the explicit full wrapper distinct from the source engine"),
+		ExplicitFullRequest.Get() != SourceEngine.Get());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should keep the scoped clone wrapper distinct from the explicit full wrapper"),
+		ScopedCloneRequest.Get() != ExplicitFullRequest.Get());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should bind the scoped clone to the source engine"),
+		ScopedCloneRequest->GetSourceEngine() == SourceEngine.Get());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should reuse the source script engine for the scoped clone"),
+		ScopedCloneRequest->GetScriptEngine() == SourceEngine->GetScriptEngine());
+	bPassed &= TestNull(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should not retain a source engine for the explicit full request"),
+		ExplicitFullRequest->GetSourceEngine());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should give the explicit full request its own script engine"),
+		ExplicitFullRequest->GetScriptEngine() != SourceEngine->GetScriptEngine());
+	bPassed &= TestTrue(
+		TEXT("Core.CreateEngine.RespectsRequestedMode should keep the explicit full script engine distinct from the fallback full instance"),
+		ExplicitFullRequest->GetScriptEngine() != FallbackCloneRequest->GetScriptEngine());
+
+	return bPassed;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCoreCreateEngineIsolatedModuleRegistriesTest,
+	"Angelscript.TestModule.Angelscript.Core.CreateEngine.IsolatedModuleRegistries",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FAngelscriptCoreCreateEngineIsolatedModuleRegistriesTest::RunTest(const FString& Parameters)
+{
+	const FName ModuleName(TEXT("ASCoreCreateEngineIsolationA"));
+	FCoreEngineContextStackGuard ContextGuard;
+	DestroySharedTestEngine();
+	if (FAngelscriptEngine::IsInitialized()) { FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine(); }
+	ContextGuard.DiscardSavedStack();
+	ON_SCOPE_EXIT
+	{
+		if (FAngelscriptEngine::IsInitialized()) { FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine(); }
+		DestroySharedTestEngine();
+	};
+	const FAngelscriptEngineConfig Config; const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
+	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateForTesting(Config, Dependencies), EngineB = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	int32 Result = 0;
+	if (!TestNotNull(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create engine A"), EngineA.Get()) || !TestNotNull(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create engine B"), EngineB.Get())) return false;
+	if (!TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create distinct script engines"), EngineA->GetScriptEngine() != nullptr && EngineB->GetScriptEngine() != nullptr && EngineA->GetScriptEngine() != EngineB->GetScriptEngine())
+		|| !TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should compile the module only on engine A"), CompileModuleFromMemory(EngineA.Get(), ModuleName, TEXT("ASCoreCreateEngineIsolationA.as"), TEXT("int Run() { return 42; }")))
+		|| !TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should execute Run() on engine A"), ExecuteIntFunction(EngineA.Get(), ModuleName, TEXT("int Run()"), Result))
+		|| !TestEqual(TEXT("Core.CreateEngine.IsolatedModuleRegistries should return the compiled value on engine A"), Result, 42)
+		|| !TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should register the module on engine A"), EngineA->GetModuleByModuleName(ModuleName.ToString()).IsValid())
+		|| !TestFalse(TEXT("Core.CreateEngine.IsolatedModuleRegistries should keep engine B module lookup empty"), EngineB->GetModuleByModuleName(ModuleName.ToString()).IsValid())
+		|| !TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should discard the module from engine A"), EngineA->DiscardModule(*ModuleName.ToString()))
+		|| !TestFalse(TEXT("Core.CreateEngine.IsolatedModuleRegistries should keep engine B empty after engine A discard"), EngineB->GetModuleByModuleName(ModuleName.ToString()).IsValid())) return false;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCoreModuleLookupFilenameThenModuleFallbackTest,
+	"Angelscript.TestModule.Angelscript.Core.ModuleLookup.FilenameThenModuleFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptCoreModuleLookupFilenameThenModuleFallbackTest::RunTest(const FString& Parameters)
+{
+	static const FName ModuleName(TEXT("ASCoreModuleLookupProbe"));
+	static const FString RelativeFilename(TEXT("Lookup/ModuleLookup/FilenameFallback.as"));
+	static const FString MissingFilename(TEXT("Z:/DefinitelyMissing/ModuleLookupProbe.as"));
+	static const FString WrongModuleName(TEXT("DefinitelyWrongName"));
+	static const FString Script(TEXT("int Run() { return 42; }"));
+
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	const FString AbsoluteFilename = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), RelativeFilename);
+	const FName WrongModuleFName(*WrongModuleName);
+	if (!TestTrue(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should compile the probe module"),
+			CompileModuleFromMemory(&Engine, ModuleName, RelativeFilename, Script)))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FAngelscriptModuleDesc> FilenameModule = Engine.GetModuleByFilename(AbsoluteFilename);
+	const TSharedPtr<FAngelscriptModuleDesc> FilenameHitModule = Engine.GetModuleByFilenameOrModuleName(AbsoluteFilename, WrongModuleName);
+	const TSharedPtr<FAngelscriptModuleDesc> FallbackModule = Engine.GetModuleByFilenameOrModuleName(MissingFilename, ModuleName.ToString());
+	const TSharedPtr<FAngelscriptModuleDesc> MissingModule = Engine.GetModuleByFilenameOrModuleName(MissingFilename, WrongModuleName);
+
+	bPassed &= TestNotNull(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should find the module by absolute filename"),
+		FilenameModule.Get());
+	bPassed &= TestNotNull(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should prefer filename hits even when the module name argument is wrong"),
+		FilenameHitModule.Get());
+	bPassed &= TestNotNull(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should fall back to module-name lookup when filename misses"),
+		FallbackModule.Get());
+	bPassed &= TestFalse(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should return null when both filename and module name miss"),
+		MissingModule.IsValid());
+
+	if (FilenameModule.IsValid())
+	{
+		bPassed &= TestEqual(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should keep the explicit module name on the compiled descriptor"),
+			FilenameModule->ModuleName,
+			ModuleName.ToString());
+		bPassed &= TestEqual(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should keep a single code section on the compiled descriptor"),
+			FilenameModule->Code.Num(),
+			1);
+		if (FilenameModule->Code.Num() == 1)
+		{
+			bPassed &= TestTrue(
+				TEXT("Core.ModuleLookup.FilenameThenModuleFallback should preserve the absolute automation filename on the code section"),
+				FilenameModule->Code[0].AbsoluteFilename.Equals(AbsoluteFilename, ESearchCase::IgnoreCase));
+		}
+		bPassed &= TestNotNull(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should keep the active script module on filename lookup"),
+			FilenameModule->ScriptModule);
+	}
+
+	if (FilenameModule.IsValid() && FilenameHitModule.IsValid())
+	{
+		bPassed &= TestTrue(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should return the same descriptor for direct filename lookup and filename-first combined lookup"),
+			FilenameHitModule.Get() == FilenameModule.Get());
+	}
+
+	if (FilenameModule.IsValid() && FallbackModule.IsValid())
+	{
+		bPassed &= TestTrue(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should return the same descriptor after module-name fallback"),
+			FallbackModule.Get() == FilenameModule.Get());
+		bPassed &= TestTrue(
+			TEXT("Core.ModuleLookup.FilenameThenModuleFallback should keep the same active script module after fallback"),
+			FallbackModule->ScriptModule == FilenameModule->ScriptModule);
+	}
+
+	int32 FilenameResult = 0;
+	bPassed &= TestTrue(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should execute through the filename-hit path even when the module name argument is wrong"),
+		ExecuteIntFunction(&Engine, AbsoluteFilename, WrongModuleFName, TEXT("int Run()"), FilenameResult));
+	bPassed &= TestEqual(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should return the probe value through the filename-hit path"),
+		FilenameResult,
+		42);
+
+	int32 FallbackResult = 0;
+	bPassed &= TestTrue(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should execute through the module-name fallback path"),
+		ExecuteIntFunction(&Engine, MissingFilename, ModuleName, TEXT("int Run()"), FallbackResult));
+	bPassed &= TestEqual(
+		TEXT("Core.ModuleLookup.FilenameThenModuleFallback should return the probe value through the fallback path"),
+		FallbackResult,
+		42);
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -167,6 +603,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Angelscript.Core.Parser",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptCompilerParserInvalidSyntaxDiagnosticsAndCleanupTest,
+	"Angelscript.TestModule.Angelscript.Core.Parser.InvalidSyntaxDiagnosticsAndCleanup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptCompilerParserTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
@@ -207,6 +648,107 @@ bool FAngelscriptCompilerParserTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestEqual(TEXT("Core.Parser should report an error compile result for invalid syntax"), InvalidCompileResult, ECompileResult::Error);
+	ASTEST_END_FULL
+
+	return true;
+}
+
+bool FAngelscriptCompilerParserInvalidSyntaxDiagnosticsAndCleanupTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+	ASTEST_BEGIN_FULL
+	static const FName ModuleName(TEXT("ASCoreParserInvalidCleanup"));
+	static const FString Filename(TEXT("ASCoreParserInvalidCleanup.as"));
+
+	Engine.ResetDiagnostics();
+	Engine.LastEmittedDiagnostics.Empty();
+
+	ECompileResult InvalidCompileResult = ECompileResult::FullyHandled;
+	UE_SET_LOG_VERBOSITY(Angelscript, Fatal);
+	const bool bCompiledInvalid = CompileModuleWithResult(
+		&Engine,
+		ECompileType::SoftReloadOnly,
+		ModuleName,
+		Filename,
+		TEXT("void Test( { int A = 1; }"),
+		InvalidCompileResult);
+	UE_SET_LOG_VERBOSITY(Angelscript, Log);
+
+	if (!TestFalse(TEXT("Core.Parser invalid-syntax recovery should fail the broken compile"), bCompiledInvalid))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("Core.Parser invalid-syntax recovery should surface an error compile result"), InvalidCompileResult, ECompileResult::Error))
+	{
+		return false;
+	}
+
+	const FAngelscriptEngine::FDiagnostics* InvalidDiagnostics = FindDiagnosticsByFilenameSuffix(Engine, Filename);
+	if (!TestNotNull(TEXT("Core.Parser invalid-syntax recovery should capture diagnostics for the broken file"), InvalidDiagnostics))
+	{
+		return false;
+	}
+
+	const FAngelscriptEngine::FDiagnostic* InvalidDiagnostic = FindFirstErrorDiagnostic(InvalidDiagnostics);
+	if (!TestNotNull(TEXT("Core.Parser invalid-syntax recovery should capture at least one error diagnostic"), InvalidDiagnostic))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Core.Parser invalid-syntax recovery should preserve the failing filename in diagnostics"), InvalidDiagnostics->Filename.EndsWith(Filename));
+	TestTrue(TEXT("Core.Parser invalid-syntax recovery should report a non-zero diagnostic row"), InvalidDiagnostic->Row > 0);
+	TestTrue(TEXT("Core.Parser invalid-syntax recovery should report a non-zero diagnostic column"), InvalidDiagnostic->Column > 0);
+	TestTrue(
+		TEXT("Core.Parser invalid-syntax recovery should keep a syntax-oriented diagnostic message"),
+		InvalidDiagnostic->Message.Contains(TEXT("Expected"))
+			|| InvalidDiagnostic->Message.Contains(TEXT("Unexpected"))
+			|| InvalidDiagnostic->Message.Contains(TEXT("instead")));
+
+	const TSharedPtr<FAngelscriptModuleDesc> FailedModuleDesc = Engine.GetModuleByModuleName(ModuleName.ToString());
+	if (FailedModuleDesc.IsValid() && FailedModuleDesc->ScriptModule != nullptr)
+	{
+		TestEqual(
+			TEXT("Core.Parser invalid-syntax recovery should leave zero functions on a failed module record"),
+			static_cast<int32>(FailedModuleDesc->ScriptModule->GetFunctionCount()),
+			0);
+		TestEqual(
+			TEXT("Core.Parser invalid-syntax recovery should leave zero globals on a failed module record"),
+			static_cast<int32>(FailedModuleDesc->ScriptModule->GetGlobalVarCount()),
+			0);
+	}
+	else
+	{
+		TestFalse(TEXT("Core.Parser invalid-syntax recovery should not keep a live module record after failure"), FailedModuleDesc.IsValid());
+	}
+
+	Engine.ResetDiagnostics();
+	Engine.LastEmittedDiagnostics.Empty();
+
+	ECompileResult FixedCompileResult = ECompileResult::Error;
+	const bool bCompiledFixed = CompileModuleWithResult(
+		&Engine,
+		ECompileType::SoftReloadOnly,
+		ModuleName,
+		Filename,
+		TEXT("int Test() { return 42; }"),
+		FixedCompileResult);
+	if (!TestTrue(TEXT("Core.Parser invalid-syntax recovery should compile the fixed script after failure"), bCompiledFixed))
+	{
+		return false;
+	}
+	if (!TestTrue(
+			TEXT("Core.Parser invalid-syntax recovery should report a handled compile result after retry"),
+			FixedCompileResult == ECompileResult::FullyHandled || FixedCompileResult == ECompileResult::PartiallyHandled))
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!TestTrue(TEXT("Core.Parser invalid-syntax recovery should execute the fixed function after retry"), ExecuteIntFunction(&Engine, ModuleName, TEXT("int Test()"), Result)))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Core.Parser invalid-syntax recovery should return the fixed result after retry"), Result, 42);
 	ASTEST_END_FULL
 
 	return true;

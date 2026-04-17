@@ -20,6 +20,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptSetCompareSameSizeMismatchBindingsTest,
+	"Angelscript.TestModule.Bindings.SetCompareSameSizeMismatch",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptMapCompareValueBindingsTest,
+	"Angelscript.TestModule.Bindings.MapCompareValueCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptOptionalTypeCompareTest,
 	"Angelscript.TestModule.Bindings.OptionalTypeCompareCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -86,6 +96,71 @@ int Entry()
 	return true;
 }
 
+bool FAngelscriptSetCompareSameSizeMismatchBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(TEXT("ASSetCompareSameSizeMismatch"));
+	};
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASSetCompareSameSizeMismatch",
+		TEXT(R"(
+int Entry()
+{
+	TSet<int> Left;
+	Left.Add(1);
+	Left.Add(4);
+
+	TSet<int> Reordered;
+	Reordered.Add(4);
+	Reordered.Add(1);
+
+	TSet<int> DifferentSameSize;
+	DifferentSameSize.Add(1);
+	DifferentSameSize.Add(9);
+
+	TSet<int> Copy = Left;
+
+	if (!(Left == Reordered))
+		return 10;
+
+	if (Left == DifferentSameSize)
+		return 20;
+
+	if (!(Copy == Left))
+		return 30;
+
+	return 1;
+}
+)"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("TSet compare should reject same-size mismatched members while preserving reorder and copy equality"), Result, 1);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
 bool FAngelscriptMapCompareBindingsTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
@@ -138,6 +213,72 @@ int Entry()
 	}
 
 	TestEqual(TEXT("TMap compare operations should behave as expected"), Result, 1);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
+bool FAngelscriptMapCompareValueBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(TEXT("ASMapCompareValueCompat"));
+	};
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASMapCompareValueCompat",
+		TEXT(R"(
+int Entry()
+{
+	TMap<FName, int> Left;
+	Left.Add(FName("Alpha"), 2);
+	Left.Add(FName("Beta"), 5);
+
+	TMap<FName, int> Right;
+	Right.Add(FName("Beta"), 5);
+	Right.Add(FName("Alpha"), 2);
+
+	TMap<FName, int> DifferentValue;
+	DifferentValue.Add(FName("Alpha"), 99);
+	DifferentValue.Add(FName("Beta"), 5);
+
+	TMap<FName, int> Empty;
+	TMap<FName, int> AnotherEmpty;
+
+	if (!(Left == Right))
+		return 10;
+	if (Left == DifferentValue)
+		return 20;
+	if (Left == Empty)
+		return 30;
+	if (!(Empty == AnotherEmpty))
+		return 40;
+
+	return 1;
+}
+)"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("TMap value-sensitive compare operations should behave as expected"), Result, 1);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;

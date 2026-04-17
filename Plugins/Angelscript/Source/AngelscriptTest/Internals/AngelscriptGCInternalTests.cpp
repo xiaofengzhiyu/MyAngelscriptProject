@@ -39,6 +39,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Internals.GC.CycleDetection",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptGCTwoNodeCycleCollectionTest,
+	"Angelscript.TestModule.Internals.GC.TwoNodeCycleCollection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 namespace
 {
 	struct FGCProbeObject;
@@ -413,6 +418,60 @@ bool FAngelscriptGCCycleDetectionTest::RunTest(const FString& Parameters)
 	const FGCStatisticsSnapshot AfterCollect = GetGCStatisticsSnapshot(*ScriptEngine);
 	TestTrue(TEXT("GC should eventually destroy the detected cycle"), AfterCollect.TotalDestroyed >= AfterDetect.TotalDestroyed);
 	TestEqual(TEXT("GC should leave no probe objects alive after collecting the detected self-cycle"), FGCProbeObject::LiveCount, 0);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
+bool FAngelscriptGCTwoNodeCycleCollectionTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	asITypeInfo* GCProbeType = nullptr;
+	if (!RegisterGCProbeType(*this, *ScriptEngine, GCProbeType))
+	{
+		return false;
+	}
+
+	FGCProbeObject::LiveCount = 0;
+	FGCProbeObject* Root = CreateTwoNodeCycle(*ScriptEngine, *GCProbeType);
+	if (!TestNotNull(TEXT("GC two-node cycle collection test should create the root probe object"), Root))
+	{
+		return false;
+	}
+
+	FGCProbeObject* Peer = Root->Peer;
+	if (!TestNotNull(TEXT("GC two-node cycle collection test should create the peer probe object"), Peer))
+	{
+		return false;
+	}
+
+	TestNotEqual(TEXT("GC two-node cycle collection test should build two distinct probe objects"), Root, Peer);
+	TestEqual(TEXT("GC two-node cycle collection test should start with two live probe objects"), FGCProbeObject::LiveCount, 2);
+
+	const FGCStatisticsSnapshot BeforeRelease = GetGCStatisticsSnapshot(*ScriptEngine);
+	Root->Release();
+	Peer->Release();
+
+	if (!TestEqual(TEXT("GC two-node cycle detection should accept a detect-only full cycle"), ScriptEngine->GarbageCollect(asGC_FULL_CYCLE | asGC_DETECT_GARBAGE, 1), 0))
+	{
+		return false;
+	}
+
+	const FGCStatisticsSnapshot AfterDetect = GetGCStatisticsSnapshot(*ScriptEngine);
+	TestTrue(TEXT("GC should detect at least one released two-node cycle"), AfterDetect.TotalDetected >= BeforeRelease.TotalDetected + 1);
+	TestTrue(TEXT("Detect-only GC should keep both released cyclic objects tracked until destroy runs"), AfterDetect.CurrentSize >= BeforeRelease.CurrentSize);
+
+	if (!TestTrue(TEXT("GC two-node cycle collection test should complete subsequent collection passes"), RunFullGarbageCollection(*ScriptEngine)))
+	{
+		return false;
+	}
+
+	const FGCStatisticsSnapshot AfterCollect = GetGCStatisticsSnapshot(*ScriptEngine);
+	TestTrue(TEXT("GC should destroy released two-node cycle objects during full collection"), AfterCollect.TotalDestroyed > AfterDetect.TotalDestroyed);
+	TestTrue(TEXT("Full collection should remove both released cyclic probe objects from GC tracking"), AfterDetect.CurrentSize >= AfterCollect.CurrentSize + 2);
+	TestEqual(TEXT("GC should leave no probe objects alive after collecting the detected two-node cycle"), FGCProbeObject::LiveCount, 0);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;

@@ -4,6 +4,8 @@
 #include "../Shared/AngelscriptTestEngineHelper.h"
 #include "../Shared/AngelscriptTestMacros.h"
 #include "Misc/AutomationTest.h"
+#include "UObject/Package.h"
+#include "UObject/UnrealType.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_context.h"
@@ -53,6 +55,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptFullDestroyAllowsAnnotatedRecreateTest,
 	"Angelscript.TestModule.Engine.FullDestroyAllowsAnnotatedRecreate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptFullDestroyAllowsAnnotatedSameNameRecreateTest,
+	"Angelscript.TestModule.Engine.FullDestroyAllowsAnnotatedSameNameRecreate",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptTestModuleLifecycleTest::RunTest(const FString& Parameters)
@@ -349,6 +356,142 @@ class ARecreateAnnotatedActorB : AActor
 }
 )"),
 		TEXT("ARecreateAnnotatedActorB"));
+}
+
+bool FAngelscriptFullDestroyAllowsAnnotatedSameNameRecreateTest::RunTest(const FString& Parameters)
+{
+	FCoreTestContextStackGuard ContextGuard;
+	AngelscriptTestSupport::DestroySharedTestEngine();
+	if (FAngelscriptEngine::IsInitialized())
+	{
+		AngelscriptTestSupport::FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
+	}
+	ContextGuard.DiscardSavedStack();
+	ON_SCOPE_EXIT
+	{
+		if (FAngelscriptEngine::IsInitialized())
+		{
+			AngelscriptTestSupport::FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
+		}
+		AngelscriptTestSupport::DestroySharedTestEngine();
+	};
+
+	const FName ModuleName(TEXT("RecreateAnnotatedActor"));
+	const FString ModuleNameString = ModuleName.ToString();
+	const TCHAR* Filename = TEXT("RecreateAnnotatedActor.as");
+	const FName GeneratedClassName(TEXT("ARecreateAnnotatedActor"));
+	const FString FirstEpochSource = TEXT(R"(
+UCLASS()
+class ARecreateAnnotatedActor : AActor
+{
+	UPROPERTY()
+	int Value = 11;
+}
+)");
+	const FString SecondEpochSource = TEXT(R"(
+UCLASS()
+class ARecreateAnnotatedActor : AActor
+{
+	UPROPERTY()
+	int Value = 22;
+}
+)");
+
+	auto CompileAnnotatedActor = [this, ModuleName, Filename, GeneratedClassName](FAngelscriptEngine* Engine, const FString& ScriptSource, int32 ExpectedValue, UClass*& OutGeneratedClass)
+	{
+		FAngelscriptEngineScope Scope(*Engine);
+		if (!TestTrue(
+			FString::Printf(TEXT("%s should compile annotated source"), *ModuleName.ToString()),
+			AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(Engine, ModuleName, Filename, ScriptSource)))
+		{
+			return false;
+		}
+
+		UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(Engine, GeneratedClassName);
+		if (!TestNotNull(TEXT("Annotated same-name recreate test should resolve the generated class"), GeneratedClass))
+		{
+			return false;
+		}
+
+		FIntProperty* ValueProperty = FindFProperty<FIntProperty>(GeneratedClass, TEXT("Value"));
+		if (!TestNotNull(TEXT("Annotated same-name recreate test should expose the generated Value property"), ValueProperty))
+		{
+			return false;
+		}
+
+		UObject* DefaultObject = GeneratedClass->GetDefaultObject();
+		if (!TestNotNull(TEXT("Annotated same-name recreate test should expose a generated CDO"), DefaultObject))
+		{
+			return false;
+		}
+
+		TestEqual(TEXT("Annotated same-name recreate test should read the expected CDO Value"), ValueProperty->GetPropertyValue_InContainer(DefaultObject), ExpectedValue);
+		OutGeneratedClass = GeneratedClass;
+		return true;
+	};
+
+	TUniquePtr<FAngelscriptEngine> FirstEngine = AngelscriptTestSupport::CreateFullTestEngine();
+	if (!TestNotNull(TEXT("Annotated same-name recreate test should create the first full engine"), FirstEngine.Get()))
+	{
+		return false;
+	}
+
+	UClass* FirstGeneratedClass = nullptr;
+	if (!CompileAnnotatedActor(FirstEngine.Get(), FirstEpochSource, 11, FirstGeneratedClass))
+	{
+		return false;
+	}
+
+	UPackage* FirstGeneratedPackage = FirstGeneratedClass->GetPackage();
+	if (!TestNotNull(TEXT("Annotated same-name recreate test should resolve the first generated package"), FirstGeneratedPackage))
+	{
+		return false;
+	}
+
+	const FString FirstClassPath = FirstGeneratedClass->GetPathName();
+	const FString FirstPackagePath = FirstGeneratedPackage->GetPathName();
+	const uint32 FirstClassUniqueId = FirstGeneratedClass->GetUniqueID();
+
+	{
+		FAngelscriptEngineScope Scope(*FirstEngine);
+		if (!TestTrue(TEXT("Annotated same-name recreate test should discard the first epoch module"), FirstEngine->DiscardModule(*ModuleNameString)))
+		{
+			return false;
+		}
+	}
+
+	CollectGarbage(RF_NoFlags, true);
+	FirstEngine.Reset();
+	CollectGarbage(RF_NoFlags, true);
+
+	if (!TestEqual(TEXT("Annotated same-name recreate test should clear type metadata after the first full engine exits"), FAngelscriptType::GetTypes().Num(), 0))
+	{
+		return false;
+	}
+
+	TUniquePtr<FAngelscriptEngine> SecondEngine = AngelscriptTestSupport::CreateFullTestEngine();
+	if (!TestNotNull(TEXT("Annotated same-name recreate test should create the second full engine"), SecondEngine.Get()))
+	{
+		return false;
+	}
+
+	UClass* SecondGeneratedClass = nullptr;
+	if (!CompileAnnotatedActor(SecondEngine.Get(), SecondEpochSource, 22, SecondGeneratedClass))
+	{
+		return false;
+	}
+
+	UPackage* SecondGeneratedPackage = SecondGeneratedClass->GetPackage();
+	if (!TestNotNull(TEXT("Annotated same-name recreate test should resolve the recreated generated package"), SecondGeneratedPackage))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Annotated same-name recreate test should recreate the class at the same object path"), SecondGeneratedClass->GetPathName(), FirstClassPath);
+	TestEqual(TEXT("Annotated same-name recreate test should recreate the package at the same object path"), SecondGeneratedPackage->GetPathName(), FirstPackagePath);
+	TestNotEqual(TEXT("Annotated same-name recreate test should create a new UObject identity for the recreated class"), SecondGeneratedClass->GetUniqueID(), FirstClassUniqueId);
+	TestEqual(TEXT("Annotated same-name recreate test should let global lookup resolve the recreated class"), FindObject<UClass>(nullptr, *FirstClassPath), SecondGeneratedClass);
+	return true;
 }
 
 #endif

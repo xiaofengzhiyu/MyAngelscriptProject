@@ -3,6 +3,7 @@
 #include "../Shared/AngelscriptTestEngineHelper.h"
 #include "ClassGenerator/ASClass.h"
 
+#include "Components/ActorTestSpawner.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
 
@@ -23,6 +24,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptComponentDestroyBindingsTest,
 	"Angelscript.TestModule.Bindings.ComponentDestroyCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptComponentActivationAndTagBindingsTest,
+	"Angelscript.TestModule.Bindings.ComponentActivationAndTagCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptNativeActorBindingsTest::RunTest(const FString& Parameters)
@@ -277,6 +283,132 @@ class UDestroyBindingComponent : UActorComponent
 	TestTrue(TEXT("DestroyComponent binding should mark the component as being destroyed"), RuntimeComponent->IsBeingDestroyed());
 	bPassed = RuntimeComponent->IsBeingDestroyed();
 	ASTEST_END_SHARE
+
+	return bPassed;
+}
+
+bool FAngelscriptComponentActivationAndTagBindingsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = false;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+	ASTEST_BEGIN_FULL
+
+	FActorTestSpawner Spawner;
+	Spawner.InitializeGameSubsystems();
+
+	AActor& HostActor = Spawner.SpawnActor<AActor>();
+
+	const bool bCompiled = CompileAnnotatedModuleFromMemory(
+		&Engine,
+		TEXT("ASComponentActivationAndTagCompat"),
+		TEXT("ASComponentActivationAndTagCompat.as"),
+		TEXT(R"(
+UCLASS()
+class UBindingActivationComponent : UActorComponent
+{
+	UFUNCTION()
+	int VerifyTagBindings()
+	{
+		if (!ComponentHasTag(n"Probe"))
+			return 0;
+		if (ComponentHasTag(NAME_None))
+			return 0;
+		return 1;
+	}
+
+	UFUNCTION()
+	int DeactivateSelf()
+	{
+		Deactivate();
+		return 1;
+	}
+
+	UFUNCTION()
+	int ReactivateSelf()
+	{
+		Activate(true);
+		return 1;
+	}
+}
+)"));
+	if (!TestTrue(TEXT("Compile annotated activation component module should succeed"), bCompiled))
+	{
+		return false;
+	}
+
+	UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UBindingActivationComponent"));
+	if (!TestNotNull(TEXT("Generated activation component class should exist"), RuntimeClass))
+	{
+		return false;
+	}
+
+	UFunction* VerifyTagBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("VerifyTagBindings"));
+	UFunction* DeactivateSelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("DeactivateSelf"));
+	UFunction* ReactivateSelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReactivateSelf"));
+	if (!TestNotNull(TEXT("VerifyTagBindings function should exist"), VerifyTagBindingsFunction)
+		|| !TestNotNull(TEXT("DeactivateSelf function should exist"), DeactivateSelfFunction)
+		|| !TestNotNull(TEXT("ReactivateSelf function should exist"), ReactivateSelfFunction))
+	{
+		return false;
+	}
+
+	UActorComponent* RuntimeComponent = NewObject<UActorComponent>(&HostActor, RuntimeClass, TEXT("ActivationBindingComponent"));
+	if (!TestNotNull(TEXT("Generated activation component instance should be created"), RuntimeComponent))
+	{
+		return false;
+	}
+
+	HostActor.AddInstanceComponent(RuntimeComponent);
+	RuntimeComponent->ComponentTags.Add(TEXT("Probe"));
+	RuntimeComponent->RegisterComponent();
+	if (!TestTrue(TEXT("Activation component should register into the spawned world"), RuntimeComponent->IsRegistered()))
+	{
+		return false;
+	}
+
+	RuntimeComponent->Activate(true);
+	if (!TestTrue(TEXT("Activation component should start active before script toggles it"), RuntimeComponent->IsActive()))
+	{
+		return false;
+	}
+
+	int32 TagResult = 0;
+	if (!TestTrue(TEXT("VerifyTagBindings reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, VerifyTagBindingsFunction, TagResult)))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("Tag compatibility probe should initially fail during red phase"), TagResult, 1))
+	{
+		return false;
+	}
+
+	int32 DeactivateResult = 0;
+	if (!TestTrue(TEXT("DeactivateSelf reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, DeactivateSelfFunction, DeactivateResult)))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("DeactivateSelf should report success"), DeactivateResult, 1))
+	{
+		return false;
+	}
+	if (!TestFalse(TEXT("Deactivate binding should clear the active state"), RuntimeComponent->IsActive()))
+	{
+		return false;
+	}
+
+	int32 ReactivateResult = 0;
+	if (!TestTrue(TEXT("ReactivateSelf reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, ReactivateSelfFunction, ReactivateResult)))
+	{
+		return false;
+	}
+	if (!TestEqual(TEXT("ReactivateSelf should report success"), ReactivateResult, 1))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Activate(true) binding should restore the active state"), RuntimeComponent->IsActive());
+	bPassed = TagResult == 1 && DeactivateResult == 1 && ReactivateResult == 1 && RuntimeComponent->IsActive();
+	ASTEST_END_FULL
 
 	return bPassed;
 }

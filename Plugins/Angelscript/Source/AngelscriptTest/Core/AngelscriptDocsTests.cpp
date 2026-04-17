@@ -1,0 +1,348 @@
+#include "AngelscriptDocs.h"
+#include "AngelscriptEngine.h"
+#include "../Shared/AngelscriptTestEngineHelper.h"
+#include "../Shared/AngelscriptTestMacros.h"
+
+#include "Containers/StringConv.h"
+#include "HAL/FileManager.h"
+#include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
+#include "Misc/Paths.h"
+#include "Misc/ScopeExit.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+using namespace AngelscriptTestSupport;
+
+namespace
+{
+	FString MakeAutomationDocsSuffix()
+	{
+		return FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(12);
+	}
+
+	FString MakeDocsScriptSource(const FString& TypeName)
+	{
+		return FString::Printf(
+			TEXT(R"ANGELSCRIPT(
+class %s
+{
+	int EvaluateScore(int InValue) const
+	{
+		return InValue + 7;
+	}
+}
+)ANGELSCRIPT"),
+			*TypeName);
+	}
+
+	asITypeInfo* FindTypeInfoByDecl(
+		FAutomationTestBase& Test,
+		asIScriptModule& Module,
+		const FString& Declaration)
+	{
+		const FTCHARToUTF8 DeclarationUtf8(*Declaration);
+		asITypeInfo* TypeInfo = Module.GetTypeInfoByDecl(DeclarationUtf8.Get());
+		Test.TestNotNull(
+			*FString::Printf(TEXT("Docs normalization test should resolve script type '%s'"), *Declaration),
+			TypeInfo);
+		return TypeInfo;
+	}
+
+	asIScriptFunction* FindMethodByDecl(
+		FAutomationTestBase& Test,
+		asITypeInfo& ScriptType,
+		const FString& Declaration)
+	{
+		const FTCHARToUTF8 DeclarationUtf8(*Declaration);
+		asIScriptFunction* Function = ScriptType.GetMethodByDecl(DeclarationUtf8.Get());
+		if (Function == nullptr)
+		{
+			FString MethodName;
+			int32 OpenParenIndex = INDEX_NONE;
+			if (Declaration.FindChar(TEXT('('), OpenParenIndex))
+			{
+				const FString Prefix = Declaration.Left(OpenParenIndex).TrimStartAndEnd();
+				int32 NameSeparatorIndex = INDEX_NONE;
+				if (Prefix.FindLastChar(TEXT(' '), NameSeparatorIndex))
+				{
+					MethodName = Prefix.Mid(NameSeparatorIndex + 1).TrimStartAndEnd();
+				}
+			}
+
+			if (!MethodName.IsEmpty())
+			{
+				const FTCHARToUTF8 MethodNameUtf8(*MethodName);
+				const asUINT MethodCount = ScriptType.GetMethodCount();
+				for (asUINT MethodIndex = 0; MethodIndex < MethodCount; ++MethodIndex)
+				{
+					asIScriptFunction* CandidateFunction = ScriptType.GetMethodByIndex(MethodIndex);
+					if (CandidateFunction != nullptr && FCStringAnsi::Strcmp(CandidateFunction->GetName(), MethodNameUtf8.Get()) == 0)
+					{
+						Function = CandidateFunction;
+						break;
+					}
+				}
+			}
+		}
+
+		if (Function == nullptr)
+		{
+			FString AvailableMethods;
+			const asUINT MethodCount = ScriptType.GetMethodCount();
+			for (asUINT MethodIndex = 0; MethodIndex < MethodCount; ++MethodIndex)
+			{
+				asIScriptFunction* CandidateFunction = ScriptType.GetMethodByIndex(MethodIndex);
+				if (CandidateFunction == nullptr)
+				{
+					continue;
+				}
+
+				if (!AvailableMethods.IsEmpty())
+				{
+					AvailableMethods += TEXT(", ");
+				}
+
+				AvailableMethods += UTF8_TO_TCHAR(CandidateFunction->GetDeclaration());
+			}
+
+			if (AvailableMethods.IsEmpty())
+			{
+				Test.AddError(FString::Printf(
+					TEXT("Docs normalization test should resolve method '%s'; script type exposes no methods"),
+					*Declaration));
+			}
+			else
+			{
+				Test.AddError(FString::Printf(
+					TEXT("Docs normalization test should resolve method '%s'; available methods: %s"),
+					*Declaration,
+					*AvailableMethods));
+			}
+		}
+
+		Test.TestNotNull(
+			*FString::Printf(TEXT("Docs normalization test should resolve method '%s'"), *Declaration),
+			Function);
+		return Function;
+	}
+
+	FString GetGeneratedDocsRootDir()
+	{
+		return FPaths::Combine(FPaths::ProjectDir(), TEXT("Docs"), TEXT("angelscript"), TEXT("generated"));
+	}
+
+	FString GetGeneratedDocsParentDir()
+	{
+		return FPaths::Combine(FPaths::ProjectDir(), TEXT("Docs"), TEXT("angelscript"));
+	}
+
+	FString GetGeneratedDocsFilePath(const FString& TypeName)
+	{
+		return FPaths::Combine(GetGeneratedDocsRootDir(), TypeName + TEXT(".hpp"));
+	}
+
+	struct FGeneratedDocsOutputGuard
+	{
+		explicit FGeneratedDocsOutputGuard(const FString& InTypeName)
+			: RootDir(GetGeneratedDocsRootDir())
+			, ParentDir(GetGeneratedDocsParentDir())
+			, FilePath(GetGeneratedDocsFilePath(InTypeName))
+			, bRootDirExisted(IFileManager::Get().DirectoryExists(*RootDir))
+			, bParentDirExisted(IFileManager::Get().DirectoryExists(*ParentDir))
+		{
+		}
+
+		bool Prepare(FAutomationTestBase& Test) const
+		{
+			return Test.TestTrue(
+				TEXT("Docs normalization test should create the generated docs directory"),
+				IFileManager::Get().MakeDirectory(*RootDir, true));
+		}
+
+		void Cleanup() const
+		{
+			IFileManager::Get().Delete(*FilePath, false, true, true);
+
+			if (!bRootDirExisted)
+			{
+				IFileManager::Get().DeleteDirectory(*RootDir, false, true);
+			}
+
+			if (!bParentDirExisted)
+			{
+				IFileManager::Get().DeleteDirectory(*ParentDir, false, false);
+			}
+		}
+
+		FString RootDir;
+		FString ParentDir;
+		FString FilePath;
+		bool bRootDirExisted = false;
+		bool bParentDirExisted = false;
+	};
+
+	bool LoadGeneratedDocsFile(
+		FAutomationTestBase& Test,
+		const FString& FilePath,
+		FString& OutContent)
+	{
+		OutContent.Reset();
+
+		const bool bExists = IFileManager::Get().FileExists(*FilePath);
+		if (!Test.TestTrue(
+				*FString::Printf(TEXT("Docs normalization test should create generated file '%s'"), *FilePath),
+				bExists))
+		{
+			TArray<FString> GeneratedFilenames;
+			IFileManager::Get().FindFiles(
+				GeneratedFilenames,
+				*(GetGeneratedDocsRootDir() / TEXT("*.hpp")),
+				true,
+				false);
+
+			GeneratedFilenames.Sort();
+			const FString AvailableFiles = GeneratedFilenames.Num() > 0
+				? FString::Join(GeneratedFilenames, TEXT(", "))
+				: TEXT("<none>");
+			Test.AddError(FString::Printf(
+				TEXT("Docs normalization test missing expected file '%s'; generated dir '%s' currently contains %d hpp files: %s"),
+				*FilePath,
+				*GetGeneratedDocsRootDir(),
+				GeneratedFilenames.Num(),
+				*AvailableFiles));
+			return false;
+		}
+
+		const bool bLoaded = FFileHelper::LoadFileToString(OutContent, *FilePath);
+		Test.TestTrue(
+			*FString::Printf(TEXT("Docs normalization test should load generated file '%s'"), *FilePath),
+			bLoaded);
+		return bLoaded;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptDocsDumpDocumentationNormalizesSeeNoteAndReturnsAliasesTest,
+	"Angelscript.TestModule.Engine.Docs.DumpDocumentationNormalizesSeeNoteAndReturnsAliases",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptDocsDumpDocumentationNormalizesSeeNoteAndReturnsAliasesTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+	ASTEST_BEGIN_FULL
+
+	const FString UniqueSuffix = MakeAutomationDocsSuffix();
+	const FString TypeName = FString::Printf(TEXT("FAutomationDocs_%s"), *UniqueSuffix);
+	const FName ModuleName(*FString::Printf(TEXT("Automation.Docs.%s"), *UniqueSuffix));
+	const FString ScriptFilename = FString::Printf(TEXT("Docs/%s.as"), *TypeName);
+	const FString ScriptSource = MakeDocsScriptSource(TypeName);
+	const FString GeneratedFilePath = GetGeneratedDocsFilePath(TypeName);
+	const FGeneratedDocsOutputGuard OutputGuard(TypeName);
+	int32 FunctionId = INDEX_NONE;
+
+	ON_SCOPE_EXIT
+	{
+		if (FunctionId != INDEX_NONE)
+		{
+			FAngelscriptDocs::AddUnrealDocumentation(FunctionId, TEXT(""), TEXT(""), nullptr);
+		}
+
+		Engine.DiscardModule(*ModuleName.ToString());
+		OutputGuard.Cleanup();
+	};
+
+	if (!OutputGuard.Prepare(*this))
+	{
+		return false;
+	}
+
+	const bool bCompiled = CompileModuleFromMemory(
+		&Engine,
+		ModuleName,
+		ScriptFilename,
+		ScriptSource);
+	if (!TestTrue(TEXT("Docs normalization test should compile the automation docs module"), bCompiled))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FAngelscriptModuleDesc> ModuleDesc = Engine.GetModuleByModuleName(ModuleName.ToString());
+	if (!TestTrue(TEXT("Docs normalization test should register the module by name"), ModuleDesc.IsValid()))
+	{
+		return false;
+	}
+
+	if (!TestNotNull(TEXT("Docs normalization test should expose the compiled script module"), ModuleDesc->ScriptModule))
+	{
+		return false;
+	}
+
+	asITypeInfo* ScriptType = FindTypeInfoByDecl(*this, *ModuleDesc->ScriptModule, TypeName);
+	if (ScriptType == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* EvaluateScore = FindMethodByDecl(*this, *ScriptType, TEXT("int EvaluateScore(int) const"));
+	if (EvaluateScore == nullptr)
+	{
+		return false;
+	}
+
+	FunctionId = EvaluateScore->GetId();
+	const FString FunctionTooltip = TEXT(
+		"Evaluates the score.\n"
+		"@see RelatedScoreType\n"
+		"@note Keep integer only\n"
+		"@param InValue - first line\n"
+		"  second line continues\n"
+		"@returns final computed score");
+
+	FAngelscriptDocs::AddUnrealDocumentation(FunctionId, FunctionTooltip, TEXT(""), nullptr);
+	FAngelscriptDocs::DumpDocumentation(Engine.GetScriptEngine());
+
+	FString GeneratedContent;
+	if (!LoadGeneratedDocsFile(*this, GeneratedFilePath, GeneratedContent))
+	{
+		return false;
+	}
+
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should emit the generated class declaration"),
+		GeneratedContent.Contains(FString::Printf(TEXT("class %s"), *TypeName)));
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should normalize @see into a See section"),
+		GeneratedContent.Contains(TEXT("See: RelatedScoreType")));
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should normalize @note into a Note section"),
+		GeneratedContent.Contains(TEXT("Note: Keep integer only")));
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should emit a Parameters section"),
+		GeneratedContent.Contains(TEXT("Parameters:")));
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should fold multi-line parameter text into one readable line"),
+		GeneratedContent.Contains(TEXT("InValue - first line second line continues")));
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should emit a Returns section for @returns"),
+		GeneratedContent.Contains(TEXT("Returns:")));
+	bPassed &= TestTrue(
+		TEXT("Docs normalization test should preserve the @returns description text"),
+		GeneratedContent.Contains(TEXT("final computed score")));
+	bPassed &= TestFalse(
+		TEXT("Docs normalization test should not leak raw @see tags into generated output"),
+		GeneratedContent.Contains(TEXT("@see")));
+	bPassed &= TestFalse(
+		TEXT("Docs normalization test should not leak raw @note tags into generated output"),
+		GeneratedContent.Contains(TEXT("@note")));
+	bPassed &= TestFalse(
+		TEXT("Docs normalization test should not leak raw @returns tags into generated output"),
+		GeneratedContent.Contains(TEXT("@returns")));
+
+	ASTEST_END_FULL
+	return bPassed;
+}
+
+#endif

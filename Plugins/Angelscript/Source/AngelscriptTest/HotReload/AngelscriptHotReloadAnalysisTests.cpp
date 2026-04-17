@@ -4,6 +4,7 @@
 
 #include "ClassGenerator/AngelscriptClassGenerator.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/ScopeExit.h"
 
 // Test Layer: Runtime Integration
 #if WITH_DEV_AUTOMATION_TESTS
@@ -43,6 +44,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptAnalyzeReloadFunctionSignatureChangedTest,
 	"Angelscript.TestModule.HotReload.AnalyzeReload.FunctionSignatureChanged",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptAnalyzeReloadEnumValueChangeTest,
+	"Angelscript.TestModule.HotReload.AnalyzeReload.EnumValueChange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptAnalyzeReloadDelegateSignatureChangeTest,
+	"Angelscript.TestModule.HotReload.AnalyzeReload.DelegateSignatureChange",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptAnalyzeReloadNoChangeTest::RunTest(const FString& Parameters)
@@ -363,6 +374,154 @@ class UReloadFunctionTarget : UObject
 
 	TestTrue(TEXT("Function signature change should request a full reload path"), bWantsFullReload || bNeedsFullReload);
 	TestEqual(TEXT("Function signature change should require a full reload"), ReloadRequirement, FAngelscriptClassGenerator::FullReloadRequired);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
+bool FAngelscriptAnalyzeReloadEnumValueChangeTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	const FString ScriptV1 = TEXT(R"AS(
+UENUM(BlueprintType)
+enum class EReloadAnalysisState : uint16
+{
+	Alpha = 1,
+	Beta = 4
+}
+
+UCLASS()
+class UReloadEnumValueCarrier : UObject
+{
+	UPROPERTY()
+	EReloadAnalysisState State;
+
+	default State = EReloadAnalysisState::Alpha;
+}
+)AS");
+	const FString ScriptV2 = TEXT(R"AS(
+UENUM(BlueprintType)
+enum class EReloadAnalysisState : uint16
+{
+	Alpha = 1,
+	Beta = 7
+}
+
+UCLASS()
+class UReloadEnumValueCarrier : UObject
+{
+	UPROPERTY()
+	EReloadAnalysisState State;
+
+	default State = EReloadAnalysisState::Alpha;
+}
+)AS");
+
+	if (!TestTrue(TEXT("Initial enum-value baseline compile should succeed"), CompileAnnotatedModuleFromMemory(&Engine, TEXT("ReloadEnumValueMod"), TEXT("ReloadEnumValueMod.as"), ScriptV1)))
+	{
+		return false;
+	}
+
+	FAngelscriptClassGenerator::EReloadRequirement ReloadRequirement = FAngelscriptClassGenerator::Error;
+	bool bWantsFullReload = false;
+	bool bNeedsFullReload = false;
+	const bool bAnalyzed = AnalyzeReloadFromMemory(&Engine, TEXT("ReloadEnumValueMod"), TEXT("ReloadEnumValueMod.as"), ScriptV2, ReloadRequirement, bWantsFullReload, bNeedsFullReload);
+
+	if (!TestTrue(TEXT("Reload analysis should succeed for enum value-only change"), bAnalyzed))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Enum value-only change should suggest a full reload"), ReloadRequirement, FAngelscriptClassGenerator::FullReloadSuggested);
+	TestTrue(TEXT("Enum value-only change should request a full reload path"), bWantsFullReload);
+	TestFalse(TEXT("Enum value-only change should not be marked as full reload required"), bNeedsFullReload);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
+bool FAngelscriptAnalyzeReloadDelegateSignatureChangeTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	static const FName ModuleName(TEXT("ReloadDelegateSignatureMod"));
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(*ModuleName.ToString());
+	};
+
+	const FString ScriptV1 = TEXT(R"AS(
+delegate void FReloadAnalysisSignal(int Value);
+
+UCLASS()
+class UReloadDelegateAnalysisCarrier : UObject
+{
+	UPROPERTY()
+	FReloadAnalysisSignal Signal;
+}
+)AS");
+	const FString ScriptV2 = TEXT(R"AS(
+delegate void FReloadAnalysisSignal(int Value, int Tag);
+
+UCLASS()
+class UReloadDelegateAnalysisCarrier : UObject
+{
+	UPROPERTY()
+	FReloadAnalysisSignal Signal;
+}
+)AS");
+
+	if (!TestTrue(
+			TEXT("Initial delegate-signature analysis baseline compile should succeed"),
+			CompileAnnotatedModuleFromMemory(&Engine, ModuleName, TEXT("ReloadDelegateSignatureMod.as"), ScriptV1)))
+	{
+		return false;
+	}
+
+	if (!TestNotNull(
+			TEXT("Delegate-signature analysis baseline should publish the carrier class"),
+			FindGeneratedClass(&Engine, TEXT("UReloadDelegateAnalysisCarrier"))))
+	{
+		return false;
+	}
+
+	if (!TestTrue(
+			TEXT("Delegate-signature analysis baseline should publish the delegate metadata"),
+			Engine.GetDelegate(TEXT("FReloadAnalysisSignal")).IsValid()))
+	{
+		return false;
+	}
+
+	FAngelscriptClassGenerator::EReloadRequirement ReloadRequirement = FAngelscriptClassGenerator::Error;
+	bool bWantsFullReload = false;
+	bool bNeedsFullReload = false;
+	const bool bAnalyzed = AnalyzeReloadFromMemory(
+		&Engine,
+		ModuleName,
+		TEXT("ReloadDelegateSignatureMod.as"),
+		ScriptV2,
+		ReloadRequirement,
+		bWantsFullReload,
+		bNeedsFullReload);
+
+	if (!TestTrue(TEXT("Reload analysis should succeed for delegate signature change"), bAnalyzed))
+	{
+		return false;
+	}
+
+	TestEqual(
+		TEXT("Delegate signature change should require a full reload"),
+		ReloadRequirement,
+		FAngelscriptClassGenerator::FullReloadRequired);
+	TestTrue(
+		TEXT("Delegate signature change should request a full reload"),
+		bWantsFullReload);
+	TestTrue(
+		TEXT("Delegate signature change should be marked as full reload required"),
+		bNeedsFullReload);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;

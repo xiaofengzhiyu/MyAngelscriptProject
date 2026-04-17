@@ -1,6 +1,8 @@
 #include "AngelscriptTestSupport.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
+#include "UObject/UObjectGlobals.h"
+#include "Shared/AngelscriptNativeScriptTestObject.h"
 #include "Shared/AngelscriptTestMacros.h"
 // Test Layer: Runtime Integration
 #if WITH_DEV_AUTOMATION_TESTS
@@ -12,6 +14,52 @@ namespace AngelscriptTestSupport
 	bool CompileModuleFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script);
 	bool CompileModuleWithResult(FAngelscriptEngine* Engine, ECompileType CompileType, FName ModuleName, FString Filename, FString Script, ECompileResult& OutCompileResult);
 	void ResetSharedInitializedTestEngine(FAngelscriptEngine& Engine);
+}
+
+namespace
+{
+	static constexpr ANSICHAR HandleNativeObjectArgumentModuleName[] = "ASHandleNativeObjectArgument";
+
+	bool ExecuteNativeObjectArgumentCase(
+		FAutomationTestBase& Test,
+		asIScriptContext& Context,
+		asIScriptFunction& Function,
+		UObject* Value,
+		const TCHAR* ContextLabel,
+		int32 ExpectedReturnValue)
+	{
+		const int PrepareResult = Context.Prepare(&Function);
+		if (!Test.TestEqual(
+			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
+			PrepareResult,
+			static_cast<int32>(asSUCCESS)))
+		{
+			return false;
+		}
+
+		const int SetArgResult = Context.SetArgObject(0, Value);
+		if (!Test.TestEqual(
+			*FString::Printf(TEXT("%s should bind the UObject argument"), ContextLabel),
+			SetArgResult,
+			static_cast<int32>(asSUCCESS)))
+		{
+			return false;
+		}
+
+		const int ExecuteResult = Context.Execute();
+		if (!Test.TestEqual(
+			*FString::Printf(TEXT("%s should execute successfully"), ContextLabel),
+			ExecuteResult,
+			static_cast<int32>(asEXECUTION_FINISHED)))
+		{
+			return false;
+		}
+
+		return Test.TestEqual(
+			*FString::Printf(TEXT("%s should return the expected nullability marker"), ContextLabel),
+			static_cast<int32>(Context.GetReturnDWord()),
+			ExpectedReturnValue);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -118,6 +166,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Angelscript.Handles.RefArgument",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptHandleNativeObjectArgumentNullAndNonNullTest,
+	"Angelscript.TestModule.Angelscript.Handles.NativeObjectArgument.NullAndNonNull",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptHandleRefArgumentTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -154,6 +207,87 @@ bool FAngelscriptHandleRefArgumentTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Handles.RefArgument should propagate out-ref writes back to the caller"), Result, 42);
 	ASTEST_END_SHARE
 	return true;
+}
+
+bool FAngelscriptHandleNativeObjectArgumentNullAndNonNullTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = false;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(TEXT("ASHandleNativeObjectArgument"));
+	};
+
+	do
+	{
+		asIScriptModule* Module = BuildModule(
+			*this,
+			Engine,
+			HandleNativeObjectArgumentModuleName,
+			TEXT(R"(
+int Test(UObject Value)
+{
+	return Value != nullptr ? 1 : 0;
+}
+)"));
+		if (!TestNotNull(TEXT("Handles.NativeObjectArgument.NullAndNonNull should compile the test module"), Module))
+		{
+			break;
+		}
+
+		asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Test(UObject)"));
+		if (Function == nullptr)
+		{
+			break;
+		}
+
+		asIScriptContext* Context = Engine.CreateContext();
+		if (!TestNotNull(TEXT("Handles.NativeObjectArgument.NullAndNonNull should create a context"), Context))
+		{
+			break;
+		}
+
+		ON_SCOPE_EXIT
+		{
+			Context->Release();
+		};
+
+		UObject* Instance = NewObject<UAngelscriptNativeScriptTestObject>(GetTransientPackage());
+		if (!TestNotNull(TEXT("Handles.NativeObjectArgument.NullAndNonNull should create a native UObject instance"), Instance))
+		{
+			break;
+		}
+
+		if (!ExecuteNativeObjectArgumentCase(
+				*this,
+				*Context,
+				*Function,
+				Instance,
+				TEXT("Handles.NativeObjectArgument.NullAndNonNull(non-null)"),
+				1))
+		{
+			break;
+		}
+
+		if (!ExecuteNativeObjectArgumentCase(
+				*this,
+				*Context,
+				*Function,
+				nullptr,
+				TEXT("Handles.NativeObjectArgument.NullAndNonNull(null)"),
+				0))
+		{
+			break;
+		}
+
+		bPassed = true;
+	}
+	while (false);
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
 }
 
 #endif

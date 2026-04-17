@@ -22,6 +22,18 @@
 			{
 			}
 
+			void ResetParser()
+			{
+				Reset();
+			}
+
+			int ParseScriptSnippetWithoutImplicitReset(asCScriptCode* InScript)
+			{
+				script = InScript;
+				scriptNode = asCParser::ParseScript(false);
+				return errorWhileParsing ? -1 : 0;
+			}
+
 			asCScriptNode* ParseExpressionSnippet(asCScriptCode* InScript)
 			{
 				Reset();
@@ -39,21 +51,21 @@
 
 		bool ContainsNodeType(const asCScriptNode* Node, eScriptNode ExpectedType)
 		{
-		for (const asCScriptNode* Current = Node; Current != nullptr; Current = Current->next)
-		{
-			if (Current->nodeType == ExpectedType)
+			for (const asCScriptNode* Current = Node; Current != nullptr; Current = Current->next)
 			{
-				return true;
+				if (Current->nodeType == ExpectedType)
+				{
+					return true;
+				}
+
+				if (Current->firstChild != nullptr && ContainsNodeType(Current->firstChild, ExpectedType))
+				{
+					return true;
+				}
 			}
 
-			if (Current->firstChild != nullptr && ContainsNodeType(Current->firstChild, ExpectedType))
-			{
-				return true;
-			}
+			return false;
 		}
-
-		return false;
-	}
 
 	asCModule* CreateParserModule(asCScriptEngine* ScriptEngine, const char* ModuleName)
 	{
@@ -79,6 +91,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptParserSyntaxErrorTest,
 	"Angelscript.TestModule.Internals.Parser.SyntaxErrors",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptParserReuseAfterSyntaxErrorTest,
+	"Angelscript.TestModule.Internals.Parser.ReuseAfterSyntaxError",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptParserDeclarationTest::RunTest(const FString& Parameters)
@@ -200,6 +217,62 @@ bool FAngelscriptParserSyntaxErrorTest::RunTest(const FString& Parameters)
 	bPassed = ParseResult < 0;
 	ASTEST_END_SHARE_CLEAN
 
+	return bPassed;
+}
+
+bool FAngelscriptParserReuseAfterSyntaxErrorTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	asCScriptEngine* ScriptEngine = static_cast<asCScriptEngine*>(Engine.GetScriptEngine());
+	asCModule* Module = CreateParserModule(ScriptEngine, "ParserReuseAfterSyntaxError");
+	if (!TestNotNull(TEXT("Parser reuse-after-error test should create a backing module"), Module))
+	{
+		return false;
+	}
+
+	asCBuilder Builder(ScriptEngine, Module);
+	Builder.silent = true;
+
+	asCScriptCode InvalidCode;
+	InvalidCode.SetCode("ParserReuseAfterSyntaxError_Invalid", "void Broken( { return; }", true);
+
+	asCScriptCode ValidCode;
+	ValidCode.SetCode("ParserReuseAfterSyntaxError_Valid", "int GlobalValue = 7; class FRecoveredSample { int Value; }", true);
+
+	FParserAccessor Parser(&Builder);
+	const int InvalidParseResult = Parser.ParseScriptSnippetWithoutImplicitReset(&InvalidCode);
+	bPassed &= TestTrue(
+		TEXT("Parser.ReuseAfterSyntaxError should fail the malformed script on the first parse"),
+		InvalidParseResult < 0);
+
+	Parser.ResetParser();
+
+	const int ValidParseResult = Parser.ParseScriptSnippetWithoutImplicitReset(&ValidCode);
+	bPassed &= TestEqual(
+		TEXT("Parser.ReuseAfterSyntaxError should succeed when the same parser is reused on valid script after Reset"),
+		ValidParseResult,
+		0);
+
+	asCScriptNode* Root = Parser.GetScriptNode();
+	if (!TestNotNull(TEXT("Parser.ReuseAfterSyntaxError should produce a root node for the recovered parse"), Root))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Parser.ReuseAfterSyntaxError should recover a script root node after Reset"),
+		static_cast<int32>(Root->nodeType),
+		static_cast<int32>(snScript));
+	bPassed &= TestTrue(
+		TEXT("Parser.ReuseAfterSyntaxError should recover a declaration node after Reset"),
+		ContainsNodeType(Root, snDeclaration));
+	bPassed &= TestTrue(
+		TEXT("Parser.ReuseAfterSyntaxError should recover a class node after Reset"),
+		ContainsNodeType(Root, snClass));
+
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

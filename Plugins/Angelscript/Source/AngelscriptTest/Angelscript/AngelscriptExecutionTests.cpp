@@ -233,6 +233,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Angelscript.Execute.MixedArgs",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptExecutionInt64QWordRoundTripTest,
+	"Angelscript.TestModule.Angelscript.Execute.Int64QWordRoundTrip",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptExecutionMixedArgsTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -315,6 +320,90 @@ bool FAngelscriptExecutionMixedArgsTest::RunTest(const FString& Parameters)
 	Context->Release();
 	ASTEST_END_SHARE
 
+	return true;
+}
+
+bool FAngelscriptExecutionInt64QWordRoundTripTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASExecutionInt64QWordRoundTrip",
+		TEXT("int64 AddFive(int64 Value) { return Value + 5; } int64 Negate(int64 Value) { return -Value; }"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* AddFiveFunction = GetFunctionByDecl(*this, *Module, TEXT("int64 AddFive(int64)"));
+	if (AddFiveFunction == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* NegateFunction = GetFunctionByDecl(*this, *Module, TEXT("int64 Negate(int64)"));
+	if (NegateFunction == nullptr)
+	{
+		return false;
+	}
+
+	auto EncodeInt64 = [](int64 Value) -> asQWORD
+	{
+		asQWORD EncodedValue = 0;
+		FMemory::Memcpy(&EncodedValue, &Value, sizeof(Value));
+		return EncodedValue;
+	};
+
+	auto DecodeInt64 = [](asQWORD EncodedValue) -> int64
+	{
+		int64 DecodedValue = 0;
+		FMemory::Memcpy(&DecodedValue, &EncodedValue, sizeof(DecodedValue));
+		return DecodedValue;
+	};
+
+	auto ExecuteInt64Case = [this, &Engine, &EncodeInt64, &DecodeInt64](const FString& CaseName, asIScriptFunction& Function, int64 ArgumentValue, int64 ExpectedValue) -> bool
+	{
+		asIScriptContext* Context = Engine.CreateContext();
+		if (!TestNotNull(*FString::Printf(TEXT("%s should create a context"), *CaseName), Context))
+		{
+			return false;
+		}
+
+		const int PrepareResult = Context->Prepare(&Function);
+		if (!TestEqual(*FString::Printf(TEXT("%s should prepare the function"), *CaseName), PrepareResult, static_cast<int32>(asSUCCESS)))
+		{
+			Context->Release();
+			return false;
+		}
+
+		Context->SetArgQWord(0, EncodeInt64(ArgumentValue));
+		const int ExecuteResult = Context->Execute();
+		if (!TestEqual(*FString::Printf(TEXT("%s should execute successfully"), *CaseName), ExecuteResult, static_cast<int32>(asEXECUTION_FINISHED)))
+		{
+			Context->Release();
+			return false;
+		}
+
+		const int64 ReturnValue = DecodeInt64(Context->GetReturnQWord());
+		const bool bMatched = TestEqual(*FString::Printf(TEXT("%s should preserve the expected int64 result"), *CaseName), ReturnValue, ExpectedValue);
+		Context->Release();
+		return bMatched;
+	};
+
+	if (!ExecuteInt64Case(TEXT("Execution.Int64QWordRoundTrip.AddFive"), *AddFiveFunction, static_cast<int64>(1099511627776LL), static_cast<int64>(1099511627781LL)))
+	{
+		return false;
+	}
+
+	if (!ExecuteInt64Case(TEXT("Execution.Int64QWordRoundTrip.Negate"), *NegateFunction, static_cast<int64>(-7), static_cast<int64>(7)))
+	{
+		return false;
+	}
+
+	ASTEST_END_SHARE
 	return true;
 }
 

@@ -89,6 +89,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.DefaultComponent.Multiple",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptScenarioDefaultComponentNativeTypesTest,
+	"Angelscript.TestModule.DefaultComponent.NativeTypes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptScenarioComponentBeginPlayTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
@@ -509,6 +514,82 @@ class AScenarioDefaultComponentMultiple : AActor
 	}
 
 	TestTrue(TEXT("Scenario actor attached default component should preserve the scripted hierarchy"), Billboard->GetAttachParent() == RootScene);
+	return true;
+}
+
+bool FAngelscriptScenarioDefaultComponentNativeTypesTest::RunTest(const FString& Parameters)
+{
+	DestroySharedTestEngine();
+	FActorTestSpawner Spawner;
+	InitializeComponentScenarioSpawner(Spawner);
+	FAngelscriptEngine* ProductionEngine = RequireRunningProductionEngine(*this, TEXT("Default component scenario tests require a production engine after subsystem initialization."));
+	if (ProductionEngine == nullptr)
+	{
+		return false;
+	}
+	FAngelscriptEngine& Engine = *ProductionEngine;
+	FAngelscriptEngineScope EngineScope(Engine);
+	static const FName ModuleName(TEXT("ScenarioDefaultComponentNativeTypes"));
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(*ModuleName.ToString());
+	};
+
+	UClass* ScriptClass = CompileScriptModule(
+		*this,
+		Engine,
+		ModuleName,
+		TEXT("ScenarioDefaultComponentNativeTypes.as"),
+		TEXT(R"AS(
+UCLASS()
+class AScenarioDefaultComponentNativeTypes : AActor
+{
+	UPROPERTY(DefaultComponent, RootComponent)
+	UStaticMeshComponent Mesh;
+
+	UPROPERTY(DefaultComponent, Attach = Mesh)
+	UBillboardComponent Billboard;
+}
+)AS"),
+		TEXT("AScenarioDefaultComponentNativeTypes"));
+	if (ScriptClass == nullptr)
+	{
+		return false;
+	}
+
+	AActor* Actor = SpawnScriptActor(*this, Spawner, ScriptClass);
+	if (Actor == nullptr)
+	{
+		return false;
+	}
+
+	BeginPlayActor(Engine, *Actor);
+
+	USceneComponent* RootScene = Actor->GetRootComponent();
+	if (!TestNotNull(TEXT("Scenario actor should create a native static mesh root component"), RootScene))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("Scenario actor root component should use UStaticMeshComponent"), RootScene->IsA(UStaticMeshComponent::StaticClass())))
+	{
+		return false;
+	}
+
+	UBillboardComponent* Billboard = nullptr;
+	for (UActorComponent* Component : Actor->GetComponents())
+	{
+		if (UBillboardComponent* TypedBillboard = Cast<UBillboardComponent>(Component))
+		{
+			Billboard = TypedBillboard;
+			break;
+		}
+	}
+	if (!TestNotNull(TEXT("Scenario actor should create the native billboard component"), Billboard))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Scenario actor native billboard component should attach to the native mesh root"), Billboard->GetAttachParent() == RootScene);
 	return true;
 }
 

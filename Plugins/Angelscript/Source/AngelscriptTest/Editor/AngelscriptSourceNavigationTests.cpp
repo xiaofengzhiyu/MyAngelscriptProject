@@ -1,16 +1,48 @@
 #include "../Shared/AngelscriptTestEngineHelper.h"
 #include "../Shared/AngelscriptTestUtilities.h"
 
+#include "AngelscriptSourceCodeNavigation.h"
 #include "ClassGenerator/ASClass.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
 #include "Misc/Paths.h"
 #include "SourceCodeNavigation.h"
+#include "UObject/UObjectGlobals.h"
+#include "UObject/UnrealType.h"
 
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+
+namespace
+{
+	struct FRecordedSourceNavigation
+	{
+		int32 CallCount = 0;
+		FString Path;
+		int32 LineNumber = INDEX_NONE;
+
+		void Install()
+		{
+			AngelscriptSourceNavigation::SetOpenLocationOverrideForTesting(
+				[this](const FAngelscriptSourceNavigationLocation& Location)
+				{
+					++CallCount;
+					Path = Location.Path;
+					LineNumber = Location.LineNumber;
+				});
+		}
+
+		void Reset()
+		{
+			CallCount = 0;
+			Path.Reset();
+			LineNumber = INDEX_NONE;
+		}
+	};
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptFunctionSourceNavigationTest,
@@ -76,6 +108,128 @@ class UFunctionNavigationCarrier : UObject
 	TestEqual(TEXT("Generated function should preserve source line number"), RuntimeASFunction->GetSourceLineNumber(), 6);
 	TestTrue(TEXT("Source navigation should recognize generated script class"), FSourceCodeNavigation::CanNavigateToClass(RuntimeClass));
 	TestTrue(TEXT("Source navigation should recognize generated script function"), FSourceCodeNavigation::CanNavigateToFunction(RuntimeFunction));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptSourceNavigationStoredLocationTest,
+	"Angelscript.TestModule.Editor.SourceNavigation.NavigateToFunctionUsesStoredSourceLocation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptSourceNavigationStoredLocationTest::RunTest(const FString& Parameters)
+{
+	FResolvedProductionLikeEngine ResolvedEngine;
+	if (!AcquireProductionLikeEngine(*this, TEXT("Source navigation navigation-action test requires a production-like engine."), ResolvedEngine))
+	{
+		return false;
+	}
+
+	FAngelscriptEngine& Engine = ResolvedEngine.Get();
+	const FString UniqueSuffix = FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(8);
+	const FName ModuleName(*FString::Printf(TEXT("SourceNavigationStoredLocation_%s"), *UniqueSuffix));
+	const FString ModuleNameString = ModuleName.ToString();
+	const FString RelativeScriptFilename = FString::Printf(TEXT("SourceNavigationStoredLocation_%s.as"), *UniqueSuffix);
+	const FString ScriptPath = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), RelativeScriptFilename);
+	const FName ScriptStructName(*FString::Printf(TEXT("FSourceNavigationStruct_%s"), *UniqueSuffix));
+	const FName GeneratedStructName(*FString::Printf(TEXT("SourceNavigationStruct_%s"), *UniqueSuffix));
+	const FName GeneratedClassName(*FString::Printf(TEXT("USourceNavigationCarrier_%s"), *UniqueSuffix));
+
+	FString Script = TEXT(R"AS(
+USTRUCT()
+struct __STRUCT_NAME__
+{
+	UPROPERTY()
+	int StructValue = 11;
+}
+
+UCLASS()
+class __CLASS_NAME__ : UObject
+{
+	UPROPERTY()
+	int StoredValue = 13;
+
+	UFUNCTION()
+	int ComputeValue()
+	{
+		return StoredValue + 1;
+	}
+}
+)AS");
+	Script.ReplaceInline(TEXT("__STRUCT_NAME__"), *ScriptStructName.ToString());
+	Script.ReplaceInline(TEXT("__CLASS_NAME__"), *GeneratedClassName.ToString());
+
+	ON_SCOPE_EXIT
+	{
+		AngelscriptSourceNavigation::ResetOpenLocationOverrideForTesting();
+		Engine.DiscardModule(*ModuleNameString);
+		IFileManager::Get().Delete(*ScriptPath, false, true, true);
+	};
+
+	const bool bCompiled = CompileAnnotatedModuleFromMemory(
+		&Engine,
+		ModuleName,
+		RelativeScriptFilename,
+		Script);
+	if (!TestTrue(TEXT("Compile annotated source navigation location module should succeed"), bCompiled))
+	{
+		return false;
+	}
+
+	UClass* RuntimeClass = FindGeneratedClass(&Engine, GeneratedClassName);
+	if (!TestNotNull(TEXT("Generated class for source navigation location test should exist"), RuntimeClass))
+	{
+		return false;
+	}
+
+	UFunction* RuntimeFunction = FindGeneratedFunction(RuntimeClass, TEXT("ComputeValue"));
+	if (!TestNotNull(TEXT("Generated function for source navigation location test should exist"), RuntimeFunction))
+	{
+		return false;
+	}
+
+	FProperty* StoredValueProperty = FindFProperty<FProperty>(RuntimeClass, TEXT("StoredValue"));
+	if (!TestNotNull(TEXT("Generated property for source navigation location test should exist"), StoredValueProperty))
+	{
+		return false;
+	}
+
+	UScriptStruct* GeneratedStruct = FindObject<UScriptStruct>(FAngelscriptEngine::GetPackage(), *GeneratedStructName.ToString());
+	if (!TestNotNull(TEXT("Generated struct for source navigation location test should exist"), GeneratedStruct))
+	{
+		return false;
+	}
+
+	FRecordedSourceNavigation RecordedNavigation;
+	RecordedNavigation.Install();
+
+	RecordedNavigation.Reset();
+	TestTrue(TEXT("Source navigation should navigate generated script function"), AngelscriptSourceNavigation::NavigateToFunctionForTesting(RuntimeFunction));
+	TestEqual(TEXT("Function navigation should emit exactly one open-location request"), RecordedNavigation.CallCount, 1);
+	TestEqual(TEXT("Function navigation should target the compiled script file"), RecordedNavigation.Path, ScriptPath);
+	TestEqual(TEXT("Function navigation should target the reflected function declaration line"), RecordedNavigation.LineNumber, 16);
+
+	RecordedNavigation.Reset();
+	TestTrue(TEXT("Source navigation should navigate generated script property"), AngelscriptSourceNavigation::NavigateToPropertyForTesting(StoredValueProperty));
+	TestEqual(TEXT("Property navigation should emit exactly one open-location request"), RecordedNavigation.CallCount, 1);
+	TestEqual(TEXT("Property navigation should target the compiled script file"), RecordedNavigation.Path, ScriptPath);
+	TestEqual(TEXT("Property navigation should target the reflected property declaration line"), RecordedNavigation.LineNumber, 13);
+
+	RecordedNavigation.Reset();
+	TestTrue(TEXT("Source navigation should navigate generated script struct"), AngelscriptSourceNavigation::NavigateToStructForTesting(GeneratedStruct));
+	TestEqual(TEXT("Struct navigation should emit exactly one open-location request"), RecordedNavigation.CallCount, 1);
+	TestEqual(TEXT("Struct navigation should target the compiled script file"), RecordedNavigation.Path, ScriptPath);
+	TestEqual(TEXT("Struct navigation should target the reflected struct declaration line"), RecordedNavigation.LineNumber, 3);
+
+	UASFunction* EmptyPathFunction = NewObject<UASFunction>(GetTransientPackage(), NAME_None, RF_Transient);
+	RecordedNavigation.Reset();
+	TestFalse(TEXT("Source navigation should reject script functions without a stored source path"), AngelscriptSourceNavigation::NavigateToFunctionForTesting(EmptyPathFunction));
+	TestEqual(TEXT("Empty-path function navigation should not trigger an open-location request"), RecordedNavigation.CallCount, 0);
+
+	UFunction* NonScriptFunction = NewObject<UFunction>(GetTransientPackage(), NAME_None, RF_Transient);
+	RecordedNavigation.Reset();
+	TestFalse(TEXT("Source navigation should reject non-Angelscript UFunction instances"), AngelscriptSourceNavigation::NavigateToFunctionForTesting(NonScriptFunction));
+	TestEqual(TEXT("Non-Angelscript function navigation should not trigger an open-location request"), RecordedNavigation.CallCount, 0);
 
 	return true;
 }

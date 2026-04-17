@@ -20,6 +20,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptDataTypeHandleQualifierMatrixTest,
+	"Angelscript.TestModule.Internals.DataType.Comparisons.HandleQualifierMatrix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptDataTypeObjectHandleTest,
 	"Angelscript.TestModule.Internals.DataType.ObjectHandles",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -56,6 +61,57 @@ bool FAngelscriptDataTypeComparisonTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Constness should still matter for exact equality"), MutableInt == ConstInt);
 	TestTrue(TEXT("Reference-ness should be ignored by IsEqualExceptRef"), MutableInt.IsEqualExceptRef(RefInt));
 	TestFalse(TEXT("Reference-ness should still matter for exact equality"), MutableInt == RefInt);
+	return true;
+}
+
+bool FAngelscriptDataTypeHandleQualifierMatrixTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+	asCScriptEngine* ScriptEngine = static_cast<asCScriptEngine*>(Engine.GetScriptEngine());
+	asCTypeInfo* ActorType = static_cast<asCTypeInfo*>(ScriptEngine->GetTypeInfoByName("AActor"));
+	if (!TestNotNull(TEXT("AActor should exist in the script type system for handle qualifier comparisons"), ActorType))
+	{
+		return false;
+	}
+
+	asCDataType ActorValueType = asCDataType::CreateType(ActorType, false);
+	asCDataType ActorHandleType = asCDataType::CreateObjectHandle(ActorType, false);
+	asCDataType ConstActorHandleType = asCDataType::CreateObjectHandle(ActorType, true);
+	asCDataType RefConstActorHandleType = ConstActorHandleType;
+	RefConstActorHandleType.MakeReference(true);
+	asCDataType NullHandleType = asCDataType::CreateNullHandle();
+
+	if (!TestTrue(TEXT("Object handle matrix should preserve the target type info"), ActorHandleType.GetTypeInfo() == ActorType))
+	{
+		return false;
+	}
+	if (!TestFalse(TEXT("Exact equality should distinguish mutable and const handles"), ActorHandleType == ConstActorHandleType))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("IsEqualExceptConst should ignore handle constness"), ActorHandleType.IsEqualExceptConst(ConstActorHandleType)))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("IsEqualExceptRefAndConst should ignore both reference and const on handles"), ActorHandleType.IsEqualExceptRefAndConst(RefConstActorHandleType)))
+	{
+		return false;
+	}
+	if (!TestFalse(TEXT("Null handle should not be exactly equal to a typed object handle"), NullHandleType == ActorHandleType))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("Null handle should still report object-handle semantics"), NullHandleType.IsObjectHandle() && NullHandleType.IsNullHandle()))
+	{
+		return false;
+	}
+	if (!TestTrue(TEXT("Value type and object handle should keep different kind semantics"), ActorValueType.IsObject() && ActorHandleType.IsObjectHandle()))
+	{
+		return false;
+	}
+
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 
