@@ -10,8 +10,7 @@
  * ScriptMixin library to bind functions on FGameplayTagQuery
  * that are not BlueprintCallable by default.
  */
-//UCLASS(Meta = (ScriptMixin = "FGameplayTagQuery"))
-UCLASS(Meta = ())
+UCLASS(Meta = (ScriptMixin = "FGameplayTagQuery"))
 class UGameplayTagQueryMixinLibrary : public UObject
 {
 	GENERATED_BODY()

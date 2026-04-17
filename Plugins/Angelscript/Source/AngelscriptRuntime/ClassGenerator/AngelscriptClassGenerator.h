@@ -6,7 +6,7 @@
 
 // Generic call callback for dispatching interface method calls.
 // Resolves the real UFunction on the implementing object via FindFunction + ProcessEvent.
-extern void CallInterfaceMethod(class asIScriptGeneric* InGeneric);
+extern ANGELSCRIPTRUNTIME_API void CallInterfaceMethod(class asIScriptGeneric* InGeneric);
 
 typedef const TArray<TPair<FName, int64>>& EnumNameList;
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnAngelscriptPostReload, bool);

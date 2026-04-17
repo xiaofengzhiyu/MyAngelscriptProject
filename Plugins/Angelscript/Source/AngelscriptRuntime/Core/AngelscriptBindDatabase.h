@@ -120,7 +120,7 @@ struct FAngelscriptClassHeader
 	}
 };
 
-class FAngelscriptBindDatabase
+class ANGELSCRIPTRUNTIME_API FAngelscriptBindDatabase
 {
 public:
 	static FAngelscriptBindDatabase& Get();

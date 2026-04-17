@@ -128,7 +128,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static void PushInputComponent(APlayerController* PlayerController, UInputComponent* Component)
 	{
-		PlayerController->PushInputComponent(Component);
+		if (PlayerController != nullptr)
+		{
+			PlayerController->PushInputComponent(Component);
+		}
 	}
 
 	/**
@@ -138,14 +141,17 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static void PopInputComponent(APlayerController* PlayerController, UInputComponent* Component)
 	{
-		PlayerController->PopInputComponent(Component);
+		if (PlayerController != nullptr)
+		{
+			PlayerController->PopInputComponent(Component);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static UPlayerInput* GetPlayerInput(APlayerController* PlayerController)
 	{
-		return PlayerController->PlayerInput;
+		return PlayerController != nullptr ? PlayerController->PlayerInput : nullptr;
 	}
 
 };
@@ -157,53 +163,80 @@ class UPlayerInputScriptMixinLibrary : public UObject
 	GENERATED_BODY()
 
 public:
+	static const TArray<FInputActionKeyMapping>& GetEmptyActionMappings()
+	{
+		static const TArray<FInputActionKeyMapping> EmptyMappings;
+		return EmptyMappings;
+	}
+
+	static const TArray<FInputAxisKeyMapping>& GetEmptyAxisMappings()
+	{
+		static const TArray<FInputAxisKeyMapping> EmptyMappings;
+		return EmptyMappings;
+	}
+
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static void AddActionMapping(UPlayerInput* PlayerInput, const FInputActionKeyMapping& KeyMapping)
 	{
-		PlayerInput->AddActionMapping(KeyMapping);
+		if (PlayerInput != nullptr)
+		{
+			PlayerInput->AddActionMapping(KeyMapping);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static void RemoveActionMapping(UPlayerInput* PlayerInput, const FInputActionKeyMapping& KeyMapping)
 	{
-		PlayerInput->RemoveActionMapping(KeyMapping);
+		if (PlayerInput != nullptr)
+		{
+			PlayerInput->RemoveActionMapping(KeyMapping);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static void AddAxisMapping(UPlayerInput* PlayerInput, const FInputAxisKeyMapping& KeyMapping)
 	{
-		PlayerInput->AddAxisMapping(KeyMapping);
+		if (PlayerInput != nullptr)
+		{
+			PlayerInput->AddAxisMapping(KeyMapping);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static void RemoveAxisMapping(UPlayerInput* PlayerInput, const FInputAxisKeyMapping& KeyMapping)
 	{
-		PlayerInput->RemoveAxisMapping(KeyMapping);
+		if (PlayerInput != nullptr)
+		{
+			PlayerInput->RemoveAxisMapping(KeyMapping);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static void ForceRebuildingKeyMaps(UPlayerInput* PlayerInput, const bool bRestoreDefaults = false)
 	{
-		PlayerInput->ForceRebuildingKeyMaps(bRestoreDefaults);
+		if (PlayerInput != nullptr)
+		{
+			PlayerInput->ForceRebuildingKeyMaps(bRestoreDefaults);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static const TArray<FInputActionKeyMapping>& GetKeysForAction(UPlayerInput* PlayerInput, const FName ActionName)
 	{
-		return PlayerInput->GetKeysForAction(ActionName);
+		return PlayerInput != nullptr ? PlayerInput->GetKeysForAction(ActionName) : GetEmptyActionMappings();
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static const TArray<FInputAxisKeyMapping>& GetKeysForAxis(UPlayerInput* PlayerInput, const FName AxisName)
 	{
-		return PlayerInput->GetKeysForAxis(AxisName);
+		return PlayerInput != nullptr ? PlayerInput->GetKeysForAxis(AxisName) : GetEmptyAxisMappings();
 	}
 
 	//UFUNCTION(ScriptCallable)
@@ -231,20 +264,23 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static void SetMouseSensitivity(UPlayerInput* PlayerInput, const float Sensitivity)
 	{
-		PlayerInput->SetMouseSensitivity(Sensitivity);
+		if (PlayerInput != nullptr)
+		{
+			PlayerInput->SetMouseSensitivity(Sensitivity);
+		}
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static float GetMouseSensitivityX(UPlayerInput* PlayerInput)
 	{
-		return PlayerInput->GetMouseSensitivityX();
+		return PlayerInput != nullptr ? PlayerInput->GetMouseSensitivityX() : 0.f;
 	}
 
 	//UFUNCTION(ScriptCallable)
 	UFUNCTION(BlueprintCallable)
 	static float GetMouseSensitivityY(UPlayerInput* PlayerInput)
 	{
-		return PlayerInput->GetMouseSensitivityY();
+		return PlayerInput != nullptr ? PlayerInput->GetMouseSensitivityY() : 0.f;
 	}
 };

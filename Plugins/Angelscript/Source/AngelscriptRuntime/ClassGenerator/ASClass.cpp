@@ -1528,8 +1528,13 @@ bool UASClass::IsDeveloperOnly() const
 	auto Module = Manager.GetModule(((asITypeInfo*)ScriptTypePtr)->GetModule());
 	if (!Module.IsValid())
 		return false;
-	return Module->ModuleName.StartsWith(TEXT("Dev."))
-		|| Module->ModuleName.StartsWith(TEXT("Editor."));
+	const FString& ModuleName = Module->ModuleName;
+	return ModuleName.Equals(TEXT("Dev"))
+		|| ModuleName.StartsWith(TEXT("Dev."))
+		|| ModuleName.Equals(TEXT("Editor"))
+		|| ModuleName.StartsWith(TEXT("Editor."))
+		|| ModuleName.EndsWith(TEXT(".Editor"))
+		|| ModuleName.Contains(TEXT(".Editor."));
 }
 
 FString UASFunction::GetSourceFilePath() const
@@ -1939,7 +1944,13 @@ void UASFunction::RuntimeCallFunction(UObject* Object, FFrame& Stack, RESULT_DEC
 
 void UASFunctionNativeThunk(UObject* Object, FFrame& Stack, RESULT_DECL)
 {
-	UASFunction* Function = Cast<UASFunction>(Stack.Node);
+	// Blueprint VM can invoke this thunk through a generated wrapper frame,
+	// but CurrentNativeFunction still points at the authoritative native callee.
+	UASFunction* Function = Cast<UASFunction>(Stack.CurrentNativeFunction);
+	if (Function == nullptr)
+	{
+		Function = Cast<UASFunction>(Stack.Node);
+	}
 	check(Function != nullptr);
 	Function->RuntimeCallFunction(Object, Stack, RESULT_PARAM);
 }

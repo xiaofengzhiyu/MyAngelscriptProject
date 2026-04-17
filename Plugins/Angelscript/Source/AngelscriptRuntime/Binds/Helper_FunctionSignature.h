@@ -277,15 +277,25 @@ struct FAngelscriptFunctionSignature
 			bool bFoundMixin = false;
 			const FString& MixinClasses = Function->GetOuterUClass()->GetMetaData(NAME_Signature_ScriptMixin);
 			if (MixinClasses.Len() != 0 && ArgumentTypes.Num() > 0
-				&& (ArgumentTypes[0].IsObjectPointer() || ArgumentTypes[0].bIsReference))
+				&& (ArgumentTypes[0].IsObjectPointer()
+					|| ArgumentTypes[0].Type->IsUnresolvedObjectPointer()
+					|| ArgumentTypes[0].bIsReference))
 			{
 				TArray<FString> MixinList;
 				MixinClasses.ParseIntoArray(MixinList, TEXT(" "));
 
-				FString FirstParamType = ArgumentTypes[0].Type->GetAngelscriptTypeName();
+				FString FirstParamType = ArgumentTypes[0].Type->GetAngelscriptTypeName(ArgumentTypes[0]);
+				FString UnresolvedObjectMixinType;
+				if (MixinList.Num() == 1
+					&& ArgumentTypes[0].Type->IsUnresolvedObjectPointer()
+					&& ArgumentTypes[0].SubTypes.Num() > 0
+					&& ArgumentTypes[0].SubTypes[0].Type.IsValid())
+				{
+					UnresolvedObjectMixinType = ArgumentTypes[0].SubTypes[0].Type->GetAngelscriptTypeName(ArgumentTypes[0].SubTypes[0]);
+				}
 				for (const FString& Mixin : MixinList)
 				{
-					if (FirstParamType == Mixin)
+					if (FirstParamType == Mixin || UnresolvedObjectMixinType == Mixin)
 					{
 						if (ArgumentTypes[0].bIsConst)
 							bForceConst = true;

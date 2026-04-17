@@ -63,7 +63,6 @@ public:
 		const bool bTriggerOnce = false
 	)
 	{
-		//return UAbilityAsync_WaitGameplayTagQuery::WaitGameplayTagQueryOnActor(TargetActor, Query, TriggerCondition, bTriggerOnce);
-		return nullptr;
+		return UAbilityAsync_WaitGameplayTagQuery::WaitGameplayTagQueryOnActor(TargetActor, Query, TriggerCondition, bTriggerOnce);
 	}
 };

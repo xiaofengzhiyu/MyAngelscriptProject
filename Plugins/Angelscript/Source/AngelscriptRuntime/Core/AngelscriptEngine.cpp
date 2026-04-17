@@ -5761,6 +5761,8 @@ UStruct* FAngelscriptEngine::GetUnrealStructFromAngelscriptTypeId(int TypeId)
 		return nullptr;
 	if (UserData == FAngelscriptType::TAG_UserData_Multicast_Delegate)
 		return nullptr;
+	if (UserData != nullptr && Cast<UDelegateFunction>((UObject*)UserData) != nullptr)
+		return nullptr;
 	if ((TypeInfo->flags & asOBJ_ENUM) != 0)
 		return nullptr;
 	return (UStruct*)UserData;

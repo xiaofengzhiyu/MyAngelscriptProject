@@ -14,7 +14,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static bool GetShouldBeVisibleInEditor(const ULevelStreaming* LevelStreaming)
 	{
-		return LevelStreaming->GetShouldBeVisibleInEditor();
+		return LevelStreaming != nullptr ? LevelStreaming->GetShouldBeVisibleInEditor() : false;
 	}
 #endif
 };

@@ -7,17 +7,33 @@ IMPLEMENT_MODULE(FAngelscriptRuntimeModule, AngelscriptRuntime);
 bool FAngelscriptRuntimeModule::bInitializeAngelscriptCalled = false;
 TUniquePtr<FAngelscriptEngine> FAngelscriptRuntimeModule::OwnedPrimaryEngine;
 #if WITH_DEV_AUTOMATION_TESTS
+TOptional<bool> FAngelscriptRuntimeModule::StartupIsEditorOverrideForTesting;
+TOptional<bool> FAngelscriptRuntimeModule::StartupIsRunningCommandletOverrideForTesting;
 TFunction<FAngelscriptEngine*()> FAngelscriptRuntimeModule::InitializeOverrideForTesting;
+FAngelscriptEngine* FAngelscriptRuntimeModule::InitializedOverrideEngineForTesting = nullptr;
 #endif
 
 void FAngelscriptRuntimeModule::StartupModule()
 {
-	if (GIsEditor || IsRunningCommandlet())
+	bool bIsEditor = GIsEditor;
+	bool bIsRunningCommandlet = IsRunningCommandlet();
+	#if WITH_DEV_AUTOMATION_TESTS
+	if (StartupIsEditorOverrideForTesting.IsSet())
+	{
+		bIsEditor = StartupIsEditorOverrideForTesting.GetValue();
+	}
+	if (StartupIsRunningCommandletOverrideForTesting.IsSet())
+	{
+		bIsRunningCommandlet = StartupIsRunningCommandletOverrideForTesting.GetValue();
+	}
+	#endif
+
+	if (bIsEditor || bIsRunningCommandlet)
 	{
 		InitializeAngelscript();
 	}
 
-	if (GIsEditor)
+	if (bIsEditor)
 	{
 		FallbackTickHandle = FTSTicker::GetCoreTicker().AddTicker(
 			FTickerDelegate::CreateRaw(this, &FAngelscriptRuntimeModule::TickFallbackPrimaryEngine));
@@ -144,9 +160,11 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 	#if WITH_DEV_AUTOMATION_TESTS
 	if (InitializeOverrideForTesting)
 	{
+		InitializedOverrideEngineForTesting = nullptr;
 		if (FAngelscriptEngine* OverrideEngine = InitializeOverrideForTesting())
 		{
 			FAngelscriptEngineContextStack::Push(OverrideEngine);
+			InitializedOverrideEngineForTesting = OverrideEngine;
 		}
 		return;
 	}
@@ -155,7 +173,11 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 	FModuleManager::Get().LoadModuleChecked(TEXT("AngelscriptRuntime"));
 	if (FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine())
 	{
-		CurrentEngine->Initialize();
+		// Adopt an already-initialized ambient engine instead of re-running full initialization.
+		if (CurrentEngine->GetScriptEngine() == nullptr)
+		{
+			CurrentEngine->Initialize();
+		}
 	}
 	else
 	{
@@ -166,6 +188,18 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
+void FAngelscriptRuntimeModule::SetStartupEnvironmentOverrideForTesting(const TOptional<bool>& bIsEditorOverride, const TOptional<bool>& bIsRunningCommandletOverride)
+{
+	StartupIsEditorOverrideForTesting = bIsEditorOverride;
+	StartupIsRunningCommandletOverrideForTesting = bIsRunningCommandletOverride;
+}
+
+void FAngelscriptRuntimeModule::ClearStartupEnvironmentOverrideForTesting()
+{
+	StartupIsEditorOverrideForTesting.Reset();
+	StartupIsRunningCommandletOverrideForTesting.Reset();
+}
+
 void FAngelscriptRuntimeModule::SetInitializeOverrideForTesting(TFunction<FAngelscriptEngine*()> InOverride)
 {
 	InitializeOverrideForTesting = MoveTemp(InOverride);
@@ -173,6 +207,14 @@ void FAngelscriptRuntimeModule::SetInitializeOverrideForTesting(TFunction<FAngel
 
 void FAngelscriptRuntimeModule::ResetInitializeStateForTesting()
 {
+	ClearStartupEnvironmentOverrideForTesting();
+
+	if (InitializedOverrideEngineForTesting != nullptr)
+	{
+		FAngelscriptEngineContextStack::Pop(InitializedOverrideEngineForTesting);
+		InitializedOverrideEngineForTesting = nullptr;
+	}
+
 	if (OwnedPrimaryEngine.IsValid())
 	{
 		FAngelscriptEngineContextStack::Pop(OwnedPrimaryEngine.Get());

@@ -373,7 +373,6 @@ private:
 	#if WITH_DEV_AUTOMATION_TESTS
 	int32 GetActiveParticipantsForTesting() const;
 	int32 GetActiveCloneCountForTesting() const;
-	static int32 GetLocalPooledContextCountForTesting(asIScriptEngine* ScriptEngine);
 	#endif
 	void PreInitialize_GameThread();
 	void Initialize_AnyThread();
@@ -472,6 +471,9 @@ private:
 	friend struct FAngelscriptHotReloadTestAccess;
 	friend struct FAngelscriptEngineScope;
 	friend struct FAngelscriptTestEngineScopeAccess;
+	#if WITH_DEV_AUTOMATION_TESTS
+	friend struct FAngelscriptInterfaceSignatureTestAccess;
+	#endif
 
 public:
 	TArray<FFilenamePair> FileChangesDetectedForReload;
@@ -571,6 +573,7 @@ public:
 #if WITH_DEV_AUTOMATION_TESTS
 	int32 GetToStringEntryCountForTesting() const;
 	FAngelscriptBindDatabase& GetBindDatabaseForTesting() const;
+	static int32 GetLocalPooledContextCountForTesting(asIScriptEngine* ScriptEngine);
 	void SetUseEditorScriptsForTesting(bool bEnabled);
 	void SetAutomaticImportMethodForTesting(bool bEnabled);
 #endif

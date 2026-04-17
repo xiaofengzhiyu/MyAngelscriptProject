@@ -41,7 +41,7 @@ public:
 			return UnrealString.IsEmpty();
 
 		if (bAnsiStringUpdated)
-			return AnsiString.Num() > 1; // includes the \0 at the end
+			return AnsiString.Num() <= 1; // includes the \0 at the end
 
 		return true;
 	}
@@ -53,6 +53,11 @@ public:
 			if (CharPtr != nullptr)
 			{
 				UnrealString = ANSI_TO_TCHAR(CharPtr);
+				bUnrealStringUpdated = true;
+			}
+			else if (bAnsiStringUpdated)
+			{
+				UnrealString = ANSI_TO_TCHAR(AnsiString.GetData());
 				bUnrealStringUpdated = true;
 			}
 		}

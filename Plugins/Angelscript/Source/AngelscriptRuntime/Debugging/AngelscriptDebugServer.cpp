@@ -49,6 +49,12 @@ THIRD_PARTY_INCLUDES_END
 
 int AngelscriptDebugServer::DebugAdapterVersion = 0;
 
+namespace
+{
+	// RequestDebugDatabase can legitimately emit multi-megabyte envelopes on mature projects.
+	constexpr int32 MaxDebuggerEnvelopeSizeBytes = 16 * 1024 * 1024;
+}
+
 bool SerializeDebugMessageEnvelope(EDebugMessageType MessageType, const TArray<uint8>& Body, TArray<uint8>& OutBuffer)
 {
 	OutBuffer.Reset();
@@ -75,7 +81,7 @@ bool TryDeserializeDebugMessageEnvelope(TArray<uint8>& InOutBuffer, FAngelscript
 	int32 MessageLength = 0;
 	HeaderReader << MessageLength;
 
-	if (MessageLength <= 0 || MessageLength > 1024 * 1024)
+	if (MessageLength <= 0 || MessageLength > MaxDebuggerEnvelopeSizeBytes)
 	{
 		if (OutError != nullptr)
 		{
@@ -106,6 +112,243 @@ bool TryDeserializeDebugMessageEnvelope(TArray<uint8>& InOutBuffer, FAngelscript
 	InOutBuffer.RemoveAt(0, TotalEnvelopeSize, EAllowShrinking::No);
 	bOutHasEnvelope = true;
 	return true;
+}
+
+namespace
+{
+	enum class EConditionalBreakpointValueKind : uint8
+	{
+		Invalid,
+		Integer,
+		Boolean,
+		String,
+	};
+
+	struct FConditionalBreakpointValue
+	{
+		EConditionalBreakpointValueKind Kind = EConditionalBreakpointValueKind::Invalid;
+		int64 IntegerValue = 0;
+		bool BoolValue = false;
+		FString StringValue;
+	};
+
+	bool ParseConditionalBreakpointOperator(const FString& Condition, FString& OutLeftOperand, FString& OutOperator, FString& OutRightOperand)
+	{
+		static const TCHAR* Operators[] = { TEXT("=="), TEXT("!="), TEXT(">="), TEXT("<="), TEXT(">"), TEXT("<") };
+		for (const TCHAR* CandidateOperator : Operators)
+		{
+			const int32 OperatorIndex = Condition.Find(CandidateOperator);
+			if (OperatorIndex == INDEX_NONE)
+			{
+				continue;
+			}
+
+			OutLeftOperand = Condition.Left(OperatorIndex).TrimStartAndEnd();
+			OutOperator = CandidateOperator;
+			OutRightOperand = Condition.RightChop(OperatorIndex + FCString::Strlen(CandidateOperator)).TrimStartAndEnd();
+			return true;
+		}
+
+		return false;
+	}
+
+	bool TryParseConditionalBreakpointLiteral(const FString& Token, FConditionalBreakpointValue& OutValue)
+	{
+		const FString TrimmedToken = Token.TrimStartAndEnd();
+		if (TrimmedToken.IsEmpty())
+		{
+			return false;
+		}
+
+		if (TrimmedToken.Equals(TEXT("true"), ESearchCase::IgnoreCase))
+		{
+			OutValue.Kind = EConditionalBreakpointValueKind::Boolean;
+			OutValue.BoolValue = true;
+			OutValue.StringValue = TEXT("true");
+			return true;
+		}
+
+		if (TrimmedToken.Equals(TEXT("false"), ESearchCase::IgnoreCase))
+		{
+			OutValue.Kind = EConditionalBreakpointValueKind::Boolean;
+			OutValue.BoolValue = false;
+			OutValue.StringValue = TEXT("false");
+			return true;
+		}
+
+		int64 IntegerValue = 0;
+		if (LexTryParseString(IntegerValue, *TrimmedToken))
+		{
+			OutValue.Kind = EConditionalBreakpointValueKind::Integer;
+			OutValue.IntegerValue = IntegerValue;
+			OutValue.StringValue = TrimmedToken;
+			return true;
+		}
+
+		return false;
+	}
+
+	FString NormalizeConditionalBreakpointPath(const FString& Operand)
+	{
+		const FString TrimmedOperand = Operand.TrimStartAndEnd();
+		if (TrimmedOperand.IsEmpty() || TrimmedOperand.Contains(TEXT(":")))
+		{
+			return TrimmedOperand;
+		}
+
+		return FString::Printf(TEXT("0:%s"), *TrimmedOperand);
+	}
+
+	bool TryResolveConditionalBreakpointValue(FAngelscriptDebugServer& DebugServer, asCContext* Context, const FString& Operand, FConditionalBreakpointValue& OutValue)
+	{
+		if (TryParseConditionalBreakpointLiteral(Operand, OutValue))
+		{
+			return true;
+		}
+
+		if (Context == nullptr)
+		{
+			return false;
+		}
+
+		FDebuggerValue DebuggerValue;
+		int32 Frame = 0;
+		if (!DebugServer.GetDebuggerValue(NormalizeConditionalBreakpointPath(Operand), DebuggerValue, &Frame))
+		{
+			return false;
+		}
+
+		OutValue.StringValue = DebuggerValue.Value;
+		if (DebuggerValue.Value.Equals(TEXT("true"), ESearchCase::IgnoreCase))
+		{
+			OutValue.Kind = EConditionalBreakpointValueKind::Boolean;
+			OutValue.BoolValue = true;
+			return true;
+		}
+
+		if (DebuggerValue.Value.Equals(TEXT("false"), ESearchCase::IgnoreCase))
+		{
+			OutValue.Kind = EConditionalBreakpointValueKind::Boolean;
+			OutValue.BoolValue = false;
+			return true;
+		}
+
+		int64 IntegerValue = 0;
+		if (LexTryParseString(IntegerValue, *DebuggerValue.Value))
+		{
+			OutValue.Kind = EConditionalBreakpointValueKind::Integer;
+			OutValue.IntegerValue = IntegerValue;
+			return true;
+		}
+
+		OutValue.Kind = EConditionalBreakpointValueKind::String;
+		return true;
+	}
+
+	TOptional<bool> EvaluateConditionalBreakpoint(FAngelscriptDebugServer& DebugServer, asCContext* Context, const FString& Condition, FString* OutFailureReason)
+	{
+		const FString TrimmedCondition = Condition.TrimStartAndEnd();
+		if (TrimmedCondition.IsEmpty())
+		{
+			return true;
+		}
+
+		auto SetFailureReason = [OutFailureReason](const FString& Message)
+		{
+			if (OutFailureReason != nullptr)
+			{
+				*OutFailureReason = Message;
+			}
+		};
+
+		FString LeftOperand;
+		FString Operator;
+		FString RightOperand;
+		if (!ParseConditionalBreakpointOperator(TrimmedCondition, LeftOperand, Operator, RightOperand))
+		{
+			FConditionalBreakpointValue Value;
+			if (!TryResolveConditionalBreakpointValue(DebugServer, Context, TrimmedCondition, Value))
+			{
+				SetFailureReason(FString::Printf(TEXT("Could not resolve breakpoint condition operand '%s'."), *TrimmedCondition));
+				return {};
+			}
+
+			switch (Value.Kind)
+			{
+			case EConditionalBreakpointValueKind::Boolean:
+				return Value.BoolValue;
+
+			case EConditionalBreakpointValueKind::Integer:
+				return Value.IntegerValue != 0;
+
+			case EConditionalBreakpointValueKind::String:
+				return !Value.StringValue.IsEmpty();
+
+			default:
+				SetFailureReason(FString::Printf(TEXT("Breakpoint condition '%s' evaluated to an unsupported value kind."), *TrimmedCondition));
+				return {};
+			}
+		}
+
+		FConditionalBreakpointValue LeftValue;
+		FConditionalBreakpointValue RightValue;
+		if (!TryResolveConditionalBreakpointValue(DebugServer, Context, LeftOperand, LeftValue))
+		{
+			SetFailureReason(FString::Printf(TEXT("Could not resolve left operand '%s' for conditional breakpoint '%s'."), *LeftOperand, *TrimmedCondition));
+			return {};
+		}
+
+		if (!TryResolveConditionalBreakpointValue(DebugServer, Context, RightOperand, RightValue))
+		{
+			SetFailureReason(FString::Printf(TEXT("Could not resolve right operand '%s' for conditional breakpoint '%s'."), *RightOperand, *TrimmedCondition));
+			return {};
+		}
+
+		const bool bLeftIsNumeric = LeftValue.Kind == EConditionalBreakpointValueKind::Integer || LeftValue.Kind == EConditionalBreakpointValueKind::Boolean;
+		const bool bRightIsNumeric = RightValue.Kind == EConditionalBreakpointValueKind::Integer || RightValue.Kind == EConditionalBreakpointValueKind::Boolean;
+		if (bLeftIsNumeric && bRightIsNumeric)
+		{
+			const int64 LeftNumericValue = LeftValue.Kind == EConditionalBreakpointValueKind::Boolean ? (LeftValue.BoolValue ? 1 : 0) : LeftValue.IntegerValue;
+			const int64 RightNumericValue = RightValue.Kind == EConditionalBreakpointValueKind::Boolean ? (RightValue.BoolValue ? 1 : 0) : RightValue.IntegerValue;
+
+			if (Operator == TEXT("=="))
+			{
+				return LeftNumericValue == RightNumericValue;
+			}
+			if (Operator == TEXT("!="))
+			{
+				return LeftNumericValue != RightNumericValue;
+			}
+			if (Operator == TEXT(">"))
+			{
+				return LeftNumericValue > RightNumericValue;
+			}
+			if (Operator == TEXT(">="))
+			{
+				return LeftNumericValue >= RightNumericValue;
+			}
+			if (Operator == TEXT("<"))
+			{
+				return LeftNumericValue < RightNumericValue;
+			}
+			if (Operator == TEXT("<="))
+			{
+				return LeftNumericValue <= RightNumericValue;
+			}
+		}
+
+		if (Operator == TEXT("=="))
+		{
+			return LeftValue.StringValue == RightValue.StringValue;
+		}
+		if (Operator == TEXT("!="))
+		{
+			return LeftValue.StringValue != RightValue.StringValue;
+		}
+
+		SetFailureReason(FString::Printf(TEXT("Conditional breakpoint '%s' uses unsupported operator '%s' for non-numeric values."), *TrimmedCondition, *Operator));
+		return {};
+	}
 }
 
 namespace DataBreakpoint_Windows
@@ -476,6 +719,21 @@ void FAngelscriptDebugServer::ProcessScriptLine(class asCContext* Context)
 	if (IsEngineExitRequested())
 		return;
 
+	// Running scripts still need to poll the debugger socket so manual Pause can
+	// arm the next line break without waiting for an outer engine tick.
+	const bool bHadPendingLineBreakBeforePolling = bBreakNextScriptLine.Load();
+	ProcessMessages();
+
+	if (!bIsDebugging || bIsPaused)
+		return;
+
+	// A Pause request that arrived while processing this callback should stop on
+	// the *next* script line, not immediately on the current callback.
+	if (!bHadPendingLineBreakBeforePolling && bPauseRequested && bBreakNextScriptLine.Load())
+	{
+		return;
+	}
+
 	if (DataBreakpoints.Num() > 0 && bBreakNextScriptLine)
 	{
 		SyncActiveDataBreakpointsToAuthoritativeState();
@@ -545,6 +803,7 @@ void FAngelscriptDebugServer::ProcessScriptLine(class asCContext* Context)
 		}
 	}
 
+	bool bWasPause = false;
 	bool bWasStep = false;
 	bool bWasIgnored = false;
 	if (bBreakNextScriptLine)
@@ -563,9 +822,11 @@ void FAngelscriptDebugServer::ProcessScriptLine(class asCContext* Context)
 
 		if (bShouldBreak)
 		{
-			bWasStep = true;
+			bWasPause = bPauseRequested;
+			bWasStep = !bWasPause;
 			bIsPaused = true;
 			bBreakNextScriptLine.Store(false);
+			bPauseRequested = false;
 
 			ConditionBreakFrame = -1;
 			ConditionBreakFunction = nullptr;
@@ -601,7 +862,27 @@ void FAngelscriptDebugServer::ProcessScriptLine(class asCContext* Context)
 
 			if (ActiveBreakpoints->Lines.Contains(Line) && !bWasIgnored)
 			{
-				if (ShouldBreakOnActiveSide())
+				bool bConditionAllowsBreak = true;
+				if (const FString* ConditionExpression = ActiveBreakpoints->Conditions.Find(Line))
+				{
+					FString ConditionFailureReason;
+					const TOptional<bool> EvaluatedCondition = EvaluateConditionalBreakpoint(*this, Context, *ConditionExpression, &ConditionFailureReason);
+					if (EvaluatedCondition.IsSet())
+					{
+						bConditionAllowsBreak = EvaluatedCondition.GetValue();
+					}
+					else
+					{
+						UE_LOG(Angelscript, Warning, TEXT("Failed to evaluate conditional breakpoint '%s' at %s:%d. %s"),
+							**ConditionExpression,
+							ANSI_TO_TCHAR(Section),
+							Line,
+							*ConditionFailureReason);
+						bConditionAllowsBreak = true;
+					}
+				}
+
+				if (bConditionAllowsBreak && ShouldBreakOnActiveSide())
 				{
 					bIsPaused = true;
 					IgnoreBreakLine = Line;
@@ -621,7 +902,7 @@ void FAngelscriptDebugServer::ProcessScriptLine(class asCContext* Context)
 	if (bIsPaused)
 	{
 		FStoppedMessage StopMsg;
-		StopMsg.Reason = bWasStep ? TEXT("step") : TEXT("breakpoint");
+		StopMsg.Reason = bWasPause ? TEXT("pause") : (bWasStep ? TEXT("step") : TEXT("breakpoint"));
 
 		PauseExecution(&StopMsg);
 	}
@@ -736,7 +1017,9 @@ void FAngelscriptDebugServer::ProcessMessages()
 				if (ClientsThatAreDebugging.Num() == 0)
 				{
 					bIsDebugging = false;
+					bPauseRequested = false;
 					bIsPaused = false;
+					bBreakNextScriptLine = false;
 					ClearAllBreakpoints();
 					FAngelscriptEngine::Get().UpdateLineCallbackState();
 				}
@@ -774,7 +1057,7 @@ void FAngelscriptDebugServer::ProcessMessages()
 				*Datagram << PacketSize;
 			}
 
-			if (PacketSize <= 0 || PacketSize > 1024 * 1024)
+			if (PacketSize <= 0 || PacketSize > MaxDebuggerEnvelopeSizeBytes)
 				break;
 
 			// Loop until all data received
@@ -828,6 +1111,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 	else if (MessageType == EDebugMessageType::Pause)
 	{
 		bBreakNextScriptLine = true;
+		bPauseRequested = true;
 
 		ConditionBreakFrame = -1;
 		ConditionBreakFunction = nullptr;
@@ -838,6 +1122,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 	{
 		bIsPaused = false;
 		bBreakNextScriptLine = false;
+		bPauseRequested = false;
 
 		ConditionBreakFrame = -1;
 		ConditionBreakFunction = nullptr;
@@ -847,6 +1132,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 	else if (MessageType == EDebugMessageType::StepIn)
 	{
 		bBreakNextScriptLine = true;
+		bPauseRequested = false;
 		bIsPaused = false;
 
 		ConditionBreakFrame = -1;
@@ -857,6 +1143,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 	else if (MessageType == EDebugMessageType::StepOver)
 	{
 		bBreakNextScriptLine = true;
+		bPauseRequested = false;
 		bIsPaused = false;
 
 		auto* Context = asGetActiveContext();
@@ -877,6 +1164,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 	else if (MessageType == EDebugMessageType::StepOut)
 	{
 		bBreakNextScriptLine = true;
+		bPauseRequested = false;
 		bIsPaused = false;
 
 		auto* Context = asGetActiveContext();
@@ -888,6 +1176,8 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 		}
 		else
 		{
+			// StepOut on the top frame should run to completion instead of re-breaking on the next line.
+			bBreakNextScriptLine = false;
 			ConditionBreakFrame = -1;
 			ConditionBreakFunction = nullptr;
 		}
@@ -900,22 +1190,30 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 		*Datagram << Msg;
 		
 		bIsDebugging = true;
+		bPauseRequested = false;
+		bBreakNextScriptLine = false;
 		AngelscriptDebugServer::DebugAdapterVersion = Msg.DebugAdapterVersion;
 
 		FDebugServerVersionMessage DebugServerVersionMessage;
 		DebugServerVersionMessage.DebugServerVersion = DEBUG_SERVER_VERSION;
 		SendMessageToClient(Client, EDebugMessageType::DebugServerVersion, DebugServerVersionMessage);
 		
-		BreakOptions.Empty();
-		ClearAllBreakpoints();
+		const bool bIsFirstDebuggingClient = ClientsThatAreDebugging.Num() == 0;
+		if (bIsFirstDebuggingClient)
+		{
+			BreakOptions.Empty();
+			ClearAllBreakpoints();
+		}
 
-		ClientsThatAreDebugging.Add(Client);
+		ClientsThatAreDebugging.AddUnique(Client);
 		FAngelscriptEngine::Get().UpdateLineCallbackState();
 	}
 	else if (MessageType == EDebugMessageType::StopDebugging)
 	{
 		bIsDebugging = false;
+		bPauseRequested = false;
 		bIsPaused = false;
+		bBreakNextScriptLine = false;
 		ClearAllBreakpoints();
 
 		ClientsThatAreDebugging.Remove(Client);
@@ -944,6 +1242,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 
 		BreakpointCount -= Active->Lines.Num();
 		Active->Lines.Empty();
+		Active->Conditions.Empty();
 
 		if (Active->Module.IsValid())
 		{
@@ -1025,13 +1324,21 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 			}
 		}
 
+		const bool bDuplicateBreakpoint = CodeLine != -1 && Active->Lines.Contains(CodeLine);
+
 		// Add the breakpoint
-		if (CodeLine != -1)
+		if (CodeLine != -1 && !bDuplicateBreakpoint)
 		{
-			if (!Active->Lines.Contains(CodeLine))
+			Active->Lines.Add(CodeLine);
+			BreakpointCount += 1;
+
+			if (BP.Condition.IsEmpty())
 			{
-				Active->Lines.Add(CodeLine);
-				BreakpointCount += 1;
+				Active->Conditions.Remove(CodeLine);
+			}
+			else
+			{
+				Active->Conditions.Add(CodeLine, BP.Condition);
 			}
 
 			if (CodeLine != WantedLine && BP.Id != -1)
@@ -1042,6 +1349,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 				ChangedBP.Filename = OriginalFilename;
 				ChangedBP.LineNumber = CodeLine;
 				ChangedBP.Id = BP.Id;
+				ChangedBP.Condition = BP.Condition;
 				SendMessageToClient(Client, EDebugMessageType::SetBreakpoint, ChangedBP);
 			}
 		}
@@ -1054,6 +1362,7 @@ void FAngelscriptDebugServer::HandleMessage(EDebugMessageType MessageType, FArra
 				ChangedBP.Filename = OriginalFilename;
 				ChangedBP.LineNumber = -1;
 				ChangedBP.Id = BP.Id;
+				ChangedBP.Condition = BP.Condition;
 				SendMessageToClient(Client, EDebugMessageType::SetBreakpoint, ChangedBP);
 			}
 		}
@@ -2632,6 +2941,11 @@ bool FAngelscriptDebugServer::GetDebuggerValue(const FString& Path, FDebuggerVal
 		}
 	}
 
+	if (bValidValue && CurrentValue.Name.IsEmpty())
+	{
+		CurrentValue.Name = Expr[0].Name;
+	}
+
 	// No value was found in scope, nothing to show
 	if (!bValidValue)
 		return false;
@@ -2683,6 +2997,13 @@ bool FAngelscriptDebugServer::GetDebuggerValue(const FString& Path, FDebuggerVal
 	}
 	else
 	{
+		if (!CurrentValue.bTemporaryValue
+			&& CurrentValue.Address != nullptr
+			&& CurrentValue.AddressToMonitor == nullptr)
+		{
+			CurrentValue.SetAddressToMonitor(CurrentValue.Address, CurrentValue.GetAddressToMonitorValueSize());
+		}
+
 		CurrentValue.Address = nullptr;
 		CurrentValue.ClearLiteral();
 		return bValidValue;

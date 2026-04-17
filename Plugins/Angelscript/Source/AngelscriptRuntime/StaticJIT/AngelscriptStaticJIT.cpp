@@ -336,6 +336,11 @@ void FStaticJITContext::AddHeader(const FString& Header)
 
 void FStaticJITContext::DebugLineNumber()
 {
+	if (!JIT->bEmitDebugMetadataInOutput)
+	{
+		return;
+	}
+
 	int32 LineNumber = ScriptFunction->GetLineNumber(
 		(BC - BC_FunctionStart), nullptr
 	) & 0xFFFFF;
@@ -371,12 +376,15 @@ void FStaticJITContext::GenerateNewFunction(asIScriptFunction* InScriptFunction)
 
 	// Generate the actual C++ code for the main function
 	FunctionHead += FString::Printf(TEXT("// == Jit at BC %d ==\n"), (asDWORD)(BC - BC_FunctionStart));
-	FunctionHead += FString::Printf(TEXT("%s(\"%s\", %d);\n"),
-		(ScriptFunction->objectType != nullptr && (ScriptFunction->objectType->GetFlags() & asOBJ_REF) != 0)
-			? TEXT("SCRIPT_DEBUG_CALLSTACK_FRAME_UOBJECT")
-			: TEXT("SCRIPT_DEBUG_CALLSTACK_FRAME"),
-		ANSI_TO_TCHAR(ScriptFunction->GetDeclarationStr(true, true, false, true, false).AddressOf()),
-		(ScriptFunction->GetLineNumber(0, nullptr) & 0xFFFFF));
+	if (JIT->bEmitDebugMetadataInOutput)
+	{
+		FunctionHead += FString::Printf(TEXT("%s(\"%s\", %d);\n"),
+			(ScriptFunction->objectType != nullptr && (ScriptFunction->objectType->GetFlags() & asOBJ_REF) != 0)
+				? TEXT("SCRIPT_DEBUG_CALLSTACK_FRAME_UOBJECT")
+				: TEXT("SCRIPT_DEBUG_CALLSTACK_FRAME"),
+			ANSI_TO_TCHAR(ScriptFunction->GetDeclarationStr(true, true, false, true, false).AddressOf()),
+			(ScriptFunction->GetLineNumber(0, nullptr) & 0xFFFFF));
+	}
 	FunctionHead += TEXT("SCRIPT_ASSUME_NO_EXCEPTION()\n");
 
 	// Create the local stack space
@@ -3467,7 +3475,7 @@ void FAngelscriptStaticJIT::AnalyzeScriptFunction(asCScriptFunction* ScriptFunct
 	}
 }
 
-void FAngelscriptStaticJIT::WriteOutputCode()
+void FAngelscriptStaticJIT::WriteOutputCode(TMap<FString, FString>* OutGeneratedFiles)
 {
 	Engine = (asCScriptEngine*)FAngelscriptEngine::Get().Engine;
 	bAllowDevirtualize = true;
@@ -3496,14 +3504,18 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 	for (auto& Elem : FunctionsToGenerate)
 		GenerateCppCode(Elem.Key, Elem.Value);
 
-	FString GenDir = FPaths::RootDir() / TEXT("AS_JITTED_CODE");
-
-	// Delete and recreate the folder so we don't keep any old code
-	auto& FileManager =	IFileManager::Get();
-	FileManager.MakeDirectory(*GenDir, true);
-
+	FString GenDir;
+	IFileManager* FileManager = nullptr;
 	TArray<FString> PreviousFiles;
-	FileManager.FindFiles(PreviousFiles, *GenDir);
+	if (OutGeneratedFiles == nullptr)
+	{
+		GenDir = FPaths::RootDir() / TEXT("AS_JITTED_CODE");
+
+		// Delete and recreate the folder so we don't keep any old code
+		FileManager = &IFileManager::Get();
+		FileManager->MakeDirectory(*GenDir, true);
+		FileManager->FindFiles(PreviousFiles, *GenDir);
+	}
 
 	TSet<FString> CurrentFiles;
 
@@ -3549,8 +3561,6 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 			continue;
 		}
 
-		FString FullFilename = GenDir / Header.Filename;
-
 		FString FullContent = TEXT("#pragma once\n\n");
 		for (const FString& Content : Header.Includes)
 			FullContent.Append(Content+TEXT("\n"));
@@ -3561,11 +3571,15 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 			FullContent.Append(Content);
 		FullContent.Append(TEXT("\n\n"));
 
+		CurrentFiles.Add(Header.Filename);
+		if (OutGeneratedFiles != nullptr)
 		{
-			// Don't write the file if nothing in it has changed,
-			// helps to improve iteration times
+			OutGeneratedFiles->Add(Header.Filename, FullContent);
+		}
+		else
+		{
+			const FString FullFilename = GenDir / Header.Filename;
 			bool bWriteOutFile = true;
-			CurrentFiles.Add(Header.Filename);
 
 			FString ExistingFile;
 			if (FFileHelper::LoadFileToString(ExistingFile, *FullFilename))
@@ -3585,7 +3599,6 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 	for(auto ModuleElem : JITFiles)
 	{
 		FJITFile& File = *ModuleElem.Value;
-		FString FullFilename = GenDir / File.Filename;
 
 		FString FullContent = STANDARD_HEADER;
 		for (const FString& Content : File.Headers)
@@ -3609,28 +3622,35 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 		}
 		FullContent.Append(TEXT("\n\n"));
 
-		FString FilenameSymbol = GetUniqueSymbolName(TEXT("MODULENAME_") + File.ModuleName);
-		FullContent.Append(FString::Printf(
-			TEXT("#if AS_JIT_DEBUG_CALLSTACKS\n")
-			TEXT("#undef SCRIPT_DEBUG_FILENAME\n")
-			TEXT("static const char* %s = \"%s\";\n")
-			TEXT("#define SCRIPT_DEBUG_FILENAME %s\n")
-			TEXT("#endif\n"),
-			*FilenameSymbol,
-			*File.ModuleName,
-			*FilenameSymbol
-		));
+		if (bEmitDebugMetadataInOutput)
+		{
+			FString FilenameSymbol = GetUniqueSymbolName(TEXT("MODULENAME_") + File.ModuleName);
+			FullContent.Append(FString::Printf(
+				TEXT("#if AS_JIT_DEBUG_CALLSTACKS\n")
+				TEXT("#undef SCRIPT_DEBUG_FILENAME\n")
+				TEXT("static const char* %s = \"%s\";\n")
+				TEXT("#define SCRIPT_DEBUG_FILENAME %s\n")
+				TEXT("#endif\n"),
+				*FilenameSymbol,
+				*File.ModuleName,
+				*FilenameSymbol
+			));
+		}
 
 		FullContent.Append(TEXT("\n\n"));
 		for (const FString& Content : File.Content)
 			FullContent.Append(Content);
 		FullContent += STANDARD_FOOTER;
 
+		CurrentFiles.Add(File.Filename);
+		if (OutGeneratedFiles != nullptr)
 		{
-			// Don't write the file if nothing in it has changed,
-			// helps to improve iteration times
+			OutGeneratedFiles->Add(File.Filename, FullContent);
+		}
+		else
+		{
+			const FString FullFilename = GenDir / File.Filename;
 			bool bWriteOutFile = true;
-			CurrentFiles.Add(File.Filename);
 
 			FString ExistingFile;
 			if (FFileHelper::LoadFileToString(ExistingFile, *FullFilename))
@@ -3652,24 +3672,31 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 			if (LinesInCombinedFile > 200000 || FileIndex == (FileCount-1))
 			{
 				FString CombinedFilename = FString::Printf(TEXT("AngelscriptJitCode_%d.jit.cpp"), CombinedFileIndex);
-				FString CombinedPath = GenDir / CombinedFilename;
 				CurrentFiles.Add(CombinedFilename);
 
 				FString CombinedContent;
 				for (const FString& FileToInclude : FilesToCombine)
 					CombinedContent += FString::Printf(TEXT("#include \"%s\"\n"), *FileToInclude);
 
-				bool bWriteOutFile = true;
-
-				FString ExistingContent;
-				if (FFileHelper::LoadFileToString(ExistingContent, *CombinedPath))
+				if (OutGeneratedFiles != nullptr)
 				{
-					if (ExistingContent == CombinedContent)
-						bWriteOutFile = false;
+					OutGeneratedFiles->Add(CombinedFilename, CombinedContent);
 				}
+				else
+				{
+					const FString CombinedPath = GenDir / CombinedFilename;
+					bool bWriteOutFile = true;
 
-				if (bWriteOutFile)
-					FFileHelper::SaveStringToFile(CombinedContent, *CombinedPath);
+					FString ExistingContent;
+					if (FFileHelper::LoadFileToString(ExistingContent, *CombinedPath))
+					{
+						if (ExistingContent == CombinedContent)
+							bWriteOutFile = false;
+					}
+
+					if (bWriteOutFile)
+						FFileHelper::SaveStringToFile(CombinedContent, *CombinedPath);
+				}
 
 				LinesInCombinedFile = 0;
 				CombinedFileIndex += 1;
@@ -3692,16 +3719,94 @@ void FAngelscriptStaticJIT::WriteOutputCode()
 		PrecompiledData->DataGuid.D
 	);
 
-	FFileHelper::SaveStringToFile(InfoContent, *(GenDir / InfoFile));
 	CurrentFiles.Add(InfoFile);
+	if (OutGeneratedFiles != nullptr)
+	{
+		OutGeneratedFiles->Add(InfoFile, InfoContent);
+	}
+	else
+	{
+		FFileHelper::SaveStringToFile(InfoContent, *(GenDir / InfoFile));
+	}
 
 	// Delete files we no longer want to have
-	for (const FString& PrevFile : PreviousFiles)
+	if (OutGeneratedFiles == nullptr)
 	{
-		if (!CurrentFiles.Contains(PrevFile))
-			FileManager.Delete(*(GenDir / PrevFile));
+		for (const FString& PrevFile : PreviousFiles)
+		{
+			if (!CurrentFiles.Contains(PrevFile))
+				FileManager->Delete(*(GenDir / PrevFile));
+		}
 	}
 }
+
+#if WITH_DEV_AUTOMATION_TESTS && AS_CAN_GENERATE_JIT
+bool GenerateStaticJITSourceTextForTesting(asIScriptModule* Module, FString& OutSourceText, bool bEmitDebugMetadata, FString* OutError)
+{
+	OutSourceText.Reset();
+
+	asCModule* ScriptModule = reinterpret_cast<asCModule*>(Module);
+	if (ScriptModule == nullptr)
+	{
+		if (OutError != nullptr)
+		{
+			*OutError = TEXT("GenerateStaticJITSourceTextForTesting failed: module was null.");
+		}
+		return false;
+	}
+
+	asCScriptEngine* ScriptEngine = reinterpret_cast<asCScriptEngine*>(ScriptModule->GetEngine());
+	if (ScriptEngine == nullptr)
+	{
+		if (OutError != nullptr)
+		{
+			*OutError = TEXT("GenerateStaticJITSourceTextForTesting failed: script engine was null.");
+		}
+		return false;
+	}
+
+	FAngelscriptStaticJIT JIT;
+	FAngelscriptPrecompiledData PrecompiledData(ScriptEngine);
+	JIT.PrecompiledData = &PrecompiledData;
+	JIT.bGenerateOutputCode = true;
+	JIT.bEmitDebugMetadataInOutput = bEmitDebugMetadata;
+
+	asIJITCompiler* PreviousJITCompiler = ScriptEngine->GetJITCompiler();
+	ScriptEngine->SetJITCompiler(&JIT);
+	ON_SCOPE_EXIT
+	{
+		ScriptEngine->SetJITCompiler(PreviousJITCompiler);
+	};
+
+	ScriptModule->JITCompile();
+
+	TMap<FString, FString> GeneratedFiles;
+	JIT.WriteOutputCode(&GeneratedFiles);
+
+	const TSharedPtr<FJITFile>* JITFile = JIT.JITFiles.Find(ScriptModule);
+	if (JITFile == nullptr || !JITFile->IsValid())
+	{
+		if (OutError != nullptr)
+		{
+			*OutError = TEXT("GenerateStaticJITSourceTextForTesting failed: module did not produce a JIT file.");
+		}
+		return false;
+	}
+
+	const FString* GeneratedSource = GeneratedFiles.Find((*JITFile)->Filename);
+	if (GeneratedSource == nullptr)
+	{
+		if (OutError != nullptr)
+		{
+			*OutError = FString::Printf(TEXT("GenerateStaticJITSourceTextForTesting failed: generated source file '%s' was missing."), *(*JITFile)->Filename);
+		}
+		return false;
+	}
+
+	OutSourceText = *GeneratedSource;
+	return true;
+}
+#endif
 
 void FAngelscriptStaticJIT::SanitizeSymbolName(FString& InOutSymbol)
 {

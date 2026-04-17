@@ -11,10 +11,10 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_UEnhancedInputComponent(FAngel
 
 	UEnhancedInputComponent_.Method("bool HasBindings() const", METHOD_TRIVIAL(UEnhancedInputComponent, HasBindings));
 
-	UEnhancedInputComponent_.Method("void ClearActionEventBindings() const", METHOD_TRIVIAL(UEnhancedInputComponent, ClearActionEventBindings));
-	UEnhancedInputComponent_.Method("void ClearActionValueBindings() const", METHOD_TRIVIAL(UEnhancedInputComponent, ClearActionValueBindings));
-	UEnhancedInputComponent_.Method("void ClearDebugKeyBindings() const", METHOD_TRIVIAL(UEnhancedInputComponent, ClearDebugKeyBindings));
-	UEnhancedInputComponent_.Method("void ClearActionBindings() const", METHOD_TRIVIAL(UEnhancedInputComponent, ClearActionBindings));
+	UEnhancedInputComponent_.Method("void ClearActionEventBindings()", METHOD_TRIVIAL(UEnhancedInputComponent, ClearActionEventBindings));
+	UEnhancedInputComponent_.Method("void ClearActionValueBindings()", METHOD_TRIVIAL(UEnhancedInputComponent, ClearActionValueBindings));
+	UEnhancedInputComponent_.Method("void ClearDebugKeyBindings()", METHOD_TRIVIAL(UEnhancedInputComponent, ClearDebugKeyBindings));
+	UEnhancedInputComponent_.Method("void ClearActionBindings()", METHOD_TRIVIAL(UEnhancedInputComponent, ClearActionBindings));
 	UEnhancedInputComponent_.Method("void ClearBindingsForObject(UObject InOwner)", METHODPR_TRIVIAL(void, UEnhancedInputComponent, ClearBindingsForObject, (UObject*)));
 
 	UEnhancedInputComponent_.Method("bool RemoveActionEventBinding(const int32 BindingIndex)", METHODPR_TRIVIAL(bool, UEnhancedInputComponent, RemoveActionEventBinding, (const int32)));

@@ -28,7 +28,7 @@ FString UAngelscriptScriptLibrary::GetModuleNameOfGlobalVariableBeingInitialized
 	if (asCModule::InitializingGlobalProperty != nullptr)
 	{
 		if (asCModule::InitializingGlobalProperty->module != nullptr)
-			return ANSI_TO_TCHAR(asCModule::InitializingGlobalProperty->module->baseModuleName.AddressOf());
+			return ANSI_TO_TCHAR(asCModule::InitializingGlobalProperty->module->GetName());
 	}
 	return TEXT("");
 }

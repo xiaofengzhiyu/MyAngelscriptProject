@@ -248,12 +248,12 @@ FAngelscriptTypeUsage FAngelscriptTypeUsage::FromProperty(FProperty* Property)
 		Usage.Type = FAngelscriptType::GetByProperty(Property, false);
 	}
 
-	//WILL-EDIT	
 	if (Property->HasAnyPropertyFlags(CPF_ConstParm))
 		Usage.bIsConst = true;
 
-	//WILL-EDIT	
-	if (Property->HasAnyPropertyFlags(CPF_ReferenceParm))
+	const bool bIsReferenceProperty = Property->HasAnyPropertyFlags(CPF_ReferenceParm)
+		|| (Property->HasAnyPropertyFlags(CPF_OutParm) && !Property->HasAnyPropertyFlags(CPF_ReturnParm));
+	if (bIsReferenceProperty)
 		Usage.bIsReference = true;
 
 	return Usage;
@@ -284,7 +284,7 @@ FAngelscriptTypeUsage FAngelscriptTypeUsage::FromDataType(const asCDataType& Dat
 
 	auto Type = FAngelscriptTypeUsage::FromTypeId(TypeId);
 	Type.bIsReference = DataType.IsReference();
-	Type.bIsConst = DataType.IsReadOnly();
+	Type.bIsConst = DataType.IsObjectConst();
 	return Type;
 }
 

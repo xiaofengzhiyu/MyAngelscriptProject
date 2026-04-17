@@ -400,6 +400,7 @@ struct FAngelscriptStaticJIT : public asIJITCompiler
 
 #if AS_CAN_GENERATE_JIT
 	bool bGenerateOutputCode = false;
+	bool bEmitDebugMetadataInOutput = true;
 	bool bAllowDevirtualize = true;
 	bool bAllowComprehensiveJIT = true;
 
@@ -481,7 +482,7 @@ struct FAngelscriptStaticJIT : public asIJITCompiler
 	bool IsTypePotentiallyDifferent(asITypeInfo* ObjectType);
 
 	void GenerateCppCode(asIScriptFunction* ScriptFunction, FGenerateFunction& Generate);
-	void WriteOutputCode();
+	void WriteOutputCode(TMap<FString, FString>* OutGeneratedFiles = nullptr);
 
 	void SanitizeSymbolName(FString& InOutSymbol);
 
@@ -489,3 +490,11 @@ struct FAngelscriptStaticJIT : public asIJITCompiler
 	void AnalyzeScriptFunction(asCScriptFunction* Function, FGenerateFunction& Generate);
 #endif
 };
+
+#if WITH_DEV_AUTOMATION_TESTS && AS_CAN_GENERATE_JIT
+ANGELSCRIPTRUNTIME_API bool GenerateStaticJITSourceTextForTesting(
+	class asIScriptModule* Module,
+	FString& OutSourceText,
+	bool bEmitDebugMetadata,
+	FString* OutError = nullptr);
+#endif

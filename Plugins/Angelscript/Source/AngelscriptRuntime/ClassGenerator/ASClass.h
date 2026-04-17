@@ -31,8 +31,6 @@ public:
 	//TMap<FName, TPair<FGenericFuncPtr, ASAutoCaller::FunctionCaller>> GenericFuncPtrMap;
 	//static TMap<FName, TMap<FName, TPair<FGenericFuncPtr, ASAutoCaller::FunctionCaller>>> GFuncMaps;
 
-	UE::GC::FSchemaOwner ReferenceSchema;		
-
 	//END WILL
 
 	struct FDefaultComponent

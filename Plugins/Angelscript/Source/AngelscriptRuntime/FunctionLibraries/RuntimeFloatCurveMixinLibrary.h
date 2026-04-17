@@ -13,8 +13,7 @@ struct FCurveKeyHandle
 	FKeyHandle KeyHandle;
 };
 
-//UCLASS(meta = (ScriptMixin = "FRuntimeFloatCurve UCurveFloat"))
-UCLASS(meta = ())
+UCLASS(meta = (ScriptMixin = "FRuntimeFloatCurve UCurveFloat"))
 class ANGELSCRIPTRUNTIME_API URuntimeFloatCurveMixinLibrary  : public UObject
 {
 	GENERATED_BODY()
@@ -30,7 +29,7 @@ public:
 	}
 
 	//UFUNCTION(ScriptCallable, Category = "Math|Curves")
-	UFUNCTION(BlueprintCallable, Category = "Math|Curves")
+	UFUNCTION(BlueprintCallable, Category = "Math|Curves", Meta = (NotInAngelscript = "true"))
     static void GetTimeRange(const FRuntimeFloatCurve& Target, float& MinTime, float& MaxTime)
 	{
 		Target.GetRichCurveConst()->GetTimeRange(MinTime, MaxTime);

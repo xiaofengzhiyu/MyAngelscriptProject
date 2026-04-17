@@ -511,6 +511,13 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_SoftReferences((int32)FAngelsc
 		// Load the package the object is in
 		TWeakObjectPtr<UClass> WeakClass = ObjClass;
 		FSoftObjectPtr ObjectCopy(*Self);
+		const FString PackageName = FPackageName::ObjectPathToPackageName(ObjectCopy.ToString());
+		if (PackageName.IsEmpty() || (FindPackage(nullptr, *PackageName) == nullptr && !FPackageName::DoesPackageExist(PackageName)))
+		{
+			OnLoaded.ExecuteIfBound(nullptr);
+			return;
+		}
+
 		FLoadPackageAsyncDelegate Delegate;
 		Delegate.BindLambda([ObjectCopy, OnLoaded, WeakClass](const FName& PkgName, UPackage* LoadedPkg, EAsyncLoadingResult::Type Result)
 		{
@@ -523,7 +530,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_SoftReferences((int32)FAngelsc
 			OnLoaded.ExecuteIfBound(Object);
 		});
 
-		LoadPackageAsync(*FPackageName::ObjectPathToPackageName(ObjectCopy.ToString()), Delegate, 100);
+		LoadPackageAsync(*PackageName, Delegate, 100);
 	});
 	SCRIPT_BIND_DOCUMENTATION("Asynchronously loads the package that contains the referenced object.\nDelegate may be called immediately if object is already loaded.");
 
@@ -635,6 +642,13 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_SoftReferences((int32)FAngelsc
 		// Load the package the class is in
 		TWeakObjectPtr<UClass> WeakClass = ObjClass;
 		FSoftObjectPtr ObjectCopy(*Self);
+		const FString PackageName = FPackageName::ObjectPathToPackageName(ObjectCopy.ToString());
+		if (PackageName.IsEmpty() || (FindPackage(nullptr, *PackageName) == nullptr && !FPackageName::DoesPackageExist(PackageName)))
+		{
+			OnLoaded.ExecuteIfBound(nullptr);
+			return;
+		}
+
 		FLoadPackageAsyncDelegate Delegate;
 		Delegate.BindLambda([ObjectCopy, OnLoaded, WeakClass](const FName& PkgName, UPackage* LoadedPkg, EAsyncLoadingResult::Type Result)
 		{
@@ -647,7 +661,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_SoftReferences((int32)FAngelsc
 			OnLoaded.ExecuteIfBound(Object);
 		});
 
-		LoadPackageAsync(*FPackageName::ObjectPathToPackageName(ObjectCopy.ToString()), Delegate, 100);
+		LoadPackageAsync(*PackageName, Delegate, 100);
 	});
 	SCRIPT_BIND_DOCUMENTATION("Asynchronously loads the package that contains the referenced class.\nDelegate may be called immediately if class is already loaded.");
 });

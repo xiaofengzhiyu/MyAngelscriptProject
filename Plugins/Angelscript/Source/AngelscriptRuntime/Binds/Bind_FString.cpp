@@ -1025,30 +1025,67 @@ static FString ApplyFormatInteger(T Number, const FString& Specifier)
 	if (bInsertCommas)
 		Spec.InsertCommas(OutStr);
 
-	// Align before sign
-	if (Spec.Align == FFormatSpecifier::EAlign::AfterSign)
-		Spec.AlignString(OutStr);
-
-	// Add sign
+	FString Prefix;
 	if (!IsUnsigned)
-		Spec.PrependSign(Number, OutStr);
+	{
+		switch (Spec.Sign)
+		{
+		case FFormatSpecifier::ESign::Both:
+			Prefix.AppendChar(Number >= 0 ? '+' : '-');
+		break;
+		case FFormatSpecifier::ESign::Negative:
+			if (Number < 0)
+			{
+				Prefix.AppendChar('-');
+			}
+		break;
+		case FFormatSpecifier::ESign::LeadingSpace:
+			Prefix.AppendChar(Number >= 0 ? ' ' : '-');
+		break;
+		}
+	}
 
-	// Show the base if needed
 	if (Spec.bPrefixBase)
 	{
 		switch (Spec.Type)
 		{
 			case 'b':
-				OutStr = TEXT("0b") + OutStr;
+				Prefix += TEXT("0b");
 			break;
 			case 'x':
 			case 'X':
-				OutStr = TEXT("0x") + OutStr;
+				Prefix += TEXT("0x");
 			break;
 			case 'o':
-				OutStr = TEXT("0o") + OutStr;
+				Prefix += TEXT("0o");
 			break;
 		}
+	}
+
+	// Align after sign/base prefix so width accounting matches the final visible output.
+	if (Spec.Align == FFormatSpecifier::EAlign::AfterSign && Spec.MinimumWidth.Len() != 0)
+	{
+		int32 Length = 0;
+		LexFromString(Length, *Spec.MinimumWidth);
+
+		const int32 Count = Length - Prefix.Len() - OutStr.Len();
+		if (Count > 0)
+		{
+			FString Padded;
+			Padded.Reserve(OutStr.Len() + Count);
+			for (int32 Index = 0; Index < Count; ++Index)
+			{
+				Padded.AppendChar(Spec.Fill);
+			}
+			Padded.Append(OutStr);
+			OutStr = MoveTemp(Padded);
+		}
+	}
+
+	if (!Prefix.IsEmpty())
+	{
+		Prefix.Append(OutStr);
+		OutStr = MoveTemp(Prefix);
 	}
 
 	// Align after sign

@@ -312,7 +312,7 @@ struct FUObjectType : TAngelscriptPODType<UObject*>
 			}
 
 			UClass* ObjClass = Object->GetClass();
-			UASClass* asClass = Cast<UASClass>(ObjClass);
+			UASClass* asClass = UASClass::GetFirstASClass(ObjClass);
 
 			if (asClass == nullptr)
 				return;
@@ -376,7 +376,7 @@ struct FUObjectType : TAngelscriptPODType<UObject*>
 		Scope.Values.Add(MoveTemp(NameValue));
 
 		auto* ObjClass = Object->GetClass();
-		UASClass* asClass = Cast<UASClass>(ObjClass);
+		UASClass* asClass = UASClass::GetFirstASClass(ObjClass);
 		if (asClass == nullptr) return;
 		//auto* ObjScriptType = (asITypeInfo*)ObjClass->ScriptTypePtr;
 		auto* ObjScriptType = (asITypeInfo*)asClass->ScriptTypePtr;
@@ -505,7 +505,7 @@ struct FUObjectType : TAngelscriptPODType<UObject*>
 		}
 
 		auto* ObjClass = Object->GetClass();
-		UASClass* asClass = Cast<UASClass>(ObjClass);
+		UASClass* asClass = UASClass::GetFirstASClass(ObjClass);
 		if (asClass == nullptr) return false;
 		
 		//auto* ObjScriptType = (asITypeInfo*)ObjClass->ScriptTypePtr;

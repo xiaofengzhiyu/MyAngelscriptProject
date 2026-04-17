@@ -4,6 +4,7 @@
 #include "AngelscriptEngine.h"
 #include "AngelscriptType.h"
 #include "AngelscriptBinds.h"
+#include "FunctionLibraries/AngelscriptWorldLibrary.h"
 
 AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_WorldType((int32)FAngelscriptBinds::EOrder::Early, []
 {
@@ -74,6 +75,10 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_World((int32)FAngelscriptBinds
 	UWorld_.Method("UGameInstance GetGameInstance() const", [](UWorld* World) -> UGameInstance*
 	{
 		return World->GetGameInstance();
+	});
+	UWorld_.Method("TArray<ULevelStreaming> GetStreamingLevels() const", [](const UWorld* World) -> TArray<ULevelStreaming*>
+	{
+		return UAngelscriptWorldLibrary::GetStreamingLevels(World);
 	});
 	UWorld_.Method("ALevelScriptActor GetLevelScriptActor() const", [](UWorld* World) -> ALevelScriptActor*
 	{

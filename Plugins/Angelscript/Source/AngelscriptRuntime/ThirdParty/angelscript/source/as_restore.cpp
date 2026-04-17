@@ -166,6 +166,48 @@ static bool IsVariadicFunction(const asCScriptFunction *)
 }
 //[UE--]
 
+//[UE++]: The APV2 runtime still consumes legacy objVariable* metadata in as_context/as_scriptfunction,
+// while this restore path serializes the newer variables[] representation. Rebuild the legacy arrays after load.
+static void RebuildLegacyObjectVariableMetadata(asCScriptFunction *func)
+{
+	if( func == 0 || func->scriptData == 0 )
+		return;
+
+	func->scriptData->objVariableTypes.SetLength(0);
+	func->scriptData->objVariablePos.SetLength(0);
+
+	for( asUINT index = 0; index < func->scriptData->variables.GetLength(); ++index )
+	{
+		asSScriptVariable *var = func->scriptData->variables[index];
+		if( var == 0 || var->stackOffset <= 0 )
+			continue;
+		if( !(var->type.IsObject() || var->type.IsFuncdef()) || var->type.IsReference() )
+			continue;
+		if( !var->onHeap )
+			continue;
+
+		func->scriptData->objVariableTypes.PushLast(var->type.GetTypeInfo());
+		func->scriptData->objVariablePos.PushLast(var->stackOffset);
+	}
+
+	func->scriptData->objVariablesOnHeap = func->scriptData->objVariablePos.GetLength();
+
+	for( asUINT index = 0; index < func->scriptData->variables.GetLength(); ++index )
+	{
+		asSScriptVariable *var = func->scriptData->variables[index];
+		if( var == 0 || var->stackOffset <= 0 )
+			continue;
+		if( !(var->type.IsObject() || var->type.IsFuncdef()) || var->type.IsReference() )
+			continue;
+		if( var->onHeap )
+			continue;
+
+		func->scriptData->objVariableTypes.PushLast(var->type.GetTypeInfo());
+		func->scriptData->objVariablePos.PushLast(var->stackOffset);
+	}
+}
+//[UE--]
+
 static bool IsExplicitTrait(const asCScriptFunction *func)
 {
 	return func->traits.GetTrait(asTRAIT_EXPLICIT);
@@ -748,13 +790,21 @@ int asCReader::ReadInner()
 	// function ids, etc. This is basically a linking stage.
 	for( i = 0; i < module->m_scriptFunctions.GetLength() && !error; i++ )
 		if( module->m_scriptFunctions[i]->funcType == asFUNC_SCRIPT )
-			TranslateFunction(module->m_scriptFunctions[i]);
+		{
+			asCScriptFunction *scriptFunc = module->m_scriptFunctions[i];
+			TranslateFunction(scriptFunc);
+			if( !HasMapEntry(dontTranslate, scriptFunc) )
+				RebuildLegacyObjectVariableMetadata(scriptFunc);
+		}
 
 	for( asUINT globalIndex = 0; globalIndex < module->scriptGlobalsList.GetLength() && !error; ++globalIndex )
 	{
 		asCScriptFunction *initFunc = module->scriptGlobalsList[globalIndex] ? module->scriptGlobalsList[globalIndex]->GetInitFunc() : 0;
 		if( initFunc )
+		{
 			TranslateFunction(initFunc);
+			RebuildLegacyObjectVariableMetadata(initFunc);
+		}
 	}
 
 	if( error ) return asERROR;

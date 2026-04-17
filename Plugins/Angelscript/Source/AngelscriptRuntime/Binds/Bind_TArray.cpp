@@ -51,6 +51,26 @@ static void InvalidateReferencesToArray(FScriptArray& Array, FArrayOperations* O
 }
 #endif
 
+static bool CheckArrayValueDoesNotAliasStorage(FScriptArray& Array, void* Value, FArrayOperations* Ops, const ANSICHAR* ErrorMessage)
+{
+	if (Value == nullptr || Array.GetData() == nullptr)
+	{
+		return true;
+	}
+
+	const UPTRINT LowerBound = reinterpret_cast<UPTRINT>(Array.GetData());
+	const SIZE_T AllocatedSize = Array.GetAllocatedSize(Ops->NumBytesPerElement);
+	const UPTRINT UpperBound = LowerBound + AllocatedSize;
+	const UPTRINT ValueAddress = reinterpret_cast<UPTRINT>(Value);
+	if (ValueAddress >= LowerBound && ValueAddress < UpperBound)
+	{
+		FAngelscriptEngine::Throw(ErrorMessage);
+		return false;
+	}
+
+	return true;
+}
+
 FString FAngelscriptArrayType::GetAngelscriptTypeName() const 
 {
 	return TEXT("TArray");
@@ -660,6 +680,9 @@ void FArrayOperations::Add(FScriptArray& Arr, asCObjectType* Meta, void* Value)
 
 	auto* Ops = GetArrayOperations(Meta);
 
+	if (!CheckArrayValueDoesNotAliasStorage(Arr, Value, Ops, "Cannot Add an element from the same array by reference. Copy it to a temporary first."))
+		return;
+
 #if AS_REFERENCE_DEBUGGING
 	InvalidateReferencesToArray(Arr, Ops);
 #endif
@@ -808,6 +831,9 @@ void FArrayOperations::Insert(FScriptArray& Arr, asCObjectType* Meta, void* Valu
 
 	auto* Ops = GetArrayOperations(Meta);
 
+	if (!CheckArrayValueDoesNotAliasStorage(Arr, Value, Ops, "Cannot Insert an element from the same array by reference. Copy it to a temporary first."))
+		return;
+
 #if AS_REFERENCE_DEBUGGING
 	InvalidateReferencesToArray(Arr, Ops);
 #endif
@@ -923,8 +949,13 @@ void FArrayOperations::Reserve(FScriptArray& Arr, asCObjectType* Meta, int32 Res
 	InvalidateReferencesToArray(Arr, Ops);
 #endif
 
-	//Arr.ResizeTo(ReservedSize, Ops->NumBytesPerElement, Ops->Alignment);
-	Arr.Reset(ReservedSize, Ops->NumBytesPerElement, Ops->Alignment);
+	if (ReservedSize > Arr.Max())
+	{
+		const int32 ExistingNum = Arr.Num();
+		const int32 ReserveDelta = ReservedSize - ExistingNum;
+		Arr.Add(ReserveDelta, Ops->NumBytesPerElement, Ops->Alignment);
+		Arr.Remove(ExistingNum, ReserveDelta, Ops->NumBytesPerElement, Ops->Alignment, EAllowShrinking::No);
+	}
 }
 
 void FArrayOperations::SetNum(FScriptArray& Arr, asCObjectType* Meta, int32 NewNum)
@@ -963,6 +994,10 @@ void FArrayOperations::SetNum(FScriptArray& Arr, asCObjectType* Meta, int32 NewN
 	{
 		for (int32 i = PrevNum; i < NewNum; ++i)
 			Ops->Type.ConstructValue(Ops->Get(Arr, i));
+	}
+	else if (NewNum > PrevNum)
+	{
+		FMemory::Memzero(Ops->Get(Arr, PrevNum), (NewNum - PrevNum) * Ops->NumBytesPerElement);
 	}
 }
 
@@ -1184,6 +1219,7 @@ int32 FArrayOperations::RemoveSwap(FScriptArray& Arr, asCObjectType* Meta, void*
 			if (SwapWith != i)
 				FMemory::Memcpy(Ops->Get(Arr, i), Ops->Get(Arr, SwapWith), Ops->NumBytesPerElement);
 			Arr.Remove(SwapWith, 1, Ops->NumBytesPerElement, Ops->Alignment);
+			++NumRemoved;
 
 			Num--;
 			i--;

@@ -157,14 +157,14 @@ void UAngelscriptAbilitySystemComponent::SetAttributeBaseValue(TSubclassOf<UAnge
 
 float UAngelscriptAbilitySystemComponent::GetAttributeCurrentValueChecked(TSubclassOf<UAngelscriptAttributeSet> AttributeSetClass, FName AttributeName) const
 {
-	float OutCurrentValue;
+	float OutCurrentValue = 0.f;
 	ensureMsgf(TryGetAttributeCurrentValue(AttributeSetClass, AttributeName, OutCurrentValue), TEXT("Could not set attribute base value for attribute <%s>"), *AttributeName.ToString());
 	return OutCurrentValue;
 }
 
 float UAngelscriptAbilitySystemComponent::GetAttributeBaseValueChecked(TSubclassOf<UAngelscriptAttributeSet> AttributeSetClass, FName AttributeName) const
 {
-	float OutBaseValue;
+	float OutBaseValue = 0.f;
 	ensureMsgf(TryGetAttributeBaseValue(AttributeSetClass, AttributeName, OutBaseValue), TEXT("Could not set attribute base value for attribute <%s>"), *AttributeName.ToString());
 	return OutBaseValue;
 }
@@ -251,7 +251,10 @@ void UAngelscriptAbilitySystemComponent::GetActiveAbilitiesWithTags(const FGamep
 
 		for (UGameplayAbility* ActiveAbility : AbilityInstances)
 		{
-			ActiveAbilities.Add(Cast<UGameplayAbility>(ActiveAbility));
+			if (ActiveAbility != nullptr && ActiveAbility->IsActive())
+			{
+				ActiveAbilities.Add(ActiveAbility);
+			}
 		}
 	}
 }
@@ -304,6 +307,7 @@ void UAngelscriptAbilitySystemComponent::SetAbilitySpecSourceObject(FGameplayAbi
 	if (!Spec)
 	{
 		ABILITY_LOG(Warning, TEXT("SetAbilitySpecSourceObject called with invalid Handle"));
+		return;
 	}
 
 	Spec->SourceObject = NewSourceObject;

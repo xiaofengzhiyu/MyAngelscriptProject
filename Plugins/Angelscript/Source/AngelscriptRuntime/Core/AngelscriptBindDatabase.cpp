@@ -118,8 +118,13 @@ void FAngelscriptBindDatabase::Load(const FString& Path, bool bGeneratingPrecomp
 #if AS_CAN_GENERATE_JIT
 	if (bGeneratingPrecompiledData)
 	{
+		HeaderLinks.Empty();
+
 		TArray<uint8> HeaderData;
-		FFileHelper::LoadFileToArray(HeaderData, *(Path + TEXT(".Headers")));
+		if (!FFileHelper::LoadFileToArray(HeaderData, *(Path + TEXT(".Headers"))))
+		{
+			return;
+		}
 
 		FMemoryReader Reader(HeaderData);
 

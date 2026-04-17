@@ -25,8 +25,7 @@ public:
 
 };
 
-//UCLASS(Meta = (ScriptMixin = "UWidget"))
-UCLASS(Meta = ())
+UCLASS(Meta = (ScriptMixin = "UWidget"))
 class UAngelscriptWidgetMixinLibrary : public UObject
 {
 	GENERATED_BODY()

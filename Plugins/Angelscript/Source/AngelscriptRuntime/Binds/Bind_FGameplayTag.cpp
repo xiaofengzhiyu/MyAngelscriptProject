@@ -145,6 +145,14 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FGameplayTag(FAngelscriptBinds
 	FGameplayTag_.Method("bool opEquals(const FGameplayTag& Other) const", METHODPR_TRIVIAL(bool, FGameplayTag, operator==, (FGameplayTag const& Other) const));
 	FGameplayTag_.Method("bool IsValid() const", METHOD_TRIVIAL(FGameplayTag, IsValid));
 	FGameplayTag_.Method("FName GetTagName() const", METHOD_TRIVIAL(FGameplayTag, GetTagName));
+	FGameplayTag_.Method("bool MatchesTag(const FGameplayTag& TagToCheck) const", METHOD_TRIVIAL(FGameplayTag, MatchesTag));
+	FGameplayTag_.Method("bool MatchesTagExact(const FGameplayTag& TagToCheck) const", METHOD_TRIVIAL(FGameplayTag, MatchesTagExact));
+	FGameplayTag_.Method("int MatchesTagDepth(const FGameplayTag& TagToCheck) const", METHOD_TRIVIAL(FGameplayTag, MatchesTagDepth));
+	FGameplayTag_.Method("bool MatchesAny(const FGameplayTagContainer& ContainerToCheck) const", METHOD_TRIVIAL(FGameplayTag, MatchesAny));
+	FGameplayTag_.Method("bool MatchesAnyExact(const FGameplayTagContainer& ContainerToCheck) const", METHOD_TRIVIAL(FGameplayTag, MatchesAnyExact));
+	FGameplayTag_.Method("FGameplayTagContainer GetSingleTagContainer() const", METHOD_TRIVIAL(FGameplayTag, GetSingleTagContainer));
+	FGameplayTag_.Method("FGameplayTag RequestDirectParent() const", METHOD_TRIVIAL(FGameplayTag, RequestDirectParent));
+	FGameplayTag_.Method("FGameplayTagContainer GetGameplayTagParents() const", METHOD_TRIVIAL(FGameplayTag, GetGameplayTagParents));
 
 	auto FGameplayTagContainer_ = FAngelscriptBinds::ExistingClass("FGameplayTagContainer");
 	{
@@ -157,10 +165,13 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FGameplayTag(FAngelscriptBinds
 	FGameplayTagContainer_.Method("int Num() const", METHOD_TRIVIAL(FGameplayTagContainer, Num));
 	FGameplayTagContainer_.Method("FGameplayTag First() const", METHOD_TRIVIAL(FGameplayTagContainer, First));
 	FGameplayTagContainer_.Method("void AddTag(const FGameplayTag& TagToAdd)", METHOD_TRIVIAL(FGameplayTagContainer, AddTag));
+	FGameplayTagContainer_.Method("void AddTagFast(const FGameplayTag& TagToAdd)", METHOD_TRIVIAL(FGameplayTagContainer, AddTagFast));
+	FGameplayTagContainer_.Method("bool AddLeafTag(const FGameplayTag& TagToAdd)", METHOD_TRIVIAL(FGameplayTagContainer, AddLeafTag));
 	FGameplayTagContainer_.Method("bool RemoveTag(const FGameplayTag& TagToRemove)", [](FGameplayTagContainer& Container, const FGameplayTag& TagToRemove) -> bool
 	{
 		return Container.RemoveTag(TagToRemove, false);
 	});
+	FGameplayTagContainer_.Method("void RemoveTags(const FGameplayTagContainer& TagsToRemove)", METHOD_TRIVIAL(FGameplayTagContainer, RemoveTags));
 	FGameplayTagContainer_.Method("void AppendTags(const FGameplayTagContainer& Other)", METHOD_TRIVIAL(FGameplayTagContainer, AppendTags));
 	FGameplayTagContainer_.Method("void Reset(int Slack = 0)", METHOD_TRIVIAL(FGameplayTagContainer, Reset));
 	FGameplayTagContainer_.Method("bool HasTag(const FGameplayTag& TagToCheck) const", METHOD_TRIVIAL(FGameplayTagContainer, HasTag));
@@ -169,6 +180,9 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FGameplayTag(FAngelscriptBinds
 	FGameplayTagContainer_.Method("bool HasAnyExact(const FGameplayTagContainer& ContainerToCheck) const", METHOD_TRIVIAL(FGameplayTagContainer, HasAnyExact));
 	FGameplayTagContainer_.Method("bool HasAll(const FGameplayTagContainer& ContainerToCheck) const", METHOD_TRIVIAL(FGameplayTagContainer, HasAll));
 	FGameplayTagContainer_.Method("bool HasAllExact(const FGameplayTagContainer& ContainerToCheck) const", METHOD_TRIVIAL(FGameplayTagContainer, HasAllExact));
+	FGameplayTagContainer_.Method("FGameplayTagContainer GetGameplayTagParents() const", METHOD_TRIVIAL(FGameplayTagContainer, GetGameplayTagParents));
+	FGameplayTagContainer_.Method("FGameplayTagContainer Filter(const FGameplayTagContainer& OtherContainer) const", METHOD_TRIVIAL(FGameplayTagContainer, Filter));
+	FGameplayTagContainer_.Method("FGameplayTagContainer FilterExact(const FGameplayTagContainer& OtherContainer) const", METHOD_TRIVIAL(FGameplayTagContainer, FilterExact));
 	FGameplayTagContainer_.Method("bool MatchesQuery(const FGameplayTagQuery& Query) const", METHOD_TRIVIAL(FGameplayTagContainer, MatchesQuery));
 
 	FToStringHelper::Register(TEXT("FGameplayTag"), [](void *Ptr, FString &Str) {

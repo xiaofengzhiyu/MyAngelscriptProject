@@ -222,7 +222,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_UDataTable(FAngelscriptBinds::
 
 				ForEachMatchingProperty(CategoryHandle, [&Matches](FConstDataTableIter Iter) { Matches.Add(Iter.Value()); });
 
-				OutArray.Insert(Index, RowMap.Num(), SubClass->GetStructureSize(), SubClass->GetMinAlignment());
+				OutArray.Insert(Index, Matches.Num(), SubClass->GetStructureSize(), SubClass->GetMinAlignment());
 
 				auto StructType = static_cast<const UScriptStruct*>(SubClass);
 				auto Data = static_cast<uint8*>(OutArray.GetData()) + (Index * StructureSize);

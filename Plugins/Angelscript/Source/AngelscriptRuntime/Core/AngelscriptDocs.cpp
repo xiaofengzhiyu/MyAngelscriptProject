@@ -1,5 +1,7 @@
 #include "AngelscriptDocs.h"
 
+#include "Containers/Set.h"
+#include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -513,14 +515,18 @@ void FAngelscriptDocs::DumpDocumentation(asIScriptEngine* Engine)
 		SetAccessors.Empty();
 	};
 
-	int32 TypeCount = ScriptEngine->GetObjectTypeCount();
-	for (int32 TypeIndex = 0; TypeIndex < TypeCount; ++TypeIndex)
+	TSet<asITypeInfo*> ProcessedScriptTypes;
+
+	auto ProcessScriptType = [&](asITypeInfo* ScriptType)
 	{
-		auto* ScriptType = ScriptEngine->GetObjectTypeByIndex(TypeIndex);
+		if (ScriptType == nullptr || ProcessedScriptTypes.Contains(ScriptType))
+			return;
+
+		ProcessedScriptTypes.Add(ScriptType);
 		FString TypeName = ANSI_TO_TCHAR(ScriptType->GetName());
 
 		if (TypeName.StartsWith(TEXT("_")))
-			continue;
+			return;
 
 		FDocClass& ClassDoc = Classes.FindOrAdd(TypeName);
 		ClassDoc.ClassName = TypeName;
@@ -586,6 +592,26 @@ void FAngelscriptDocs::DumpDocumentation(asIScriptEngine* Engine)
 		}
 
 		ResolveAccessors(ClassDoc, Class);
+	};
+
+	int32 TypeCount = ScriptEngine->GetObjectTypeCount();
+	for (int32 TypeIndex = 0; TypeIndex < TypeCount; ++TypeIndex)
+	{
+		ProcessScriptType(ScriptEngine->GetObjectTypeByIndex(TypeIndex));
+	}
+
+	int32 ModuleCount = ScriptEngine->GetModuleCount();
+	for (int32 ModuleIndex = 0; ModuleIndex < ModuleCount; ++ModuleIndex)
+	{
+		asIScriptModule* ScriptModule = ScriptEngine->GetModuleByIndex(ModuleIndex);
+		if (ScriptModule == nullptr)
+			continue;
+
+		int32 ModuleTypeCount = ScriptModule->GetObjectTypeCount();
+		for (int32 TypeIndex = 0; TypeIndex < ModuleTypeCount; ++TypeIndex)
+		{
+			ProcessScriptType(ScriptModule->GetObjectTypeByIndex(TypeIndex));
+		}
 	}
 
 	struct FNS
@@ -673,13 +699,16 @@ void FAngelscriptDocs::DumpDocumentation(asIScriptEngine* Engine)
 	}
 
 	// ** Dump documentation into generated header files
+	const FString GeneratedDocsDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Docs"), TEXT("angelscript"), TEXT("generated"));
+	IFileManager::Get().MakeDirectory(*GeneratedDocsDir, true);
+
 	for (auto It : Classes)
 	{
 		FDocClass& ClassDoc = It.Value;
 		ClassDoc.Properties.Sort();
 		ClassDoc.Functions.Sort();
 
-		FString Filename = FPaths::ProjectDir() / TEXT("/Docs/angelscript/generated") / ClassDoc.ClassName + TEXT(".hpp");
+		const FString Filename = FPaths::Combine(GeneratedDocsDir, ClassDoc.ClassName + TEXT(".hpp"));
 
 		FString Content;
 		FString CurCategory;

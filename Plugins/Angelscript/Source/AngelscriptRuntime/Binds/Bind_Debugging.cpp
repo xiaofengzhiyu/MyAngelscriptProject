@@ -40,6 +40,11 @@ void AngelscriptEnableDebugBreaks()
 	GDebugBreaksEnabled = true;
 }
 
+bool AreAngelscriptDebugBreaksEnabledForTesting()
+{
+	return GDebugBreaksEnabled;
+}
+
 static TMap<FString, int32>& GetPoppedEnsures()
 {
 	static TMap<FString, int32> PoppedEnsures;

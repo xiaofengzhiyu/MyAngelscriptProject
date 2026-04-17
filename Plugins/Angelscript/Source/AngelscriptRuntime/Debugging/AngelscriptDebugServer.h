@@ -205,9 +205,15 @@ struct FAngelscriptCallFrame : FDebugMessage
 		Ar << Frame.Name;
 		Ar << Frame.Source;
 		Ar << Frame.LineNumber;
-		if (Frame.ModuleName.IsSet())
+
+		if (AngelscriptDebugServer::DebugAdapterVersion >= 1)
 		{
-			Ar << Frame.ModuleName.GetValue();
+			FString SerializedModuleName = Frame.ModuleName.IsSet() ? Frame.ModuleName.GetValue() : FString();
+			Ar << SerializedModuleName;
+			if (Ar.IsLoading())
+			{
+				Frame.ModuleName = MoveTemp(SerializedModuleName);
+			}
 		}
 		return Ar;
 	}
@@ -230,6 +236,7 @@ struct FAngelscriptBreakpoint : FDebugMessage
 	int32 LineNumber;
 	int32 Id = -1;
 	FString ModuleName;
+	FString Condition;
 
 	FORCEINLINE friend FArchive& operator<<(FArchive& Ar, FAngelscriptBreakpoint& BP)
 	{
@@ -248,6 +255,11 @@ struct FAngelscriptBreakpoint : FDebugMessage
 		if (Ar.IsSaving() || !Ar.AtEnd())
 		{
 			Ar << BP.ModuleName;
+		}
+
+		if (Ar.IsSaving() || !Ar.AtEnd())
+		{
+			Ar << BP.Condition;
 		}
 		
 		return Ar;
@@ -418,8 +430,8 @@ struct FAngelscriptVariable : FDebugMessage
 	FString Name;
 	FString Value;
 	FString Type;
-	uint64 ValueAddress;
-	uint8 ValueSize;
+	uint64 ValueAddress = 0;
+	uint8 ValueSize = 0;
 
 	bool bHasMembers = false;
 
@@ -595,6 +607,7 @@ public:
 
 public:
 	TAtomic<bool> bBreakNextScriptLine { false };
+	bool bPauseRequested = false;
 	bool bIsPaused = false;
 	bool bIsEvaluatingDebuggerWatch = false;
 	bool bIsDebugging = false;
@@ -696,6 +709,7 @@ public:
 	{
 		TSharedPtr<struct FAngelscriptModuleDesc> Module;
 		TSet<int32> Lines;
+		TMap<int32, FString> Conditions;
 	};
 
 	FString CanonizeFilename(const FString& Filename);

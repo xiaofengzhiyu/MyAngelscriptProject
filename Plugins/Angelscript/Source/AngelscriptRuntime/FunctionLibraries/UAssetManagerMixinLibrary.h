@@ -15,6 +15,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static bool GetPrimaryAssetData(UAssetManager* AssetManager, const FPrimaryAssetId& PrimaryAssetId, FAssetData& AssetData)
 	{
+		if (AssetManager == nullptr)
+		{
+			AssetData = FAssetData();
+			return false;
+		}
+
 		return AssetManager->GetPrimaryAssetData(PrimaryAssetId, AssetData);
 	}
 
@@ -23,6 +29,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static bool GetPrimaryAssetDataList(UAssetManager* AssetManager, FPrimaryAssetType PrimaryAssetType, TArray<FAssetData>& AssetDataList)
 	{
+		if (AssetManager == nullptr)
+		{
+			AssetDataList.Reset();
+			return false;
+		}
+
 		return AssetManager->GetPrimaryAssetDataList(PrimaryAssetType, AssetDataList);
 	}
 
@@ -31,6 +43,11 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static UObject* GetPrimaryAssetObject(UAssetManager* AssetManager, const FPrimaryAssetId& PrimaryAssetId)
 	{
+		if (AssetManager == nullptr)
+		{
+			return nullptr;
+		}
+
 		return AssetManager->GetPrimaryAssetObject(PrimaryAssetId);
 	}
 
@@ -39,6 +56,11 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static FPrimaryAssetId GetPrimaryAssetIdForObject(UAssetManager* AssetManager, UObject* Object)
 	{
+		if (AssetManager == nullptr)
+		{
+			return FPrimaryAssetId();
+		}
+
 		return AssetManager->GetPrimaryAssetIdForObject(Object);
 	}
 
@@ -47,6 +69,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static bool GetPrimaryAssetIdList(UAssetManager* AssetManager, FPrimaryAssetType PrimaryAssetType, TArray<FPrimaryAssetId>& PrimaryAssetIdList)
 	{
+		if (AssetManager == nullptr)
+		{
+			PrimaryAssetIdList.Reset();
+			return false;
+		}
+
 		return AssetManager->GetPrimaryAssetIdList(PrimaryAssetType, PrimaryAssetIdList);
 	}
 
@@ -55,6 +83,12 @@ public:
 	UFUNCTION()
 	static bool GetPrimaryAssetTypeInfo(UAssetManager* AssetManager, FPrimaryAssetType PrimaryAssetType, FPrimaryAssetTypeInfo& AssetTypeInfo)
 	{
+		if (AssetManager == nullptr)
+		{
+			AssetTypeInfo = FPrimaryAssetTypeInfo();
+			return false;
+		}
+
 		return AssetManager->GetPrimaryAssetTypeInfo(PrimaryAssetType, AssetTypeInfo);
 	}
 
@@ -63,6 +97,12 @@ public:
 	UFUNCTION()
 	static void GetPrimaryAssetTypeInfoList(UAssetManager* AssetManager, TArray<FPrimaryAssetTypeInfo>& AssetTypeInfoList)
 	{
+		if (AssetManager == nullptr)
+		{
+			AssetTypeInfoList.Reset();
+			return;
+		}
+
 		AssetManager->GetPrimaryAssetTypeInfoList(AssetTypeInfoList);
 	}
 
@@ -71,6 +111,11 @@ public:
 	UFUNCTION()
 	static FPrimaryAssetRules GetPrimaryAssetRules(UAssetManager* AssetManager, const FPrimaryAssetId& PrimaryAssetId)
 	{
+		if (AssetManager == nullptr)
+		{
+			return FPrimaryAssetRules();
+		}
+
 		return AssetManager->GetPrimaryAssetRules(PrimaryAssetId);
 	}
 
@@ -79,6 +124,11 @@ public:
 	UFUNCTION(BlueprintCallable, Meta = (DelegateObjectParam = "Object", DelegateFunctionParam = "FunctionName", DelegateBindType = "FSimpleDelegate"))
 	static void CallOrRegister_OnCompletedInitialScan(UAssetManager* AssetManager, UObject* Object, const FName& FunctionName)
 	{
+		if (AssetManager == nullptr || Object == nullptr || FunctionName.IsNone() || Object->FindFunction(FunctionName) == nullptr)
+		{
+			return;
+		}
+
 		AssetManager->CallOrRegister_OnCompletedInitialScan(FSimpleDelegate::CreateUFunction(Object, FunctionName));
 	}
 };

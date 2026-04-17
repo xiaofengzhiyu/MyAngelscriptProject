@@ -46,6 +46,8 @@ class ANGELSCRIPTRUNTIME_API UAngelscriptAbilityTaskLibrary : public UBlueprintF
 {
 	GENERATED_BODY()
 
+public:
+
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks")
 	static UAbilityTask_ApplyRootMotionConstantForce* ApplyRootMotionConstantForce(
 		UGameplayAbility* OwningAbility,

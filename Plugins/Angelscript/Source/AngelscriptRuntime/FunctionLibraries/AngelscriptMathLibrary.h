@@ -26,7 +26,7 @@ public:
 
 	// Lerp between two rotators along the shortest path between them. Uses a quaternion slerp internally. 
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = ())
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
 	static FRotator LerpShortestPath(const FRotator& A, const FRotator& B, double Alpha)
 	{
 		FQuat AQuat(A);
@@ -38,7 +38,7 @@ public:
 
 	// Interp between two rotators along the shortest path between them. Uses a quaternion interp internally.
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = ())
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
 	static FRotator RInterpShortestPathTo(const FRotator& Current, const FRotator& Target, float DeltaTime, float InterpSpeed)
 	{
 		FQuat AQuat(Current);
@@ -50,7 +50,7 @@ public:
 
 	// Interp with constant speed between two rotators along the shortest path between them. Uses a quaternion interp internally.
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = ())
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
 	static FRotator RInterpConstantShortestPathTo(const FRotator& Current, const FRotator& Target, float DeltaTime, float InterpSpeedDegrees)
 	{
 		FQuat AQuat(Current);
@@ -61,7 +61,7 @@ public:
 	}
 
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial))
-	UFUNCTION(BlueprintCallable, Meta = ())
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
 	static FTransform TInterpTo(const FTransform& Current, const FTransform& Target, float DeltaTime, float InterpSpeed)
 	{
 		if (InterpSpeed <= 0.f)
@@ -90,14 +90,14 @@ public:
 	}
 
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptName = "Modf", ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = (ScriptName = "Modf"))
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptName = "Modf", ScriptNoDiscard))
 	static float Modf_32(float InValue, float& OutIntPart)
 	{
 		return FMath::Modf(InValue, &OutIntPart);
 	}
 
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptName = "Modf", ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = (ScriptName = "Modf"))
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptName = "Modf", ScriptNoDiscard))
 	static double Modf_64(double InValue, double& OutIntPart)
 	{
 		return FMath::Modf(InValue, &OutIntPart);
@@ -108,7 +108,7 @@ public:
 	 * When X can wrap to both Min and Max, it will wrap to Min if it lies below the range and wrap to Max if it is above the range. 
 	 **/
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = (ScriptName = "Wrap"))
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard))
 	static double WrapDouble(double X, double Min, double Max)
 	{
 		// This is not implemented with FMath::Wrap, because that uses while loops for some reason,
@@ -153,7 +153,7 @@ public:
 	 * When X can wrap to both Min and Max, it will wrap to Min if it lies below the range and wrap to Max if it is above the range. 
 	 **/
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard))
-	UFUNCTION(BlueprintCallable, Meta = (ScriptName = "Wrap"))
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard))
 	static float WrapFloat(float X, float Min, float Max)
 	{
 		// This is not implemented with FMath::Wrap, because that uses while loops for some reason,
@@ -198,7 +198,7 @@ public:
 	 * When X can wrap to both Min and Max, it will wrap to Min if it lies below the range and wrap to Max if it is above the range. 
 	 **/
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard, DeprecatedFunction, DeprecationMessage = "Wrapping integers is inclusive, and returns unintuitive values. Use Math::WrapIndex for the natural behavior."))
-	UFUNCTION(BlueprintCallable, Meta = (ScriptName = "Wrap", DeprecatedFunction, DeprecationMessage = "Wrapping integers is inclusive, and returns unintuitive values. Use Math::WrapIndex for the natural behavior."))
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard, DeprecatedFunction, DeprecationMessage = "Wrapping integers is inclusive, and returns unintuitive values. Use Math::WrapIndex for the natural behavior."))
 	static int32 WrapInt(int32 X, int32 Min, int32 Max)
 	{
 		// This is not implemented with FMath::Wrap, because that uses while loops for some reason,
@@ -292,7 +292,7 @@ public:
 	 * rather than inclusive.
 	 */
 	//UFUNCTION(ScriptCallable, Meta = (ScriptTrivial, ScriptNoDiscard))	
-	UFUNCTION(BlueprintCallable, Meta = ())	
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))	
 	static int32 WrapIndex(int32 Value, int32 Min, int32 Max)
 	{
 		if (Min == Max)

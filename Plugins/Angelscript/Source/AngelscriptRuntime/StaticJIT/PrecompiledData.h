@@ -599,17 +599,17 @@ struct FAngelscriptPrecompiledData
 		return Ar;
 	}
 
-	FAngelscriptPrecompiledData(asIScriptEngine* InEngine);
-	~FAngelscriptPrecompiledData();
+	ANGELSCRIPTRUNTIME_API FAngelscriptPrecompiledData(asIScriptEngine* InEngine);
+	ANGELSCRIPTRUNTIME_API ~FAngelscriptPrecompiledData();
 
-	void InitFromActiveScript();
+	ANGELSCRIPTRUNTIME_API void InitFromActiveScript();
 	static void OutputTimingData();
 
-	int32 GetCurrentBuildIdentifier();
-	bool IsValidForCurrentBuild();
+	ANGELSCRIPTRUNTIME_API int32 GetCurrentBuildIdentifier();
+	ANGELSCRIPTRUNTIME_API bool IsValidForCurrentBuild();
 
-	void Save(const FString& Filename);
-	void Load(const FString& Filename);
+	ANGELSCRIPTRUNTIME_API void Save(const FString& Filename);
+	ANGELSCRIPTRUNTIME_API void Load(const FString& Filename);
 
 	struct asSNameSpace* GetNamespace(const FStringInArchive& Namespace);
 	void AddRefTo(const class asCDataType& DataType);

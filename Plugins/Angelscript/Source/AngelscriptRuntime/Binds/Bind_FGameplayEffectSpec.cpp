@@ -1,4 +1,5 @@
 #include "AngelscriptBinds.h"
+#include "AngelscriptEngine.h"
 
 #include "GameplayEffect.h"
 
@@ -9,6 +10,13 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FGameplayEffectSpec(FAngelscri
 	"void f(const UGameplayEffect InDef, const FGameplayEffectContextHandle& InEffectContext, float32 Level = -1.f)",
 	[](FGameplayEffectSpec* Address, const UGameplayEffect* InDef, const FGameplayEffectContextHandle& InEffectContext, const float Level)
 	{
+		if (InDef == nullptr)
+		{
+			new(Address) FGameplayEffectSpec();
+			FAngelscriptEngine::Throw("GameplayEffect was null.");
+			return;
+		}
+
 		new(Address) FGameplayEffectSpec(InDef, InEffectContext, Level);
 	});
 	SCRIPT_TRIVIAL_NATIVE_CONSTRUCTOR(FGameplayEffectSpec_, "FGameplayEffectSpec");

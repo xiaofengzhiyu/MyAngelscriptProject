@@ -39,4 +39,54 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FHitResult(FAngelscriptBinds::
 	FHitResult_.Property("FVector Normal", &FHitResult::Normal);
 	FHitResult_.Property("FName BoneName", &FHitResult::BoneName);
 	FHitResult_.Property("FName MyBoneName", &FHitResult::MyBoneName);
+
+	FHitResult_.Method("void SetComponent(UPrimitiveComponent InComponent)", [](FHitResult* HitResult, UPrimitiveComponent* Component)
+	{
+		HitResult->Component = Component;
+	});
+
+	FHitResult_.Method("UPrimitiveComponent GetComponent() const", [](FHitResult* HitResult) -> UPrimitiveComponent*
+	{
+		return HitResult->GetComponent();
+	});
+
+	FHitResult_.Method("void SetActor(AActor InActor)", [](FHitResult* HitResult, AActor* Actor)
+	{
+		HitResult->HitObjectHandle = FActorInstanceHandle(Actor);
+	});
+
+	FHitResult_.Method("AActor GetActor() const", [](FHitResult* HitResult) -> AActor*
+	{
+		return HitResult->GetActor();
+	});
+
+	FHitResult_.Method("void Reset()", [](FHitResult* HitResult)
+	{
+		HitResult->Reset();
+	});
+
+	FHitResult_.Method("bool GetbBlockingHit() const", [](FHitResult* HitResult) -> bool
+	{
+		return HitResult->bBlockingHit;
+	});
+
+	FHitResult_.Method("void SetBlockingHit(bool bIsBlocking)", [](FHitResult* HitResult, bool bIsBlocking)
+	{
+		HitResult->bBlockingHit = bIsBlocking;
+	});
+
+	FHitResult_.Method("void SetbBlockingHit(bool bIsBlocking)", [](FHitResult* HitResult, bool bIsBlocking)
+	{
+		HitResult->bBlockingHit = bIsBlocking;
+	});
+
+	FHitResult_.Method("bool GetbStartPenetrating() const", [](FHitResult* HitResult) -> bool
+	{
+		return HitResult->bStartPenetrating;
+	});
+
+	FHitResult_.Method("void SetbStartPenetrating(bool bStartPenetrating)", [](FHitResult* HitResult, bool bStartPenetrating)
+	{
+		HitResult->bStartPenetrating = bStartPenetrating;
+	});
 });

@@ -158,7 +158,7 @@ void FStaticJITFunction::SetSwitchValueInvalidException(FScriptExecution& Execut
 void FStaticJITFunction::SetUnknownException(FScriptExecution& Execution)
 {
 	Execution.bExceptionThrown = true;
-	FAngelscriptEngine::HandleExceptionFromJIT("Unknown exception");
+	FAngelscriptEngine::HandleExceptionFromJIT("Unknown exception.");
 }
 
 void FStaticJITFunction::ScriptFinishConstruct(FScriptExecution& Execution, asIScriptObject* Object, asITypeInfo* TypeInfo)

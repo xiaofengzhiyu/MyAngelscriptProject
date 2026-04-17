@@ -4,6 +4,7 @@
 
 #include "AngelscriptAttributeSet.h"
 
+#include "GameplayEffect.h"
 #include "GameplayEffectTypes.h"
 #include "AbilitySystemComponent.h"
 
@@ -75,7 +76,97 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptAttributeChangedData
 	GENERATED_BODY()
 
 public:
+	FAngelscriptAttributeChangedData()
+		: WrappedData()
+		, SnapshotEffectSpec()
+		, SnapshotEvaluatedData()
+		, SnapshotTargetAbilitySystemComponent(nullptr)
+	{
+	}
+
+	FAngelscriptAttributeChangedData(const FAngelscriptAttributeChangedData& Other)
+		: WrappedData(Other.WrappedData)
+		, SnapshotEffectSpec()
+		, SnapshotEvaluatedData()
+		, SnapshotTargetAbilitySystemComponent(nullptr)
+	{
+		CopyOrSnapshotGameplayEffectData(Other);
+	}
+
+	FAngelscriptAttributeChangedData& operator=(const FAngelscriptAttributeChangedData& Other)
+	{
+		if (this != &Other)
+		{
+			WrappedData = Other.WrappedData;
+			CopyOrSnapshotGameplayEffectData(Other);
+		}
+
+		return *this;
+	}
+
 	FOnAttributeChangeData WrappedData;
+
+	const FGameplayEffectSpec* GetStableEffectSpec() const
+	{
+		if (WrappedData.GEModData == GetSnapshotMarker())
+		{
+			return &SnapshotEffectSpec;
+		}
+
+		return WrappedData.GEModData ? &WrappedData.GEModData->EffectSpec : nullptr;
+	}
+
+	const FGameplayModifierEvaluatedData* GetStableGameplayModifierEvaluatedData() const
+	{
+		if (WrappedData.GEModData == GetSnapshotMarker())
+		{
+			return &SnapshotEvaluatedData;
+		}
+
+		return WrappedData.GEModData ? &WrappedData.GEModData->EvaluatedData : nullptr;
+	}
+
+	UAbilitySystemComponent* GetStableTargetAbilitySystemComponent() const
+	{
+		if (WrappedData.GEModData == GetSnapshotMarker())
+		{
+			return SnapshotTargetAbilitySystemComponent.Get();
+		}
+
+		return WrappedData.GEModData ? &WrappedData.GEModData->Target : nullptr;
+	}
+
+private:
+	static const FGameplayEffectModCallbackData* GetSnapshotMarker()
+	{
+		return reinterpret_cast<const FGameplayEffectModCallbackData*>(UPTRINT(1));
+	}
+
+	void CopyOrSnapshotGameplayEffectData(const FAngelscriptAttributeChangedData& Other)
+	{
+		if (Other.WrappedData.GEModData == GetSnapshotMarker())
+		{
+			SnapshotEffectSpec = Other.SnapshotEffectSpec;
+			SnapshotEvaluatedData = Other.SnapshotEvaluatedData;
+			SnapshotTargetAbilitySystemComponent = Other.SnapshotTargetAbilitySystemComponent;
+			return;
+		}
+
+		if (Other.WrappedData.GEModData)
+		{
+			SnapshotEffectSpec = Other.WrappedData.GEModData->EffectSpec;
+			SnapshotEvaluatedData = Other.WrappedData.GEModData->EvaluatedData;
+			SnapshotTargetAbilitySystemComponent = &Other.WrappedData.GEModData->Target;
+			WrappedData.GEModData = GetSnapshotMarker();
+			return;
+		}
+
+		SnapshotTargetAbilitySystemComponent.Reset();
+	}
+
+	FGameplayEffectSpec SnapshotEffectSpec;
+	FGameplayModifierEvaluatedData SnapshotEvaluatedData;
+	TWeakObjectPtr<UAbilitySystemComponent> SnapshotTargetAbilitySystemComponent;
 };
 
 //UCLASS(Meta = (ScriptMixin = "FAngelscriptAttributeChangedData"))
@@ -106,10 +197,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static const FGameplayEffectSpec& GetEffectSpec(const FAngelscriptAttributeChangedData& Data, bool& bIsValid)
 	{
-		if (Data.WrappedData.GEModData)
+		if (const FGameplayEffectSpec* EffectSpec = Data.GetStableEffectSpec())
 		{
 			bIsValid = true;
-			return Data.WrappedData.GEModData->EffectSpec;
+			return *EffectSpec;
 		}
 
 		static FGameplayEffectSpec Dummy;
@@ -120,10 +211,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static const FGameplayModifierEvaluatedData& GetGameplayModifierEvaluatedData(const FAngelscriptAttributeChangedData& Data, bool& bIsValid)
 	{
-		if (Data.WrappedData.GEModData)
+		if (const FGameplayModifierEvaluatedData* EvaluatedData = Data.GetStableGameplayModifierEvaluatedData())
 		{
 			bIsValid = true;
-			return Data.WrappedData.GEModData->EvaluatedData;
+			return *EvaluatedData;
 		}
 
 		static FGameplayModifierEvaluatedData Dummy;
@@ -134,7 +225,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 	static UAbilitySystemComponent* GetTargetAbilitySystemComponent(const FAngelscriptAttributeChangedData& Data)
 	{
-		return Data.WrappedData.GEModData ? &Data.WrappedData.GEModData->Target : nullptr;
+		return Data.GetStableTargetAbilitySystemComponent();
 	}
 };
 

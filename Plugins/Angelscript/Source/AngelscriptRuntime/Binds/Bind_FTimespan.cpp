@@ -39,7 +39,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FTimespan(FAngelscriptBinds::E
 	FTimespan_.Method("FTimespan opAdd(const FTimespan& Other) const", METHODPR_TRIVIAL(FTimespan, FTimespan, operator+, (const FTimespan&) const));
 	FTimespan_.Method("FTimespan& opAddAssign(const FTimespan& Other)", METHODPR_TRIVIAL(FTimespan&, FTimespan, operator+=, (const FTimespan&)));
 
-	FTimespan_.Method("FTimespan opSub() const", METHODPR_TRIVIAL(FTimespan, FTimespan, operator-, () const));
+	FTimespan_.Method("FTimespan opNeg() const", METHODPR_TRIVIAL(FTimespan, FTimespan, operator-, () const));
 	FTimespan_.Method("FTimespan opSub(const FTimespan& Other) const", METHODPR_TRIVIAL(FTimespan, FTimespan, operator-, (const FTimespan&) const));
 	FTimespan_.Method("FTimespan& opSubAssign(const FTimespan& Other)", METHODPR_TRIVIAL(FTimespan&, FTimespan, operator-=, (const FTimespan&)));
 

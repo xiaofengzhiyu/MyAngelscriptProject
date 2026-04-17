@@ -15,6 +15,6 @@ public:
 	UFUNCTION(BlueprintCallable, Meta = ())
 	static TArray<ULevelStreaming*> GetStreamingLevels(const UWorld* World)
 	{
-		return World->GetStreamingLevels();
+		return World != nullptr ? World->GetStreamingLevels() : TArray<ULevelStreaming*>();
 	}
 };

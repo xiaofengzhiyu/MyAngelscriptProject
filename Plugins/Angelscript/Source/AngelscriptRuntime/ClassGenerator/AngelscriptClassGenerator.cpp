@@ -159,9 +159,9 @@ TSharedPtr<FAngelscriptClassDesc> FAngelscriptClassGenerator::GetClassDesc(const
 FString FAngelscriptClassGenerator::GetUnrealName(bool bIsStruct, const FString& ClassName)
 {
 	FString UnrealName = ClassName;
-	if (UnrealName.Len() >= 2)
+	if (bIsStruct && UnrealName.Len() >= 2)
 	{
-		if (bIsStruct ? (UnrealName[0] == 'F') : (UnrealName[0] == 'U' || UnrealName[0] == 'A'))
+		if (UnrealName[0] == 'F')
 		{
 			if (FChar::IsUpper(UnrealName[1]))
 				UnrealName = UnrealName.Mid(1);
@@ -383,8 +383,8 @@ void FAngelscriptClassGenerator::Analyze(FModuleData& ModuleData, FClassData& Cl
 			{
 				// If the property is a default component and a subobject of that name exists in the code parent, error
 				UClass* CodeSuperClass = ClassData.NewClass->CodeSuperClass;
-				UObject* CodeCDO = CodeSuperClass->GetDefaultObject();
-				if (CodeCDO->GetDefaultSubobjectByName(*PropertyDesc->PropertyName) != nullptr)
+				UObject* CodeCDO = CodeSuperClass != nullptr ? CodeSuperClass->GetDefaultObject() : nullptr;
+				if (CodeCDO != nullptr && CodeCDO->GetDefaultSubobjectByName(*PropertyDesc->PropertyName) != nullptr)
 				{
 					FAngelscriptEngine::Get().ScriptCompileError(ModuleData.NewModule, PropertyDesc->LineNumber, FString::Printf(
 						TEXT("Component with name %s in class %s already exists in parent class."), *PropertyDesc->PropertyName, *ClassData.NewClass->ClassName));
@@ -399,6 +399,112 @@ void FAngelscriptClassGenerator::Analyze(FModuleData& ModuleData, FClassData& Cl
 						TEXT("DefaultComponent with name %s and type %s in class %s does not derive from UActorComponent."),
 						*PropertyDesc->PropertyName, *PropertyType.GetAngelscriptDeclaration(), *ClassData.NewClass->ClassName));
 					ClassData.ReloadReq = EReloadRequirement::Error;
+				}
+
+				// Fail closed before swap-in if the attach target can't be resolved from this class or its inherited CDO.
+				FString* AttachParentName = PropertyDesc->Meta.Find(NAME_Actor_Attach);
+				if (AttachParentName != nullptr
+					&& PropertyCodeSuper != nullptr
+					&& PropertyCodeSuper->IsChildOf(USceneComponent::StaticClass()))
+				{
+					bool bAttachParentExists = false;
+					if (TSharedPtr<FAngelscriptPropertyDesc> AttachProperty = ClassData.NewClass->GetProperty(*AttachParentName); AttachProperty.IsValid())
+					{
+						bAttachParentExists = AttachProperty->Meta.Contains(NAME_Actor_DefaultComponent);
+					}
+
+					if (!bAttachParentExists)
+					{
+						bAttachParentExists = CodeCDO->GetDefaultSubobjectByName(**AttachParentName) != nullptr;
+					}
+
+					if (!bAttachParentExists)
+					{
+						FAngelscriptEngine::Get().ScriptCompileError(
+							ModuleData.NewModule,
+							PropertyDesc->LineNumber,
+							FString::Printf(
+								TEXT("Attach parent %s does not exist for DefaultComponent %s."),
+								**AttachParentName,
+								*PropertyDesc->PropertyName));
+						ClassData.ReloadReq = EReloadRequirement::Error;
+					}
+				}
+			}
+
+			if (PropertyDesc->Meta.Contains(NAME_Actor_OverrideComponent))
+			{
+				UClass* PropertyCodeSuper = ResolveCodeSuperForProperty(PropertyType);
+				FString* OverrideComponentName = PropertyDesc->Meta.Find(NAME_Actor_OverrideComponent);
+				if (OverrideComponentName != nullptr
+					&& PropertyCodeSuper != nullptr
+					&& PropertyCodeSuper->IsChildOf(UActorComponent::StaticClass()))
+				{
+					bool bOverrideTargetExists = false;
+
+					TSharedPtr<FAngelscriptClassDesc> CheckSuperClass = AngelscriptSuperClass;
+					while (CheckSuperClass.IsValid())
+					{
+						if (TSharedPtr<FAngelscriptPropertyDesc> OverrideProperty = CheckSuperClass->GetProperty(*OverrideComponentName); OverrideProperty.IsValid())
+						{
+							bOverrideTargetExists = OverrideProperty->Meta.Contains(NAME_Actor_DefaultComponent);
+						}
+
+						if (bOverrideTargetExists || CheckSuperClass->bSuperIsCodeClass)
+						{
+							break;
+						}
+
+						CheckSuperClass = EnsureClassAnalyzed(CheckSuperClass->SuperClass);
+					}
+
+					if (!bOverrideTargetExists)
+					{
+						for (UClass* CheckCodeSuperClass = ClassData.NewClass->CodeSuperClass;
+							CheckCodeSuperClass != nullptr;
+							CheckCodeSuperClass = CheckCodeSuperClass->GetSuperClass())
+						{
+							UObject* CheckCodeCDO = CheckCodeSuperClass->GetDefaultObject();
+							if (CheckCodeCDO != nullptr
+								&& CheckCodeCDO->GetDefaultSubobjectByName(**OverrideComponentName) != nullptr)
+							{
+								bOverrideTargetExists = true;
+								break;
+							}
+
+							for (TFieldIterator<FProperty> It(CheckCodeSuperClass, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+							{
+								FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(*It);
+								if (ObjectProperty != nullptr
+									&& ObjectProperty->HasAnyPropertyFlags(CPF_InstancedReference)
+									&& ObjectProperty->GetFName() == **OverrideComponentName
+									&& ObjectProperty->PropertyClass != nullptr
+									&& ObjectProperty->PropertyClass->HasAllClassFlags(CLASS_Abstract))
+								{
+									bOverrideTargetExists = true;
+									break;
+								}
+							}
+
+							if (bOverrideTargetExists)
+							{
+								break;
+							}
+						}
+					}
+
+					if (!bOverrideTargetExists)
+					{
+						FAngelscriptEngine::Get().ScriptCompileError(
+							ModuleData.NewModule,
+							PropertyDesc->LineNumber,
+							FString::Printf(
+								TEXT("OverrideComponent %s::%s could not find component %s in base class to override."),
+								*ClassData.NewClass->ClassName,
+								*PropertyDesc->PropertyName,
+								**OverrideComponentName));
+						ClassData.ReloadReq = EReloadRequirement::Error;
+					}
 				}
 			}
 #endif
@@ -1331,6 +1437,25 @@ void FAngelscriptClassGenerator::Analyze(FModuleData& ModuleData, FClassData& Cl
 		//[UE--]
 	}
 
+	if (!ClassData.NewClass->ComposeOntoClass.IsEmpty())
+	{
+		auto ComposeOntoClassDesc = GetClassDesc(ClassData.NewClass->ComposeOntoClass);
+		if (!ComposeOntoClassDesc.IsValid())
+		{
+			FAngelscriptEngine::Get().ScriptCompileError(ModuleData.NewModule, ClassData.NewClass->LineNumber, FString::Printf(
+				TEXT("Class %s declares ComposeOntoClass %s, but the target class is missing."),
+				*ClassData.NewClass->ClassName, *ClassData.NewClass->ComposeOntoClass));
+			ClassData.ReloadReq = EReloadRequirement::Error;
+		}
+		else
+		{
+			FAngelscriptEngine::Get().ScriptCompileError(ModuleData.NewModule, ClassData.NewClass->LineNumber, FString::Printf(
+				TEXT("Class %s declares ComposeOntoClass %s, but compose materialization is not implemented yet."),
+				*ClassData.NewClass->ClassName, *ClassData.NewClass->ComposeOntoClass));
+			ClassData.ReloadReq = EReloadRequirement::Error;
+		}
+	}
+
 	// Make sure any composed structs we're composing have the ComposedStruct metatag on their property
 	// as well, or weird stuff will happen.
 #if WITH_EDITOR
@@ -1677,7 +1802,7 @@ void FAngelscriptClassGenerator::AnalyzeEnums(FModuleData& ModuleData)
 		if (EnumData.OldEnum.IsValid())
 		{
 			if (EnumData.NewEnum->ValueNames != EnumData.OldEnum->ValueNames
-				|| EnumData.NewEnum->EnumValues != EnumData.NewEnum->EnumValues)
+				|| EnumData.NewEnum->EnumValues != EnumData.OldEnum->EnumValues)
 			{
 				if (ModuleData.ReloadReq < EReloadRequirement::FullReloadSuggested)
 				{
@@ -2800,11 +2925,44 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 			NewClass->MinAlignment = SuperClass->GetMinAlignment();
 			NewClass->ClassCastFlags = SuperClass->ClassCastFlags;
 
+			asITypeInfo* InterfaceScriptType = InterfaceDesc->ScriptType;
+			auto ResolveInterfaceScriptMethod = [](asITypeInfo* InInterfaceScriptType, const FString& InMethodDecl, const FString& InFunctionName) -> asIScriptFunction*
+			{
+				if (InInterfaceScriptType == nullptr)
+				{
+					return nullptr;
+				}
+
+				if (asIScriptFunction* ExactMethod = InInterfaceScriptType->GetMethodByDecl(TCHAR_TO_ANSI(*InMethodDecl)))
+				{
+					return ExactMethod;
+				}
+
+				asIScriptFunction* UniqueNameMatch = nullptr;
+				const asUINT MethodCount = InInterfaceScriptType->GetMethodCount();
+				for (asUINT MethodIndex = 0; MethodIndex < MethodCount; ++MethodIndex)
+				{
+					asIScriptFunction* CandidateMethod = InInterfaceScriptType->GetMethodByIndex(MethodIndex);
+					if (CandidateMethod == nullptr || InFunctionName != ANSI_TO_TCHAR(CandidateMethod->GetName()))
+					{
+						continue;
+					}
+
+					if (UniqueNameMatch != nullptr)
+					{
+						return nullptr;
+					}
+
+					UniqueNameMatch = CandidateMethod;
+				}
+
+				return UniqueNameMatch;
+			};
+
 			// Create UFunctions for each interface method declaration
 			for (const FString& MethodDecl : InterfaceDesc->InterfaceMethodDeclarations)
 			{
 				// Parse "ReturnType MethodName(ParamType ParamName, ...)" format
-				// For now, create a minimal UFunction with just the name
 				int32 ParenPos = MethodDecl.Find(TEXT("("));
 				if (ParenPos == INDEX_NONE)
 					continue;
@@ -2816,13 +2974,110 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 					continue;
 
 				FString FuncName = BeforeParen.Mid(LastSpace + 1).TrimStartAndEnd();
+				asIScriptFunction* ScriptMethod = ResolveInterfaceScriptMethod(InterfaceScriptType, MethodDecl, FuncName);
 
 				UFunction* NewFunction = NewObject<UFunction>(NewClass, *FuncName, RF_Public);
 				NewFunction->FunctionFlags = FUNC_Event | FUNC_BlueprintEvent | FUNC_Public;
 				NewFunction->ReturnValueOffset = MAX_uint16;
 				NewFunction->FirstPropertyToInit = nullptr;
-				NewFunction->Bind();
+				NewFunction->NumParms = 0;
+				NewFunction->ParmsSize = 0;
+
+				if (ScriptMethod != nullptr && ScriptMethod->IsReadOnly())
+				{
+					NewFunction->FunctionFlags |= FUNC_Const;
+				}
+
+				FProperty* ReturnProperty = nullptr;
+				if (ScriptMethod != nullptr && ScriptMethod->GetReturnTypeId() != asTYPEID_VOID)
+				{
+					FAngelscriptTypeUsage ReturnType = FAngelscriptTypeUsage::FromReturn(ScriptMethod);
+					if (ReturnType.IsValid() && ReturnType.CanCreateProperty() && ReturnType.CanBeReturned() && !ReturnType.bIsReference)
+					{
+						ReturnProperty = AddFunctionReturnType(NewFunction, ReturnType);
+						NewFunction->FunctionFlags |= FUNC_HasOutParms;
+					}
+				}
+
+				TArray<FProperty*> ArgumentProperties;
+				if (ScriptMethod != nullptr)
+				{
+					const int32 ArgCount = ScriptMethod->GetParamCount();
+					for (int32 ArgIndex = 0; ArgIndex < ArgCount; ++ArgIndex)
+					{
+						const char* ParamName = nullptr;
+						const char* ParamDefaultValue = nullptr;
+						asDWORD RefFlags = 0;
+						ScriptMethod->GetParam(ArgIndex, nullptr, &RefFlags, &ParamName, &ParamDefaultValue);
+
+						FAngelscriptTypeUsage Type = FAngelscriptTypeUsage::FromParam(ScriptMethod, ArgIndex);
+						if (!Type.IsValid() || !Type.CanBeArgument() || !Type.CanCreateProperty())
+						{
+							continue;
+						}
+
+						FAngelscriptArgumentDesc ArgDesc;
+						ArgDesc.Type = Type;
+						ArgDesc.ArgumentName = ParamName != nullptr
+							? ANSI_TO_TCHAR(ParamName)
+							: FString::Printf(TEXT("Arg%d"), ArgIndex);
+						ArgDesc.DefaultValue = ParamDefaultValue != nullptr ? ANSI_TO_TCHAR(ParamDefaultValue) : FString();
+
+						if (Type.IsValid() && Type.Type->IsParamForcedOutParam() && Type.bIsConst)
+						{
+							ArgDesc.bInRefForceCopyOut = true;
+							ArgDesc.bBlueprintInRef = true;
+						}
+						else if (Type.bIsReference)
+						{
+							if ((RefFlags & asTM_INOUTREF) == asTM_INOUTREF)
+							{
+								if (Type.bIsConst)
+								{
+									ArgDesc.bBlueprintByValue = true;
+								}
+								else
+								{
+									ArgDesc.bBlueprintInRef = true;
+								}
+							}
+							else if ((RefFlags & asTM_OUTREF) != 0)
+							{
+								ArgDesc.bBlueprintOutRef = true;
+							}
+							else
+							{
+								ArgDesc.bBlueprintInRef = true;
+							}
+						}
+						else
+						{
+							ArgDesc.bBlueprintByValue = true;
+						}
+
+						FProperty* NewProperty = AddFunctionArgument(NewFunction, ArgDesc);
+						ArgumentProperties.Add(NewProperty);
+
+						if (NewProperty->HasAnyPropertyFlags(CPF_OutParm))
+						{
+							NewFunction->FunctionFlags |= FUNC_HasOutParms;
+						}
+					}
+				}
+
+				for (int32 ArgumentIndex = ArgumentProperties.Num() - 1; ArgumentIndex >= 0; --ArgumentIndex)
+				{
+					FProperty* NewProperty = ArgumentProperties[ArgumentIndex];
+					NewProperty->Next = NewFunction->ChildProperties;
+					NewFunction->ChildProperties = NewProperty;
+				}
+
 				NewFunction->StaticLink(true);
+
+				if (ReturnProperty != nullptr)
+				{
+					NewFunction->ReturnValueOffset = ReturnProperty->GetOffset_ForUFunction();
+				}
 
 				// Link into UStruct::Children so TFieldIterator<UFunction> can find it
 				NewFunction->Next = NewClass->Children;
@@ -3167,18 +3422,34 @@ UClass* FAngelscriptClassGenerator::ResolveCodeSuperForProperty(const FAngelscri
 	UClass* ClassOfProperty = Usage.GetClass();
 	if (ClassOfProperty != nullptr)
 	{
-		UASClass* asClass = Cast<UASClass>(ClassOfProperty);
-		//while (ClassOfProperty != nullptr && ClassOfProperty->bIsScriptClass)
-		if (asClass != nullptr)
+		while (UASClass* AsClass = Cast<UASClass>(ClassOfProperty))
 		{
-			while (ClassOfProperty != nullptr && asClass->bIsScriptClass)
-				ClassOfProperty = ClassOfProperty->GetSuperClass();
-			return ClassOfProperty;
-		}		
+			if (!AsClass->bIsScriptClass)
+				break;
+
+			ClassOfProperty = ClassOfProperty->GetSuperClass();
+		}
+
+		return ClassOfProperty;
 	}
 
 	if (Usage.ScriptClass != nullptr)
 	{
+		if (UClass* AssociatedClass = static_cast<UClass*>(Usage.ScriptClass->GetUserData()))
+		{
+			ClassOfProperty = AssociatedClass;
+			while (UASClass* AsClass = Cast<UASClass>(ClassOfProperty))
+			{
+				if (!AsClass->bIsScriptClass)
+					break;
+
+				ClassOfProperty = ClassOfProperty->GetSuperClass();
+			}
+
+			if (ClassOfProperty != nullptr)
+				return ClassOfProperty;
+		}
+
 		FModuleData* ModuleData = nullptr;
 		FClassData* ClassData = nullptr;
 		FDelegateData* DelegateData = nullptr;
@@ -3627,14 +3898,9 @@ void FAngelscriptClassGenerator::DoFullReloadClass(FModuleData& ModuleData, FCla
 		if (NewFunction->ReturnArgument.Property != nullptr)
 			NewFunction->ReturnValueOffset = NewFunction->ReturnArgument.Property->GetOffset_ForUFunction();
 
-		for (int32 i = ArgumentProperties.Num() - 1; i >= 0; --i)
+		if (NewFunction->WorldContextIndex >= 0 && ArgumentProperties.IsValidIndex(NewFunction->WorldContextIndex))
 		{
-			auto* Prop = ArgumentProperties[i];
-			//if (Prop->HasAnyPropertyFlags(CPF_WorldContext))
-			//{
-			//	NewFunction->WorldContextOffsetInParms = Prop->GetOffset_ForUFunction();
-			//	break;
-			//}
+			NewFunction->WorldContextOffsetInParms = ArgumentProperties[NewFunction->WorldContextIndex]->GetOffset_ForUFunction();
 		}
 
 		if (WorldContextProperty != nullptr)
@@ -5095,13 +5361,14 @@ void FAngelscriptClassGenerator::FinalizeClass(FModuleData& ModuleData, FClassDa
 			}
 
 			// Fallback: search all loaded UClasses by name
-			FString UnrealInterfaceName = InterfaceName;
-			if (UnrealInterfaceName.Len() >= 2 && UnrealInterfaceName[0] == 'U' && FChar::IsUpper(UnrealInterfaceName[1]))
-				UnrealInterfaceName = UnrealInterfaceName.Mid(1);
-
 			for (TObjectIterator<UClass> It; It; ++It)
 			{
-				if (It->GetName() == UnrealInterfaceName && It->HasAnyClassFlags(CLASS_Interface))
+				if ((It->GetName() == InterfaceName
+						|| (InterfaceName.Len() >= 2
+							&& InterfaceName[0] == 'U'
+							&& FChar::IsUpper(InterfaceName[1])
+							&& It->GetName() == InterfaceName.Mid(1)))
+					&& It->HasAnyClassFlags(CLASS_Interface))
 					return *It;
 			}
 
@@ -5783,23 +6050,34 @@ void FAngelscriptClassGenerator::CallPostInitFunctions()
 		for (const FString& InitFunctionName : ModuleData.NewModule->PostInitFunctions)
 		{
 			auto AnsiFunctionName = StringCast<ANSICHAR>(*InitFunctionName);
-			bool bFound = false;
+			asCScriptFunction* MatchedFunction = nullptr;
 			for (int i = 0, Count = ModuleData.NewModule->ScriptModule->globalFunctionList.GetLength(); i < Count; ++i)
 			{
 				asCScriptFunction* ScriptFunction = ModuleData.NewModule->ScriptModule->globalFunctionList[i];
 				if (ScriptFunction->name != AnsiFunctionName.Get())
 					continue;
 
-				FAngelscriptContext Context(ScriptFunction->GetEngine());
-				if (!PrepareAngelscriptContextWithLog(Context, ScriptFunction, *InitFunctionName))
+				// Literal-asset post-init entries point at generated property getters.
+				// Prefer the property candidate when a namespaced helper shares the same short name.
+				if (ScriptFunction->IsProperty())
 				{
-					bFound = true;
+					MatchedFunction = ScriptFunction;
 					break;
 				}
-				Context->Execute();
-				bFound = true;
-				break;
+
+				if (MatchedFunction == nullptr)
+					MatchedFunction = ScriptFunction;
 			}
+
+			if (MatchedFunction == nullptr)
+				continue;
+
+			FAngelscriptContext Context(MatchedFunction->GetEngine());
+			if (!PrepareAngelscriptContextWithLog(Context, MatchedFunction, *InitFunctionName))
+			{
+				continue;
+			}
+			Context->Execute();
 		}
 	}
 }

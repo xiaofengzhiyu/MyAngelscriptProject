@@ -11,3 +11,4 @@ ANGELSCRIPTRUNTIME_API void AngelscriptForgetSeenEnsures();
 // ensures however).
 ANGELSCRIPTRUNTIME_API void AngelscriptDisableDebugBreaks();
 ANGELSCRIPTRUNTIME_API void AngelscriptEnableDebugBreaks();
+ANGELSCRIPTRUNTIME_API bool AreAngelscriptDebugBreaksEnabledForTesting();

@@ -1,8 +1,37 @@
 #include "AngelscriptBinds.h"
+#include "Dom/JsonObject.h"
 #include "JsonObjectConverter.h"
+#include "Policies/CondensedJsonPrintPolicy.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 namespace
 {
+bool DeserializeJsonObjectString(const FString& JsonString, TSharedPtr<FJsonObject>& OutJsonObject)
+{
+	TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(JsonString);
+	return FJsonSerializer::Deserialize(JsonReader, OutJsonObject) && OutJsonObject.IsValid();
+}
+
+bool SerializeJsonObjectString(
+	const TSharedRef<FJsonObject>& JsonObject,
+	FString& OutJsonString,
+	int Indent,
+	bool PrettyPrint)
+{
+	if (PrettyPrint)
+	{
+		TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> JsonWriter =
+			TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&OutJsonString, Indent);
+		return FJsonSerializer::Serialize(JsonObject, JsonWriter);
+	}
+
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> JsonWriter =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutJsonString, Indent);
+	return FJsonSerializer::Serialize(JsonObject, JsonWriter);
+}
+
 bool UStructToJsonObjectString(const void* Data, int TypeId, FString& Result, int CheckFlags, int SkipFlags, int Indent, bool PrettyPrint)
 {
 	const FAngelscriptTypeUsage Usage = FAngelscriptTypeUsage::FromTypeId(TypeId);
@@ -20,26 +49,39 @@ bool UStructToJsonObjectString(const void* Data, int TypeId, FString& Result, in
 bool AppendUStructToJsonObjectString(const void* Data, int TypeId, FString& InOutString, int CheckFlags, int SkipFlags, int Indent, bool PrettyPrint)
 {
 	FString NewJsonString;
-	bool bConversionResult = UStructToJsonObjectString(Data, TypeId, NewJsonString, CheckFlags, SkipFlags, Indent, PrettyPrint);
-
-	// Merge the new JSON with any potential old JSON
-	InOutString += NewJsonString;
-
-	if (Indent == 0)
+	const bool bConversionResult = UStructToJsonObjectString(Data, TypeId, NewJsonString, CheckFlags, SkipFlags, Indent, PrettyPrint);
+	if (!bConversionResult)
 	{
-		InOutString = InOutString.Replace(TEXT("\r\n}{"), TEXT(","));
-	}
-	else
-	{
-		FString IndentStr;
-		for (int i = 0; i < Indent; ++i)
-		{
-			IndentStr += "\t";
-		}
-		InOutString = InOutString.Replace(*(FString(TEXT("\r\n")) + IndentStr + FString(TEXT("}{"))), TEXT(","));
+		return false;
 	}
 
-	return bConversionResult;
+	if (InOutString.IsEmpty())
+	{
+		InOutString = MoveTemp(NewJsonString);
+		return true;
+	}
+
+	TSharedPtr<FJsonObject> ExistingJsonObject;
+	if (!DeserializeJsonObjectString(InOutString, ExistingJsonObject))
+	{
+		UE_LOG(LogJson, Warning, TEXT("AppendUStructToJsonObjectString - Unable to parse existing json=[%s]"), *InOutString);
+		return false;
+	}
+
+	TSharedPtr<FJsonObject> NewJsonObject;
+	if (!DeserializeJsonObjectString(NewJsonString, NewJsonObject))
+	{
+		UE_LOG(LogJson, Warning, TEXT("AppendUStructToJsonObjectString - Unable to parse appended json=[%s]"), *NewJsonString);
+		return false;
+	}
+
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& FieldPair : NewJsonObject->Values)
+	{
+		ExistingJsonObject->SetField(FieldPair.Key, FieldPair.Value);
+	}
+
+	InOutString.Reset();
+	return SerializeJsonObjectString(ExistingJsonObject.ToSharedRef(), InOutString, Indent, PrettyPrint);
 }
 
 bool JsonObjectStringToUStruct(const FString& JsonString, void* Data, int TypeId, int CheckFlags, int SkipFlags)

@@ -90,6 +90,12 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FTraceDatum_Early(FAngelscript
 	FBindFlags Flags;
 	auto FTraceDatum_ = FAngelscriptBinds::ValueClass<FTraceDatum>("FTraceDatum", Flags);
 	FAngelscriptType::Register(MakeShared<FTraceDatumType>());
+
+	FTraceDatum_.Constructor("void f()", [](FTraceDatum* Address)
+	{
+		new(Address) FTraceDatum();
+	});
+	SCRIPT_TRIVIAL_NATIVE_CONSTRUCTOR(FTraceDatum_, "FTraceDatum");
 });
 
 AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FTraceDatum_Late(FAngelscriptBinds::EOrder::Late, []
@@ -126,6 +132,12 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FOverlapDatum_Early(FAngelscri
 	FBindFlags Flags;
 	auto FOverlapDatum_ = FAngelscriptBinds::ValueClass<FOverlapDatum>("FOverlapDatum", Flags);
 	FAngelscriptType::Register(MakeShared<FOverlapDatumType>());
+
+	FOverlapDatum_.Constructor("void f()", [](FOverlapDatum* Address)
+	{
+		new(Address) FOverlapDatum();
+	});
+	SCRIPT_TRIVIAL_NATIVE_CONSTRUCTOR(FOverlapDatum_, "FOverlapDatum");
 });
 
 AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FOverlapDatum_Late(FAngelscriptBinds::EOrder::Late, []
@@ -277,11 +289,23 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_Traces((int32)FAngelscriptBind
 	FAngelscriptBinds::BindGlobalFunction("bool ComponentSweepMulti(TArray<FHitResult>& OutHits, UPrimitiveComponent PrimComp, const FVector& Start, const FVector& End, const FQuat& Rot, const FComponentQueryParams& Params)",
 		[](TArray<FHitResult>& OutHits, UPrimitiveComponent* PrimComp, const FVector& Start, const FVector& End, const FQuat& Rot, const FComponentQueryParams& Params)
 		{
+			if (PrimComp == nullptr)
+			{
+				OutHits.Reset();
+				return false;
+			}
+
 			return WorldCollision::GetWorld()->ComponentSweepMulti(OutHits, PrimComp, Start, End, Rot, Params);
 		});
 	FAngelscriptBinds::BindGlobalFunction("bool ComponentSweepMulti(TArray<FHitResult>& OutHits, UPrimitiveComponent PrimComp, const FVector& Start, const FVector& End, const FRotator& Rot, const FComponentQueryParams& Params)",
 		[](TArray<FHitResult>& OutHits, UPrimitiveComponent* PrimComp, const FVector& Start, const FVector& End, const FRotator& Rot, const FComponentQueryParams& Params)
 		{
+			if (PrimComp == nullptr)
+			{
+				OutHits.Reset();
+				return false;
+			}
+
 			return WorldCollision::GetWorld()->ComponentSweepMulti(OutHits, PrimComp, Start, End, Rot, Params);
 		});
 	FAngelscriptBinds::BindGlobalFunction("bool ComponentSweepMultiByChannel(TArray<FHitResult>& OutHits, UPrimitiveComponent PrimComp, const FVector& Start, const FVector& End, const FQuat& Rot, ECollisionChannel TraceChannel, const FComponentQueryParams& Params)",
@@ -298,11 +322,23 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_Traces((int32)FAngelscriptBind
 	FAngelscriptBinds::BindGlobalFunction("bool ComponentOverlapMulti(TArray<FOverlapResult>& OutOverlaps, const UPrimitiveComponent PrimComp, const FVector& Pos, const FQuat& Rot, const FComponentQueryParams& Params = FComponentQueryParams::DefaultComponentQueryParams, const FCollisionObjectQueryParams& ObjectQueryParams = FCollisionObjectQueryParams::DefaultObjectQueryParam)",
 		[](TArray<FOverlapResult>& OutOverlaps, const UPrimitiveComponent* PrimComp, const FVector& Pos, const FQuat& Rot, const FComponentQueryParams& Params, const FCollisionObjectQueryParams& ObjectQueryParams)
 		{
+			if (PrimComp == nullptr)
+			{
+				OutOverlaps.Reset();
+				return false;
+			}
+
 			return WorldCollision::GetWorld()->ComponentOverlapMulti(OutOverlaps, PrimComp, Pos, Rot, Params, ObjectQueryParams);
 		});
 	FAngelscriptBinds::BindGlobalFunction("bool ComponentOverlapMulti(TArray<FOverlapResult>& OutOverlaps, const UPrimitiveComponent PrimComp, const FVector& Pos, const FRotator& Rot, const FComponentQueryParams& Params = FComponentQueryParams::DefaultComponentQueryParams, const FCollisionObjectQueryParams& ObjectQueryParams = FCollisionObjectQueryParams::DefaultObjectQueryParam)",
 		[](TArray<FOverlapResult>& OutOverlaps, const UPrimitiveComponent* PrimComp, const FVector& Pos, const FRotator& Rot, const FComponentQueryParams& Params, const FCollisionObjectQueryParams& ObjectQueryParams)
 		{
+			if (PrimComp == nullptr)
+			{
+				OutOverlaps.Reset();
+				return false;
+			}
+
 			return WorldCollision::GetWorld()->ComponentOverlapMulti(OutOverlaps, PrimComp, Pos, Rot, Params, ObjectQueryParams);
 		});
 	FAngelscriptBinds::BindGlobalFunction("bool ComponentOverlapMultiByChannel(TArray<FOverlapResult>& OutOverlaps, const UPrimitiveComponent PrimComp, const FVector& Pos, const FQuat& Rot, ECollisionChannel TraceChannel, const FComponentQueryParams& Params = FComponentQueryParams::DefaultComponentQueryParams, const FCollisionObjectQueryParams& ObjectQueryParams = FCollisionObjectQueryParams::DefaultObjectQueryParam)",

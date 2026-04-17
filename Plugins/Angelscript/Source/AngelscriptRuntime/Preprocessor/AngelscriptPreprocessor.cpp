@@ -85,7 +85,9 @@ TArray<TSharedRef<FAngelscriptModuleDesc>> FAngelscriptPreprocessor::GetModulesT
 
 FString FAngelscriptPreprocessor::FilenameToModuleName(const FString& Filename)
 {
-	return Filename.Replace(TEXT(".as"), TEXT("")).Replace(TEXT("/"), TEXT("."));
+	FString NormalizedFilename = Filename.Replace(TEXT("\\"), TEXT("/"));
+	NormalizedFilename.RemoveFromEnd(TEXT(".as"));
+	return NormalizedFilename.Replace(TEXT("/"), TEXT("."));
 }
 
 void FAngelscriptPreprocessor::AddFile(const FString& RelativeFilename, const FString& AbsoluteFilename, bool bLoadAsynchronous, bool bTreatAsDeleted)
@@ -237,6 +239,14 @@ bool FAngelscriptPreprocessor::Preprocess()
 			ProcessImports(File, SortedFiles, nullptr);
 		Files = SortedFiles;
 	}
+	else
+	{
+		// Automatic imports should not change file ordering, but explicit import statements
+		// still need to contribute compatibility metadata, stripping, and warnings.
+		TArray<FFile> CompatibilityPassScratch;
+		for (FFile& File : Files)
+			ProcessImports(File, CompatibilityPassScratch, nullptr);
+	}
 
 	// Early out if there were errors during importing
 	if (bHasError)
@@ -272,6 +282,11 @@ bool FAngelscriptPreprocessor::Preprocess()
 			ProcessDefaults(File, Chunk);
 		}
 	}
+
+	// Fail closed after macro/default processing so callers don't receive
+	// partially generated code sections for invalid reflected declarations.
+	if (bHasError)
+		return false;
 	
 	// Condense the chunks back into final processed code
 	for (FFile& File : Files)
@@ -479,7 +494,7 @@ void FAngelscriptPreprocessor::ProcessImports(FFile& File, TArray<FFile>& OutSor
 			ProcessImports(*ProcessingModule, OutSortedFiles, &Chain);
 		}
 
-		File.Module->ImportedModules.Add(ImportDesc.ModuleName);
+		File.Module->ImportedModules.AddUnique(ImportDesc.ModuleName);
 		ReplaceWithBlank(File.ChunkedCode[ImportDesc.ChunkIndex], ImportDesc.StartPosInChunk, ImportDesc.EndPosInChunk+1);
 
 		if (FAngelscriptEngine::ShouldUseAutomaticImportMethodForCurrentContext())
@@ -760,6 +775,21 @@ void FAngelscriptPreprocessor::DetectClasses(FFile& File, FChunk& Chunk)
 		return;
 
 	FString ClassName = MatchClass.GetCaptureGroup(2);
+	const int32 ClassNameStart = MatchClass.GetCaptureGroupBeginning(2);
+	const int32 ClassNameEnd = MatchClass.GetCaptureGroupEnding(2);
+
+	for (FMacro& Macro : Chunk.Macros)
+	{
+		if (Macro.Type == EMacroType::Class)
+		{
+			Macro.Name = ClassName;
+			if (Macro.NameStartPos < 0)
+			{
+				Macro.NameStartPos = ClassNameStart;
+				Macro.NameEndPos = ClassNameEnd;
+			}
+		}
+	}
 
 	// Add the class into the output module
 	TSharedRef<FAngelscriptClassDesc> ClassDesc = MakeShared<FAngelscriptClassDesc>();
@@ -833,12 +863,25 @@ void FAngelscriptPreprocessor::DetectClasses(FFile& File, FChunk& Chunk)
 
 	if (ExistingClass.IsValid())
 	{
+		auto FailClosedDuplicateClass = [&](const FString& ExistingModuleName)
+		{
+			ChunkError(File, Chunk, FString::Printf(TEXT("Cannot declare class %s in module %s. A class with this name already exists in module %s."),
+				*ClassName, *File.Module->ModuleName, *ExistingModuleName));
+			bHasError = true;
+
+			File.Module->Classes.RemoveAll(
+				[&ClassDesc](const TSharedRef<FAngelscriptClassDesc>& OtherClassDesc)
+				{
+					return OtherClassDesc == ClassDesc;
+				});
+			Chunk.ClassDesc.Reset();
+		};
+
 		// If we're not preprocessing this module, and the class already exists, error.
 		if (!IsPreprocessingModule(ExistingModule->ModuleName))
 		{
-			ChunkError(File, Chunk, FString::Printf(TEXT("Cannot declare class %s in module %s. A class with this name already exists in module %s."),
-				*ClassName, *File.Module->ModuleName, *ExistingModule->ModuleName));
-			bHasError = true;
+			FailClosedDuplicateClass(ExistingModule->ModuleName);
+			return;
 		}
 		else
 		{
@@ -850,9 +893,8 @@ void FAngelscriptPreprocessor::DetectClasses(FFile& File, FChunk& Chunk)
 
 				if (OtherFile.Module->GetClass(ClassName).IsValid())
 				{
-					ChunkError(File, Chunk, FString::Printf(TEXT("Cannot declare class %s in module %s. A class with this name already exists in module %s."),
-						*ClassName, *File.Module->ModuleName, *OtherFile.Module->ModuleName));
-					bHasError = true;
+					FailClosedDuplicateClass(OtherFile.Module->ModuleName);
+					return;
 				}
 			}
 		}
@@ -925,6 +967,7 @@ TSharedPtr<FAngelscriptClassDesc> FAngelscriptPreprocessor::GetOrCreateStaticsCl
 
 void FAngelscriptPreprocessor::AnalyzeClasses(FFile& File)
 {
+	const bool bHadErrorBeforeFile = bHasError;
 	for (FChunk& Chunk : File.ChunkedCode)
 	{
 		if (Chunk.Type == EChunkType::Class)
@@ -933,6 +976,22 @@ void FAngelscriptPreprocessor::AnalyzeClasses(FFile& File)
 			AnalyzeClasses(File, Chunk);
 		else if (Chunk.Type == EChunkType::Struct)
 			AnalyzeStructs(File, Chunk);
+	}
+
+	// Fail closed for reflected class/interface declarations in files that emitted
+	// analysis errors, so later stages cannot consume stale descriptors.
+	if (!bHadErrorBeforeFile && bHasError)
+	{
+		for (FChunk& Chunk : File.ChunkedCode)
+		{
+			if (Chunk.ClassDesc.IsValid())
+			{
+				PreprocessingClasses.Remove(Chunk.ClassDesc->ClassName);
+				Chunk.ClassDesc.Reset();
+			}
+		}
+
+		File.Module->Classes.Empty();
 	}
 }
 
@@ -944,6 +1003,17 @@ void FAngelscriptPreprocessor::AnalyzeClasses(FFile& File, FChunk& Chunk)
 
 	// Determine our first code class parent
 	ResolveSuperClass(ClassDesc);
+	if (ClassDesc->CodeSuperClass == nullptr)
+	{
+		File.Module->Classes.RemoveAll(
+			[&ClassDesc](const TSharedRef<FAngelscriptClassDesc>& OtherClassDesc)
+			{
+				return OtherClassDesc == ClassDesc;
+			});
+		PreprocessingClasses.Remove(ClassDesc->ClassName);
+		Chunk.ClassDesc.Reset();
+		return;
+	}
 
 	// If inheriting from a code class we should remove the inheritance from the script
 	// For interfaces inheriting from UInterface (C++ base), strip the inheritance clause
@@ -1107,57 +1177,128 @@ void FAngelscriptPreprocessor::AnalyzeClasses(FFile& File, FChunk& Chunk)
 				// methods through interface-typed references (e.g. Casted.TakeDamage(42.0)).
 				// The CallInterfaceMethod generic callback resolves the real UFunction
 				// on the implementing object at runtime via FindFunction + ProcessEvent.
-				if (TypeId != asALREADY_REGISTERED)
+				auto ResolveInterfaceDesc = [&](const FString& ResolvedInterfaceName) -> TSharedPtr<FAngelscriptClassDesc>
 				{
-					for (const FString& MethodDecl : ClassDesc->InterfaceMethodDeclarations)
+					for (const TSharedPtr<FAngelscriptClassDesc>& ModuleClass : File.Module->Classes)
 					{
-						// Extract method name from declaration like "void TakeDamage(float Amount)"
-						int32 ParenPos = MethodDecl.Find(TEXT("("));
-						if (ParenPos == INDEX_NONE) continue;
-						FString BeforeParen = MethodDecl.Left(ParenPos).TrimEnd();
-						int32 LastSpace = INDEX_NONE;
-						BeforeParen.FindLastChar(' ', LastSpace);
-						if (LastSpace == INDEX_NONE) continue;
-						FString MethodName = BeforeParen.Mid(LastSpace + 1).TrimStartAndEnd();
-
-						auto* Sig = Engine.RegisterInterfaceMethodSignature(FName(*MethodName));
-
-						FString ASDecl = MethodDecl;
-						asIScriptFunction* ExistingFunction = InterfaceScriptType->GetMethodByDecl(TCHAR_TO_ANSI(*ASDecl));
-						asCScriptFunction* ScriptFunc = nullptr;
-						if (ExistingFunction != nullptr)
+						if (ModuleClass.IsValid() && ModuleClass->ClassName == ResolvedInterfaceName)
 						{
-							ScriptFunc = (asCScriptFunction*)ExistingFunction;
-						}
-						else
-						{
-							int32 FuncId = Engine.Engine->RegisterObjectMethod(
-								TCHAR_TO_ANSI(*InterfaceName),
-								TCHAR_TO_ANSI(*ASDecl),
-								asFUNCTION(CallInterfaceMethod),
-								asCALL_GENERIC,
-								nullptr);
-
-							if (FuncId >= 0)
-							{
-								ScriptFunc = (asCScriptFunction*)Engine.Engine->GetFunctionById(FuncId);
-							}
-						}
-
-						if (ScriptFunc != nullptr)
-						{
-							if (auto* PreviousSig = (FInterfaceMethodSignature*)ScriptFunc->GetUserData())
-							{
-								Engine.ReleaseInterfaceMethodSignature(PreviousSig);
-							}
-							ScriptFunc->SetUserData(Sig, 0);
-						}
-						else
-						{
-							Engine.ReleaseInterfaceMethodSignature(Sig);
+							return ModuleClass;
 						}
 					}
-				}
+
+					return Engine.GetClass(ResolvedInterfaceName);
+				};
+
+				auto RegisterInterfaceMethodDeclaration = [&](const FString& MethodDecl)
+				{
+					// Extract method name from declaration like "void TakeDamage(float Amount)"
+					int32 ParenPos = MethodDecl.Find(TEXT("("));
+					if (ParenPos == INDEX_NONE)
+					{
+						return;
+					}
+
+					FString BeforeParen = MethodDecl.Left(ParenPos).TrimEnd();
+					int32 LastSpace = INDEX_NONE;
+					BeforeParen.FindLastChar(' ', LastSpace);
+					if (LastSpace == INDEX_NONE)
+					{
+						return;
+					}
+
+					FString MethodName = BeforeParen.Mid(LastSpace + 1).TrimStartAndEnd();
+					auto* Sig = Engine.RegisterInterfaceMethodSignature(FName(*MethodName));
+
+					asIScriptFunction* ExistingFunction = InterfaceScriptType->GetMethodByDecl(TCHAR_TO_ANSI(*MethodDecl));
+					if (ExistingFunction == nullptr)
+					{
+						const asUINT MethodCount = InterfaceScriptType->GetMethodCount();
+						for (asUINT MethodIndex = 0; MethodIndex < MethodCount; ++MethodIndex)
+						{
+							asIScriptFunction* CandidateMethod = InterfaceScriptType->GetMethodByIndex(MethodIndex);
+							if (CandidateMethod == nullptr || MethodName != ANSI_TO_TCHAR(CandidateMethod->GetName()))
+							{
+								continue;
+							}
+
+							if (ExistingFunction != nullptr)
+							{
+								ExistingFunction = nullptr;
+								break;
+							}
+
+							ExistingFunction = CandidateMethod;
+						}
+					}
+					asCScriptFunction* ScriptFunc = nullptr;
+					if (ExistingFunction != nullptr)
+					{
+						ScriptFunc = (asCScriptFunction*)ExistingFunction;
+					}
+					else
+					{
+						int32 FuncId = Engine.Engine->RegisterObjectMethod(
+							TCHAR_TO_ANSI(*InterfaceName),
+							TCHAR_TO_ANSI(*MethodDecl),
+							asFUNCTION(CallInterfaceMethod),
+							asCALL_GENERIC,
+							nullptr);
+
+						if (FuncId >= 0)
+						{
+							ScriptFunc = (asCScriptFunction*)Engine.Engine->GetFunctionById(FuncId);
+						}
+					}
+
+					if (ScriptFunc != nullptr)
+					{
+						if (auto* PreviousSig = (FInterfaceMethodSignature*)ScriptFunc->GetUserData())
+						{
+							Engine.ReleaseInterfaceMethodSignature(PreviousSig);
+						}
+						ScriptFunc->SetUserData(Sig, 0);
+					}
+					else
+					{
+						Engine.ReleaseInterfaceMethodSignature(Sig);
+					}
+				};
+
+				TSet<FString> VisitedInterfaceNames;
+				TFunction<void(const TSharedPtr<FAngelscriptClassDesc>&)> RegisterInterfaceMethodsRecursive;
+				RegisterInterfaceMethodsRecursive = [&](const TSharedPtr<FAngelscriptClassDesc>& InterfaceDesc)
+				{
+					if (!InterfaceDesc.IsValid() || !InterfaceDesc->bIsInterface)
+					{
+						return;
+					}
+
+					if (VisitedInterfaceNames.Contains(InterfaceDesc->ClassName))
+					{
+						return;
+					}
+					VisitedInterfaceNames.Add(InterfaceDesc->ClassName);
+
+					if (!InterfaceDesc->bSuperIsCodeClass
+						&& !InterfaceDesc->SuperClass.IsEmpty()
+						&& InterfaceDesc->SuperClass != TEXT("UInterface"))
+					{
+						RegisterInterfaceMethodsRecursive(ResolveInterfaceDesc(InterfaceDesc->SuperClass));
+					}
+
+					for (const FString& ParentInterfaceName : InterfaceDesc->ImplementedInterfaces)
+					{
+						RegisterInterfaceMethodsRecursive(ResolveInterfaceDesc(ParentInterfaceName));
+					}
+
+					for (const FString& MethodDecl : InterfaceDesc->InterfaceMethodDeclarations)
+					{
+						RegisterInterfaceMethodDeclaration(MethodDecl);
+					}
+				};
+
+				RegisterInterfaceMethodsRecursive(ClassDesc);
 			}
 		}
 	}
@@ -1335,6 +1476,9 @@ void FAngelscriptPreprocessor::ProcessMacros(FFile& File)
 {
 	for (FChunk& Chunk : File.ChunkedCode)
 	{
+		if (Chunk.Type != EChunkType::Global && !Chunk.ClassDesc.IsValid())
+			continue;
+
 		for (FMacro& Macro : Chunk.Macros)
 		{
 			if (Macro.Type == EMacroType::Function)
@@ -1350,6 +1494,8 @@ void FAngelscriptPreprocessor::ProcessMacros(FFile& File)
 void FAngelscriptPreprocessor::ProcessDefaults(FFile& File, FChunk& Chunk)
 {
 	if (Chunk.Defaults.Num() == 0)
+		return;
+	if (!Chunk.ClassDesc.IsValid())
 		return;
 
 	ProcessReplacements(File, Chunk);
@@ -1991,14 +2137,10 @@ void FAngelscriptPreprocessor::GenerateBlueprintEventWrapper(FFile& File, FChunk
 		const bool bIsRefArgument = ArgumentTypes[ArgIndex].Contains(TEXT("&"));
 		if (bIsRefArgument)
 		{
-			const bool bIsConstRefArgument = ArgumentTypes[ArgIndex].Contains(TEXT("const "));
-			if (!bIsConstRefArgument)
-			{
-				Code += FString::Printf(TEXT(" __Evt_PushArgumentRef%s(%s);"),
-					*GetPushArgumentSuffix(ArgumentTypes[ArgIndex]),
-					*Arg);
-				continue;
-			}
+			Code += FString::Printf(TEXT(" __Evt_PushArgumentRef%s(%s);"),
+				*GetPushArgumentSuffix(ArgumentTypes[ArgIndex]),
+				*Arg);
+			continue;
 		}
 
 		Code += FString::Printf(TEXT(" __Evt_PushArgument%s(%s);"),
@@ -2402,11 +2544,16 @@ void FAngelscriptPreprocessor::ProcessPropertyMacro(FFile& File, FChunk& Chunk, 
 	if (!ensure(ClassDesc.IsValid()))
 		return;
 
-	ClassDesc->Properties.Add(PropDesc);
-
 	PropDesc->PropertyName = Macro.Name;
 	PropDesc->LiteralType = Macro.SubjectType;
 	PropDesc->bEditConst = false;
+
+	if (ClassDesc->bIsInterface)
+	{
+		MacroError(File, Macro, FString::Printf(TEXT("Interface %s cannot declare property %s."),
+			*ClassDesc->ClassName, *PropDesc->PropertyName));
+		bHasError = true;
+	}
 
 	// Default Editable level for properties
 	auto EditSpecifier = ClassDesc->bIsStruct ? DefaultPropertyEditSpecifierForStructs : DefaultPropertyEditSpecifier;
@@ -2774,6 +2921,11 @@ void FAngelscriptPreprocessor::ProcessPropertyMacro(FFile& File, FChunk& Chunk, 
 			bHasError = true;
 		}
 	}
+
+	if (!bHasError)
+	{
+		ClassDesc->Properties.Add(PropDesc);
+	}
 }
 
 void FAngelscriptPreprocessor::DetectEnum(FFile& File, FChunk& Chunk)
@@ -2815,6 +2967,8 @@ void FAngelscriptPreprocessor::DetectEnum(FFile& File, FChunk& Chunk)
 	EnumDesc->LineNumber = Chunk.FileLineNumber;
 	EnumDesc->EnumName = MatchEnum.GetCaptureGroup(2);
 	EnumDesc->Documentation = FormatCommentForToolTip(Chunk.Comment);
+	const int32 EnumNameStart = MatchEnum.GetCaptureGroupBeginning(2);
+	const int32 EnumNameEnd = MatchEnum.GetCaptureGroupEnding(2);
 
 	for (FMacro& Macro : Chunk.Macros)
 	{
@@ -2826,6 +2980,13 @@ void FAngelscriptPreprocessor::DetectEnum(FFile& File, FChunk& Chunk)
 		}
 		else if (Macro.Type == EMacroType::Enum)
 		{
+			Macro.Name = EnumDesc->EnumName;
+			if (Macro.NameStartPos < 0)
+			{
+				Macro.NameStartPos = EnumNameStart;
+				Macro.NameEndPos = EnumNameEnd;
+			}
+
 			TArray<FSpecifier> Specs = ParseSpecifiers(Macro.Arguments);
 			for (auto& Spec : Specs)
 			{
@@ -3042,6 +3203,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 		bool bValue;
 		bool bAnyBranchTaken;
 		bool bHasElse;
+		int32 DirectiveLine;
 		FString Condition;
 	};
 	TArray<FActiveIfDef> IfDefStack;
@@ -3072,6 +3234,48 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 	{
 		return ScopeCount <= NamespaceStack.Num();
 	};
+	auto FindNextNamespaceToken = [&](int32 SearchPos) -> int32
+	{
+		int32 Pos = SearchPos;
+		while (Pos < RawSize)
+		{
+			const TCHAR Char = File.RawCode[Pos];
+			if (IsWhitespace(Char))
+			{
+				++Pos;
+				continue;
+			}
+
+			if (Char == '/' && (Pos + 1) < RawSize)
+			{
+				const TCHAR NextChar = File.RawCode[Pos + 1];
+				if (NextChar == '/')
+				{
+					Pos += 2;
+					while (Pos < RawSize && File.RawCode[Pos] != '\n')
+						++Pos;
+					continue;
+				}
+
+				if (NextChar == '*')
+				{
+					Pos += 2;
+					while ((Pos + 1) < RawSize && !(File.RawCode[Pos] == '*' && File.RawCode[Pos + 1] == '/'))
+						++Pos;
+
+					if ((Pos + 1) < RawSize)
+						Pos += 2;
+					else
+						Pos = RawSize;
+					continue;
+				}
+			}
+
+			return Pos;
+		}
+
+		return INDEX_NONE;
+	};
 
 	auto IsStartOfIdentifier = [&]() -> bool
 	{
@@ -3094,7 +3298,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 		bool bHasEditorIfDef = false;
 		for (auto& IfDef : IfDefStack)
 		{
-			if (IfDef.Condition == TEXT("EDITOR"))
+			if (IfDef.Condition == TEXT("EDITOR") || IfDef.Condition == TEXT("EDITORONLY_DATA"))
 			{
 				bHasEditorIfDef = true;
 				break;
@@ -3136,6 +3340,25 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 				break;
 			}
 		}
+	};
+
+	auto HasInactiveIfDef = [&](bool bExcludeCurrent)
+	{
+		int32 Count = IfDefStack.Num();
+		if (bExcludeCurrent && Count > 0)
+		{
+			Count -= 1;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			if (!IfDefStack[Index].bValue)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	};
 
 	auto SubmitChunk = [&](bool bIncludeCurrentCharInChunk)
@@ -3213,7 +3436,10 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 		ParsingMacro.NameStartPos = StartOfWord + 1;
 		ParsingMacro.NameEndPos = EndOfWord + 1;
 		ParsingMacro.Name = File.RawCode.Mid(StartOfWord+1, EndOfWord - StartOfWord);
-		ParsingMacro.FileLineNumber = LineNumber;
+		if (ParsingMacro.FileLineNumber == 0)
+		{
+			ParsingMacro.FileLineNumber = LineNumber;
+		}
 
 		// Read backwards to parse the type of the property if it is a property
 		if (ParsingMacro.Type == EMacroType::Property)
@@ -3243,6 +3469,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 		Macro.Type = EMacroType::EnumValue;
 		Macro.Comment = File.RawCode.Mid(PrevCommentStart, PrevCommentEnd-PrevCommentStart);
 		Macro.SubjectIndex = EnumValueIndex - 1;
+		Macro.FileLineNumber = LineNumber;
 
 		PrevCommentStart = -1;
 
@@ -3254,43 +3481,49 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 		int16 Char = File.RawCode[ChunkEnd];
 
 		// Handle preprocessor ifdefs
-		if (Char == '#' && !bInComment)
+		if (Char == '#' && !bInComment && !bInString)
 		{
-			if ((RawSize - ChunkEnd) >= 7
-				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#ifdef "), 7) == 0)
+			if ((RawSize - ChunkEnd) >= 6
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#ifdef"), 6) == 0
+				&& (ChunkEnd + 6 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 6])))
+			{
+				FString Identifier = ReadIdentifier(File, ChunkEnd + 6);
+				const bool bValue = !HasInactiveIfDef(false) && PreprocessorFlags.FindRef(Identifier);
+				KillRawLine(File, ChunkEnd);
+				IfDefStack.Push({bValue, bValue, false, LineNumber, Identifier});
+				UpdateIfDefStack();
+				UpdateEditorBlockLines();
+			}
+			else if ((RawSize - ChunkEnd) >= 7
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#ifndef"), 7) == 0
+				&& (ChunkEnd + 7 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 7])))
 			{
 				FString Identifier = ReadIdentifier(File, ChunkEnd + 7);
-				const bool bValue = PreprocessorFlags.Find(Identifier) != nullptr;
+				const bool bValue = !HasInactiveIfDef(false) && !PreprocessorFlags.FindRef(Identifier);
 				KillRawLine(File, ChunkEnd);
-				IfDefStack.Push({bValue, bValue, false, Identifier});
+				IfDefStack.Push({bValue, bValue, false, LineNumber, Identifier});
 				UpdateIfDefStack();
 				UpdateEditorBlockLines();
 			}
-			else if ((RawSize - ChunkEnd) >= 8
-				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#ifndef "), 8) == 0)
+			else if ((RawSize - ChunkEnd) >= 3
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#if"), 3) == 0
+				&& (ChunkEnd + 3 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 3])))
 			{
-				FString Identifier = ReadIdentifier(File, ChunkEnd + 8);
-				const bool bValue = PreprocessorFlags.Find(Identifier) == nullptr;
-				KillRawLine(File, ChunkEnd);
-				IfDefStack.Push({bValue, bValue, false, Identifier});
-				UpdateIfDefStack();
-				UpdateEditorBlockLines();
-			}
-			else if ((RawSize - ChunkEnd) >= 4
-				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#if "), 4) == 0)
-			{
-				FString PreProc = ReadIdentifier(File, ChunkEnd + 4);
-				bool bValue = ParsePreProc(File, LineNumber, PreProc);
+				FString PreProc = ReadIdentifier(File, ChunkEnd + 3);
+				// Child conditions inside an already-inactive branch must still balance the stack,
+				// but they must not be evaluated or emit diagnostics.
+				bool bValue = !HasInactiveIfDef(false) && ParsePreProc(File, LineNumber, PreProc);
 				KillRawLine(File, ChunkEnd);
 
-				IfDefStack.Push({bValue, bValue, false, PreProc});
+				IfDefStack.Push({bValue, bValue, false, LineNumber, PreProc});
 				UpdateIfDefStack();
 				UpdateEditorBlockLines();
 			}
-			else if ((RawSize - ChunkEnd) >= 6
-				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#elif "), 6) == 0)
+			else if ((RawSize - ChunkEnd) >= 5
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#elif"), 5) == 0
+				&& (ChunkEnd + 5 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 5])))
 			{
-				FString PreProc = ReadIdentifier(File, ChunkEnd + 6);
+				FString PreProc = ReadIdentifier(File, ChunkEnd + 5);
 				KillRawLine(File, ChunkEnd);
 
 				if (IfDefStack.Num() == 0 || IfDefStack.Last().bHasElse)
@@ -3300,7 +3533,9 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 				}
 				else
 				{
-					bool bValue = ParsePreProc(File, LineNumber, PreProc);
+					const bool bShouldEvaluate = !IfDefStack.Last().bAnyBranchTaken && !HasInactiveIfDef(true);
+					const bool bValue = bShouldEvaluate && ParsePreProc(File, LineNumber, PreProc);
+					IfDefStack.Last().DirectiveLine = LineNumber;
 					IfDefStack.Last().Condition = PreProc;
 
 					if (IfDefStack.Last().bAnyBranchTaken)
@@ -3333,6 +3568,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 					IfDefStack.Last().bValue = !IfDefStack.Last().bAnyBranchTaken;
 					IfDefStack.Last().bAnyBranchTaken = true;
 					IfDefStack.Last().bHasElse = true;
+					IfDefStack.Last().DirectiveLine = LineNumber;
 					if (IfDefStack.Last().Condition.StartsWith(TEXT("!")))
 						IfDefStack.Last().Condition = IfDefStack.Last().Condition.Mid(1);
 					else
@@ -3360,35 +3596,65 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 				UpdateIfDefStack();
 				UpdateEditorBlockLines();
 			}
-			else if ((RawSize - ChunkEnd) >= 22
-				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#restrict usage allow "), 22) == 0)
+			else if ((RawSize - ChunkEnd) >= 8
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#include"), 8) == 0
+				&& (ChunkEnd + 8 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 8])))
 			{
-				FString Pattern = ReadUntilWhitespace(File, ChunkEnd + 22);
 				KillRawLine(File, ChunkEnd);
 
-#if WITH_EDITOR
-				FAngelscriptModuleDesc::FUsageRestriction Restriction;
-				Restriction.bIsAllow = true;
-				Restriction.Pattern = Pattern;
-
-				File.Module->UsageRestrictions.Add(Restriction);
-#endif
-
+				if (!HasInactiveIfDef(false))
+				{
+					LineError(File, LineNumber, TEXT("Unsupported preprocessor directive '#include'. Use import or automatic imports instead."));
+					bHasError = true;
+				}
 			}
-			else if ((RawSize - ChunkEnd) >= 25
-				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#restrict usage disallow "), 25) == 0)
+			else if ((RawSize - ChunkEnd) >= 21
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#restrict usage allow"), 21) == 0
+				&& (ChunkEnd + 21 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 21])))
 			{
-				FString Pattern = ReadUntilWhitespace(File, ChunkEnd + 25);
+				int32 PatternStart = ChunkEnd + 21;
+				while (PatternStart < File.RawCode.Len() && IsWhitespace(File.RawCode[PatternStart]))
+				{
+					PatternStart += 1;
+				}
+
+				FString Pattern = ReadUntilWhitespace(File, PatternStart);
 				KillRawLine(File, ChunkEnd);
 
+				if (!HasInactiveIfDef(false))
+				{
 #if WITH_EDITOR
-				FAngelscriptModuleDesc::FUsageRestriction Restriction;
-				Restriction.bIsAllow = false;
-				Restriction.Pattern = Pattern;
+					FAngelscriptModuleDesc::FUsageRestriction Restriction;
+					Restriction.bIsAllow = true;
+					Restriction.Pattern = Pattern;
 
-				File.Module->UsageRestrictions.Add(Restriction);
+					File.Module->UsageRestrictions.Add(Restriction);
 #endif
+				}
+			}
+			else if ((RawSize - ChunkEnd) >= 24
+				&& FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("#restrict usage disallow"), 24) == 0
+				&& (ChunkEnd + 24 >= RawSize || IsWhitespace(File.RawCode[ChunkEnd + 24])))
+			{
+				int32 PatternStart = ChunkEnd + 24;
+				while (PatternStart < File.RawCode.Len() && IsWhitespace(File.RawCode[PatternStart]))
+				{
+					PatternStart += 1;
+				}
 
+				FString Pattern = ReadUntilWhitespace(File, PatternStart);
+				KillRawLine(File, ChunkEnd);
+
+				if (!HasInactiveIfDef(false))
+				{
+#if WITH_EDITOR
+					FAngelscriptModuleDesc::FUsageRestriction Restriction;
+					Restriction.bIsAllow = false;
+					Restriction.Pattern = Pattern;
+
+					File.Module->UsageRestrictions.Add(Restriction);
+#endif
+				}
 			}
 		}
 
@@ -3494,20 +3760,62 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 				&& !bInComment
 				&& IsStartOfIdentifier())
 			{
+				auto IsModuleIdentifierChar = [](TCHAR Char) -> bool
+				{
+					return (Char >= 'a' && Char <= 'z')
+						|| (Char >= 'A' && Char <= 'Z')
+						|| (Char >= '0' && Char <= '9')
+						|| Char == '_'
+						|| Char == '.';
+				};
+
 				int32 ModuleStart = ChunkEnd + 7;
+				while (ModuleStart < File.RawCode.Len() && IsWhitespace(File.RawCode[ModuleStart]))
+					ModuleStart += 1;
+
 				int32 ModuleEnd = ModuleStart;
-				while (ModuleEnd < File.RawCode.Len() && File.RawCode[ModuleEnd] != ';')
+				while (ModuleEnd < File.RawCode.Len() && IsModuleIdentifierChar(File.RawCode[ModuleEnd]))
 					ModuleEnd += 1;
 
-				FImport ImportDesc;
-				ImportDesc.StartPosInChunk = ChunkEnd - ChunkStart;
-				ImportDesc.EndPosInChunk = ModuleEnd - ChunkStart;
-				ImportDesc.ChunkIndex = File.ChunkedCode.Num();
-				ImportDesc.ModuleName = File.RawCode.Mid(ModuleStart, ModuleEnd-ModuleStart).TrimStartAndEnd();
-				ImportDesc.FileLineNumber = LineNumber;
+				int32 ImportLineEnd = ChunkEnd;
+				while (ImportLineEnd < File.RawCode.Len()
+					&& File.RawCode[ImportLineEnd] != '\n'
+					&& File.RawCode[ImportLineEnd] != '\r')
+				{
+					ImportLineEnd += 1;
+				}
 
-				if(!ImportDesc.ModuleName.Contains(TEXT("(")))
+				const int32 SemicolonPos = ModuleEnd > ModuleStart
+					? FindSemicolonDirectlyAfter(File.RawCode, ModuleEnd - 1)
+					: -1;
+				const FString ImportLine = File.RawCode.Mid(ChunkEnd, ImportLineEnd - ChunkEnd);
+				const bool bLooksLikeDeclaredFunctionImport = SemicolonPos == -1
+					&& ImportLine.Contains(TEXT("("))
+					&& ImportLine.Contains(TEXT("from"))
+					&& ImportLine.Contains(TEXT("\""));
+				if (SemicolonPos != -1)
+				{
+					FImport ImportDesc;
+					ImportDesc.StartPosInChunk = ChunkEnd - ChunkStart;
+					ImportDesc.EndPosInChunk = SemicolonPos - ChunkStart;
+					ImportDesc.ChunkIndex = File.ChunkedCode.Num();
+					ImportDesc.ModuleName = File.RawCode.Mid(ModuleStart, ModuleEnd-ModuleStart).TrimStartAndEnd();
+					ImportDesc.FileLineNumber = LineNumber;
 					File.Imports.Add(ImportDesc);
+				}
+				else if (!bLooksLikeDeclaredFunctionImport)
+				{
+					LineError(File, LineNumber, TEXT("Import statement is missing terminating ';'."));
+					bHasError = true;
+
+					for (int32 ImportLinePos = ChunkEnd; ImportLinePos < ImportLineEnd; ++ImportLinePos)
+					{
+						if (!IsWhitespace(File.RawCode[ImportLinePos]))
+						{
+							File.RawCode[ImportLinePos] = ' ';
+						}
+					}
+				}
 			}
 		break;
 		case 'U':
@@ -3520,7 +3828,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 				&& IsStartOfIdentifier())
 			{
 				if (FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("UPROPERTY("), 10) == 0
-					&& (ChunkType == EChunkType::Class || ChunkType == EChunkType::Struct))
+					&& (ChunkType == EChunkType::Class || ChunkType == EChunkType::Struct || ChunkType == EChunkType::Interface))
 				{
 					bIsParsingMacro = true;
 					ParsingMacro.Type = EMacroType::Property;
@@ -3614,6 +3922,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 					}
 					MacroExitScope = -1;
 					ParsingMacro.MacroStartPos = ChunkEnd;
+					ParsingMacro.FileLineNumber = LineNumber;
 
 					if (IfDefStack.Num() != 0)
 					{
@@ -3751,6 +4060,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 			if ((RawSize - ChunkEnd) >= 3
 				&& !bInComment
 				&& !bInString
+				&& IsStartOfIdentifier()
 				&& File.RawCode[ChunkEnd+1] == '"')
 			{
 				NameLiteralStart = ChunkEnd;
@@ -3762,7 +4072,34 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 				&& !bInString
 				&& !bInComment)
 			{
-				NamespaceStack.Add(ReadIdentifier(File, ChunkEnd+10));
+				int32 NamespaceIdentifierStart = ChunkEnd + 10;
+				while (NamespaceIdentifierStart < RawSize && IsWhitespace(File.RawCode[NamespaceIdentifierStart]))
+					++NamespaceIdentifierStart;
+
+				int32 NamespaceIdentifierEnd = NamespaceIdentifierStart;
+				while (NamespaceIdentifierEnd < RawSize)
+				{
+					const TCHAR NamespaceChar = File.RawCode[NamespaceIdentifierEnd];
+					if (IsWhitespace(NamespaceChar) || NamespaceChar == '/' || NamespaceChar == '{')
+						break;
+					++NamespaceIdentifierEnd;
+				}
+
+				const FString NamespaceName = File.RawCode.Mid(
+					NamespaceIdentifierStart,
+					NamespaceIdentifierEnd - NamespaceIdentifierStart).TrimStartAndEnd();
+				const int32 NamespaceTokenPos = FindNextNamespaceToken(NamespaceIdentifierEnd);
+				if (NamespaceName.IsEmpty()
+					|| NamespaceTokenPos == INDEX_NONE
+					|| File.RawCode[NamespaceTokenPos] != '{')
+				{
+					LineError(File, LineNumber, TEXT("Invalid namespace declaration, expected '{' after namespace name."));
+					bHasError = true;
+				}
+				else
+				{
+					NamespaceStack.Add(NamespaceName);
+				}
 			}
 		break;
 		case 'f':
@@ -3770,6 +4107,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 			if ((RawSize - ChunkEnd) >= 3
 				&& !bInComment
 				&& !bInString
+				&& IsStartOfIdentifier()
 				&& File.RawCode[ChunkEnd+1] == '"')
 			{
 				FormatStringStart = ChunkEnd;
@@ -3935,7 +4273,7 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 
 	if (IfDefStack.Num() != 0)
 	{
-		LineError(File, LineNumber, TEXT("Preceding preprocessor #if/#ifdef/#else was not closed, missing #endif."));
+		LineError(File, IfDefStack.Last().DirectiveLine, TEXT("Preceding preprocessor #if/#ifdef/#else was not closed, missing #endif."));
 		bHasError = true;
 	}
 }
@@ -4009,6 +4347,79 @@ void FAngelscriptPreprocessor::PostProcessRangeBasedFor(FFile& File)
 {
 	static const FRegexPattern RangeBasedForPattern(TEXT("for(\\s*)\\(([^:;{]*):([^:;{\n][^;{\n]*)\\)(\\s*)(\\{|.*;)"));
 
+	bool bInString = false;
+	bool bInLineComment = false;
+	bool bInBlockComment = false;
+
+	auto IsEscapedQuote = [&File](int32 QuotePos)
+	{
+		int32 EscapeCount = 0;
+		for (int32 CheckPos = QuotePos - 1; CheckPos >= 0 && File.ProcessedCode[CheckPos] == '\\'; --CheckPos)
+		{
+			++EscapeCount;
+		}
+		return (EscapeCount % 2) == 1;
+	};
+
+	auto AdvanceLexState = [&File, &bInString, &bInLineComment, &bInBlockComment, &IsEscapedQuote](int32 StartPos, int32 EndPos)
+	{
+		const int32 CodeLen = File.ProcessedCode.Len();
+		for (int32 Pos = StartPos; Pos < EndPos && Pos < CodeLen; ++Pos)
+		{
+			const TCHAR Char = File.ProcessedCode[Pos];
+
+			if (bInLineComment)
+			{
+				if (Char == '\n')
+				{
+					bInLineComment = false;
+				}
+				continue;
+			}
+
+			if (bInBlockComment)
+			{
+				if (Char == '*' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen && File.ProcessedCode[Pos + 1] == '/')
+				{
+					bInBlockComment = false;
+					++Pos;
+				}
+				continue;
+			}
+
+			if (bInString)
+			{
+				if (Char == '"' && !IsEscapedQuote(Pos))
+				{
+					bInString = false;
+				}
+				continue;
+			}
+
+			if (Char == '/' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen)
+			{
+				if (File.ProcessedCode[Pos + 1] == '/')
+				{
+					bInLineComment = true;
+					++Pos;
+					continue;
+				}
+
+				if (File.ProcessedCode[Pos + 1] == '*')
+				{
+					bInBlockComment = true;
+					++Pos;
+					continue;
+				}
+			}
+
+			if (Char == '"' && !IsEscapedQuote(Pos))
+			{
+				bInString = true;
+			}
+		}
+	};
+
 	FString NewCode;
 	int32 PrevPosition = 0;
 	FRegexMatcher MatchFor(RangeBasedForPattern, File.ProcessedCode);
@@ -4016,8 +4427,21 @@ void FAngelscriptPreprocessor::PostProcessRangeBasedFor(FFile& File)
 	while (MatchFor.FindNext())
 	{
 		int32 ForStart = MatchFor.GetMatchBeginning();
+		AdvanceLexState(PrevPosition, ForStart);
+
 		if (ForStart > PrevPosition)
+		{
 			NewCode += File.ProcessedCode.Mid(PrevPosition, ForStart - PrevPosition);
+		}
+
+		const int32 MatchEnd = MatchFor.GetMatchEnding();
+		if (bInString || bInLineComment || bInBlockComment)
+		{
+			NewCode += File.ProcessedCode.Mid(ForStart, MatchEnd - ForStart);
+			AdvanceLexState(ForStart, MatchEnd);
+			PrevPosition = MatchEnd;
+			continue;
+		}
 
 		FString FinalGroup = MatchFor.GetCaptureGroup(5);
 		bool bSingleLine = (FinalGroup != TEXT("{"));
@@ -4074,7 +4498,8 @@ void FAngelscriptPreprocessor::PostProcessRangeBasedFor(FFile& File)
 			NewCode += TEXT("}");
 		}
 
-		PrevPosition = MatchFor.GetMatchEnding();
+		AdvanceLexState(ForStart, MatchEnd);
+		PrevPosition = MatchEnd;
 	}
 
 	// If no matches were found at all, don't need to do anything
@@ -4090,17 +4515,101 @@ void FAngelscriptPreprocessor::PostProcessLiteralAssets(FFile& File)
 {
 	static const FRegexPattern LiteralAssetsPattern(TEXT("asset\\s+([A-Za-z0-9_]+)\\s+of\\s+([A-Za-z0-9]+)\\s*($|\\r|\\n)"));
 
+	bool bInString = false;
+	bool bInLineComment = false;
+	bool bInBlockComment = false;
+
+	auto IsEscapedQuote = [&File](int32 QuotePos)
+	{
+		int32 EscapeCount = 0;
+		for (int32 CheckPos = QuotePos - 1; CheckPos >= 0 && File.ProcessedCode[CheckPos] == '\\'; --CheckPos)
+		{
+			++EscapeCount;
+		}
+		return (EscapeCount % 2) == 1;
+	};
+
+	auto AdvanceLexState = [&File, &bInString, &bInLineComment, &bInBlockComment, &IsEscapedQuote](int32 StartPos, int32 EndPos)
+	{
+		const int32 CodeLen = File.ProcessedCode.Len();
+		for (int32 Pos = StartPos; Pos < EndPos && Pos < CodeLen; ++Pos)
+		{
+			const TCHAR Char = File.ProcessedCode[Pos];
+
+			if (bInLineComment)
+			{
+				if (Char == '\n')
+				{
+					bInLineComment = false;
+				}
+				continue;
+			}
+
+			if (bInBlockComment)
+			{
+				if (Char == '*' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen && File.ProcessedCode[Pos + 1] == '/')
+				{
+					bInBlockComment = false;
+					++Pos;
+				}
+				continue;
+			}
+
+			if (bInString)
+			{
+				if (Char == '"' && !IsEscapedQuote(Pos))
+				{
+					bInString = false;
+				}
+				continue;
+			}
+
+			if (Char == '/' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen)
+			{
+				if (File.ProcessedCode[Pos + 1] == '/')
+				{
+					bInLineComment = true;
+					++Pos;
+					continue;
+				}
+
+				if (File.ProcessedCode[Pos + 1] == '*')
+				{
+					bInBlockComment = true;
+					++Pos;
+					continue;
+				}
+			}
+
+			if (Char == '"' && !IsEscapedQuote(Pos))
+			{
+				bInString = true;
+			}
+		}
+	};
+
 	FString NewCode;
 	int32 PrevPosition = 0;
 	FRegexMatcher MatchSettings(LiteralAssetsPattern, File.ProcessedCode);
 
 	while (MatchSettings.FindNext())
 	{
-		int32 ForStart = MatchSettings.GetMatchBeginning();
+		const int32 ForStart = MatchSettings.GetMatchBeginning();
+		AdvanceLexState(PrevPosition, ForStart);
+
 		if (ForStart > PrevPosition)
 		{
 			NewCode.Reserve(File.ProcessedCode.Len() + 500);
 			NewCode += File.ProcessedCode.Mid(PrevPosition, ForStart - PrevPosition);
+		}
+
+		const int32 MatchEnd = MatchSettings.GetMatchEnding();
+		if (bInString || bInLineComment || bInBlockComment)
+		{
+			NewCode += File.ProcessedCode.Mid(ForStart, MatchEnd - ForStart);
+			AdvanceLexState(ForStart, MatchEnd);
+			PrevPosition = MatchEnd;
+			continue;
 		}
 
 		FString AssetName = MatchSettings.GetCaptureGroup(1);
@@ -4127,7 +4636,8 @@ void FAngelscriptPreprocessor::PostProcessLiteralAssets(FFile& File)
 		Args.Add(TEXT("Type"), SettingsType);
 
 		NewCode += FString::Format(FormatStr, Args);
-		PrevPosition = MatchSettings.GetMatchEnding();
+		AdvanceLexState(ForStart, MatchEnd);
+		PrevPosition = MatchEnd;
 
 		// Execute the getter as a postinit function so we ensure the asset is created
 		File.Module->PostInitFunctions.Add(TEXT("Get") + AssetName);
@@ -4147,10 +4657,80 @@ int32 FAngelscriptPreprocessor::FindScopeCloseBracket(const FString& InString, i
 	int32 Len = InString.Len();
 	int32 Pos = OpenBracketPos + 1;
 	int32 BracketDepth = 1;
+	bool bInString = false;
+	bool bInLineComment = false;
+	bool bInBlockComment = false;
+
+	auto IsEscapedQuote = [&InString](int32 QuotePos)
+	{
+		bool bEscaped = false;
+		for (int32 CheckPos = QuotePos - 1; CheckPos >= 0 && InString[CheckPos] == '\\'; --CheckPos)
+		{
+			bEscaped = !bEscaped;
+		}
+		return bEscaped;
+	};
 
 	while (Pos < Len)
 	{
 		auto Char = InString[Pos];
+
+		if (bInLineComment)
+		{
+			if (Char == '\n')
+			{
+				bInLineComment = false;
+			}
+			Pos += 1;
+			continue;
+		}
+
+		if (bInBlockComment)
+		{
+			if (Char == '*' && Pos + 1 < Len && InString[Pos + 1] == '/')
+			{
+				bInBlockComment = false;
+				Pos += 2;
+				continue;
+			}
+			Pos += 1;
+			continue;
+		}
+
+		if (bInString)
+		{
+			if (Char == '"' && !IsEscapedQuote(Pos))
+			{
+				bInString = false;
+			}
+			Pos += 1;
+			continue;
+		}
+
+		if (Char == '/' && Pos + 1 < Len)
+		{
+			if (InString[Pos + 1] == '/')
+			{
+				bInLineComment = true;
+				Pos += 2;
+				continue;
+			}
+
+			if (InString[Pos + 1] == '*')
+			{
+				bInBlockComment = true;
+				Pos += 2;
+				continue;
+			}
+		}
+
+		if (Char == '"' && !IsEscapedQuote(Pos))
+		{
+			bInString = true;
+			Pos += 1;
+			continue;
+		}
+
 		if (Char == '(')
 			BracketDepth += 1;
 		if (Char == ')')
@@ -4182,6 +4762,27 @@ int32 FAngelscriptPreprocessor::FindSemicolonDirectlyAfter(const FString& InStri
 		else if (Char == '\t' || Char == ' ' || Char == '\n' || Char == '\r')
 		{
 			Pos += 1;
+			continue;
+		}
+		else if (Char == '/' && (Pos + 1) < Len && InString[Pos + 1] == '*')
+		{
+			Pos += 2;
+			while ((Pos + 1) < Len)
+			{
+				if (InString[Pos] == '*' && InString[Pos + 1] == '/')
+				{
+					Pos += 2;
+					break;
+				}
+
+				Pos += 1;
+			}
+
+			if (Pos >= Len)
+			{
+				return -1;
+			}
+
 			continue;
 		}
 		else
@@ -4366,11 +4967,21 @@ void FAngelscriptPreprocessor::StripCommentsFromLine(FString& Line)
 	bool bInString = false;
 	bool bInBlockComment = false;
 
+	auto IsEscapedQuote = [&Line](int32 QuotePos)
+	{
+		bool bEscaped = false;
+		for (int32 CheckPos = QuotePos - 1; CheckPos >= 0 && Line[CheckPos] == '\\'; --CheckPos)
+		{
+			bEscaped = !bEscaped;
+		}
+		return bEscaped;
+	};
+
 	for (int32 i = 0, Count = Line.Len(); i < Count; ++i)
 	{
 		auto Char = Line[i];
 
-		if (Char == '"' && !bInLineComment && !bInBlockComment)
+		if (Char == '"' && !bInLineComment && !bInBlockComment && !IsEscapedQuote(i))
 		{
 			bInString = !bInString;
 		}
