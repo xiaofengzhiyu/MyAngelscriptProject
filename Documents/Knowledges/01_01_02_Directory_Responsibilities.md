@@ -1,7 +1,7 @@
 # `AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptTest` / `Dump` 目录职责
 
 > **所属模块**: 插件总体架构 → 模块目录职责
-> **关键源码**: `Plugins/Angelscript/AGENTS.md`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptRuntimeModule.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp`, `Plugins/Angelscript/Source/AngelscriptTest/AngelscriptTestModule.cpp`
+> **关键源码**: `Plugins/Angelscript/AGENTS.md`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptRuntimeModule.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp`, `Plugins/Angelscript/Source/AngelscriptTest/AngelscriptTestModule.cpp`
 
 这一节不是简单把目录名翻译一遍，而是把四类最常被混淆的职责边界钉死：谁是真正承载脚本系统能力的主模块，谁负责编辑器补充层，谁负责验证体系，谁只负责状态导出而不回写业务。把这层边界看清，后面读类生成、热重载、调试器和测试体系时才不会把“能力层”和“验证层”混成一团。
 
@@ -77,7 +77,7 @@ void FAngelscriptRuntimeModule::StartupModule()
 
 ```cpp
 // ============================================================================
-// 文件: Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp
+// 文件: Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp
 // 函数: OnScriptFileChanges
 // 位置: Editor 侧文件变化进入 Runtime 热重载队列的接缝点
 // ============================================================================
@@ -176,3 +176,4 @@ void FAngelscriptTestModule::ShutdownModule()
 - `AngelscriptEditor` 是编辑器接缝层，负责把 Runtime 接进 Unreal Editor 工作流
 - `AngelscriptTest` 是按主题组织的验证层，承担插件能力的回归和验证地图
 - `Dump` 不是独立王国，而是 Runtime 导出实现与 Test 验证入口的两段式拆分
+

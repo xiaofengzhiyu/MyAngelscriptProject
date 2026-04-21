@@ -1,7 +1,7 @@
 # 与 Runtime / Editor 生成链路的接口边界
 
 > **所属模块**: UHT 工具链位置与边界 → UHT / Runtime / Editor Interface Boundary
-> **关键源码**: `Plugins/Angelscript/Source/AngelscriptUHTTool/AngelscriptFunctionTableExporter.cs`, `Plugins/Angelscript/Source/AngelscriptUHTTool/AngelscriptFunctionTableCodeGenerator.cs`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h`, `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/Bind_BlueprintCallable.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp`, `Documents/Plans/Plan_UhtPlugin.md`
+> **关键源码**: `Plugins/Angelscript/Source/AngelscriptUHTTool/AngelscriptFunctionTableExporter.cs`, `Plugins/Angelscript/Source/AngelscriptUHTTool/AngelscriptFunctionTableCodeGenerator.cs`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h`, `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/Bind_BlueprintCallable.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp`, `Documents/Plans/Plan_UhtPlugin.md`
 
 前两节已经把 UHT 工具链“做什么”和“怎么解析/导出”讲清楚了，这一节真正要钉死的是：这条工具链和 Runtime、Editor 之间的接口边界到底划在哪里。当前主干里最关键的事实是，`AngelscriptUHTTool` 并不会直接修改 Runtime 状态，也不会通过 Editor 菜单把条目即时写进引擎内存；它的职责止步于**生成可编译的函数表源码**。真正把这些条目收进运行时绑定表的是 Runtime；而 Editor 侧虽然还保留了一套旧的手工代码生成工具，但它已经退居为遗留/辅助路径，不再是当前主导的生成链路。
 
@@ -214,3 +214,4 @@ if (FAngelscriptBinds::ShouldSkipBlueprintCallableFunction(Function))
 - `FAngelscriptBinds::AddFunctionEntry(...)` 与 `ClassFuncMaps` 是这条 handoff 的核心契约面
 - `Bind_BlueprintCallable.cpp` 只认统一函数表接口，不关心条目来自手写绑定还是 UHT 生成
 - Editor 侧仍保留旧的生成工具函数，但根据当前计划与代码状态，它们已经属于遗留/辅助链，而不是当前主导的 UHT → Runtime 生成链路
+

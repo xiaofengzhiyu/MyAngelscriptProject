@@ -1,7 +1,7 @@
 # Editor 扩展点与 Runtime 协作
 
 > **所属模块**: Editor / Test / Dump 协作边界 → Editor 与 Runtime 协作
-> **关键源码**: `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.h`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptContentBrowserDataSource.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptRuntimeModule.h`
+> **关键源码**: `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.h`, `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/ContentBrowser/AngelscriptContentBrowserDataSource.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptRuntimeModule.h`
 
 这一节真正要钉死的不是“Editor 模块里有哪些功能”，而是它和 Runtime 的关系：`AngelscriptEditor` 并不拥有另一套脚本系统，它更像 Runtime 的编辑器接缝层。脚本引擎、编译总线、热重载决策、脚本资产包这些核心状态仍在 Runtime 一侧；Editor 负责把这些能力接进 Unreal Editor 的事件、UI、内容浏览器和蓝图重实例化工作流里。
 
@@ -213,3 +213,4 @@ void OnEngineInitDone()
 - `StartupModule()` 统一挂起了目录监听、内容浏览器数据源、Runtime delegate、literal asset 保存和 tools menu 这些 editor 扩展点
 - `OnScriptFileChanges()` / `QueueScriptFileChanges()` 展示了“Editor 感知变化，Runtime 解释变化”的协作边界
 - `FClassReloadHelper` 则展示了“Runtime 产出重载结果，Editor 完成蓝图与对象重实例化”的另一条协作链
+

@@ -1,7 +1,7 @@
 # `ClassReloadHelper` 的 editor-side 重实例化责任
 
 > **所属模块**: Editor / Test / Dump 协作边界 → ClassReloadHelper / Reinstancing
-> **关键源码**: `Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.h`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`
+> **关键源码**: `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.h`, `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`
 
 这一节真正要讲清楚的，不是 `ClassReloadHelper` “也参与了热重载”，而是它在整个 reload 体系里承担的**editor-side 善后责任**。Runtime 和 `AngelscriptClassGenerator` 负责发现变化、重建类/结构体/委托并给出 reload 结果；`FClassReloadHelper` 则专门负责把这些结果翻译回 Unreal Editor 世界，让蓝图节点、DataTable、属性编辑器、放置面板、打开中的资产和 volume 工厂都从“旧定义”迁到“新定义”。
 
@@ -181,3 +181,4 @@
 - `ReloadState()` 只缓存 Editor 真正需要的旧新映射、刷新标志和特殊类型集合
 - `PerformReinstance()` 覆盖 Blueprint 节点、DataTable、对象层级、打开资产、属性面板、volume 工厂和放置面板等多条 editor-side 善后链
 - `OnPostReload` 负责统一收尾和状态清空，因此 `ClassReloadHelper` 更像 reload 之后的 editor reconciliation coordinator，而不只是一个简单 helper
+

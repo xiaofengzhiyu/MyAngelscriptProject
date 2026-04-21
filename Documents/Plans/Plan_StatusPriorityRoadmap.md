@@ -49,7 +49,7 @@
 6. **当前运行时观测、调试和热重载基础设施已经足够深，不应再被写成“原型级能力”。**
    - `Dump/AngelscriptStateDump.h` 当前已声明 **24** 类导出表，覆盖 engine / modules / classes / functions / delegates / bind database / hot reload / precompiled data / debug server / code coverage 等状态面。
    - `Debugging/AngelscriptDebugServer.h` 当前公开的是 **Version 2** 调试协议，消息类型覆盖 `Diagnostics`、`Pause`、`RequestCallStack`、`RequestVariables`、`GoToDefinition`、`BreakOptions`、`SetDataBreakpoints` 等完整调试工作流骨架。
-   - `AngelscriptEditor/Private/ClassReloadHelper.*`、`CodeCoverage/`、`StaticJIT/`、`PrecompiledData.*` 也都表明这个仓库已经进入“复杂能力如何收口和对外说明”的阶段，而不是“先把底座搭出来”的阶段。
+   - `AngelscriptEditor/HotReload/ClassReloadHelper.*`、`CodeCoverage/`、`StaticJIT/`、`PrecompiledData.*` 也都表明这个仓库已经进入“复杂能力如何收口和对外说明”的阶段，而不是“先把底座搭出来”的阶段。
 
 7. **当前对外交付基线仍明显偏弱。**
    - 根 `README.md` 仍然只有 `NULL`。
@@ -263,3 +263,4 @@ Phase 0（口径与 owner）
 
 3. **README / examples / workflow / compatibility 将前置到 parity 扩面之前。**
    - 影响计划：`Plan_PluginEngineeringHardening.md`、后续 examples/workflow/API 可见性相关 sibling plans。
+

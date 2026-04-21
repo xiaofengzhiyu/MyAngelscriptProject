@@ -39,7 +39,7 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 入口位置 | `Plugins\Angelscript\Source\AngelscriptEditor\Private\BlueprintImpact\AngelscriptBlueprintImpactScanCommandlet.cpp` |
+| 入口位置 | `Plugins\Angelscript\Source\AngelscriptEditor\BlueprintImpact\AngelscriptBlueprintImpactScanCommandlet.cpp` |
 | 主要用途 | 扫描项目中的 Blueprint 资产，并报告哪些资产受给定 Angelscript 脚本变更影响。 |
 | 依赖 | 当前 worktree 根目录 `AgentConfig.ini`、已成功初始化的 `FAngelscriptEngine`、`AssetRegistry` |
 | 典型参数 | `-ChangedScript="Foo.as;Bar.as"`、`-ChangedScriptFile="<path>"` |
@@ -404,3 +404,4 @@ Documents\Iterations\2026-04-06\
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\IterationAnalysis\tests\IterationAnalysisSelfTests.ps1
 ```
+

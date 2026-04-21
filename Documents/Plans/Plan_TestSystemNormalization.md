@@ -15,7 +15,7 @@
 当前项目已经积累了较大规模的 Angelscript 自动化测试，但从“插件级长期维护”和“后来者可以按规范继续补测”的角度看，测试体系仍存在七类明显问题：
 
 1. **测试层级边界分散**
-   - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`、`Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`、`Plugins/Angelscript/Source/AngelscriptTest/` 已形成事实上的三层测试体系，但这套边界此前没有在单一文档中被完整固定。
+   - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`、`Plugins/Angelscript/Source/AngelscriptEditor/Tests/`、`Plugins/Angelscript/Source/AngelscriptTest/` 已形成事实上的三层测试体系，但这套边界此前没有在单一文档中被完整固定。
    - 结果是新增测试时经常先想“放哪”，而不是先按层级判断“它属于哪类测试”。
 2. **文件命名存在历史漂移**
    - 部分 Native / ASSDK 测试文件没有显式体现 `ASSDK`；部分文件缺少统一的 `Angelscript` 前缀，搜索和归类成本偏高。
@@ -46,7 +46,7 @@
 
 - **范围内**
   - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`
-  - `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`
+  - `Plugins/Angelscript/Source/AngelscriptEditor/Tests/`
   - `Plugins/Angelscript/Source/AngelscriptTest/`
   - `Plugins/Angelscript/AGENTS.md`
   - `Documents/Guides/Test.md`
@@ -102,7 +102,7 @@ Tools/（2 个）：
 ### 已确认的事实
 
 1. `AngelscriptRuntime/Tests` 已经是纯 Runtime 内部 C++ 测试层，前缀实际为 `Angelscript.CppTests.*`。
-2. `AngelscriptEditor/Private/Tests` 已经是 Editor 内部测试层，前缀实际为 `Angelscript.Editor.*`。
+2. `AngelscriptEditor/Tests` 已经是 Editor 内部测试层，前缀实际为 `Angelscript.Editor.*`。
 3. `AngelscriptTest` 模块已经承载 Native、运行时集成、UE 场景、Learning、Examples 等多层测试，但此前没有单一文档统一解释这些层的边界。
 4. Native 层的两条事实子层已经存在：
    - `Angelscript.TestModule.Native.*`：纯原生 AngelScript 公共 API 路径
@@ -127,7 +127,7 @@ Tools/（2 个）：
 ### Phase 0：固定规则与问题基线
 
 - [ ] **P0.1** 统一测试层级与放置规则
-  - 先把 `AngelscriptRuntime/Tests`、`AngelscriptEditor/Private/Tests`、`AngelscriptTest` 三层测试体系写成一份明确的层级矩阵，而不是继续依赖口头共识或零散历史计划。
+  - 先把 `AngelscriptRuntime/Tests`、`AngelscriptEditor/Tests`、`AngelscriptTest` 三层测试体系写成一份明确的层级矩阵，而不是继续依赖口头共识或零散历史计划。
   - 让后续新增测试时，第一步不是“这个文件名起什么”，而是先判断它属于 `CppTests`、`Editor`、`Native`、运行时集成还是 UE 场景层。
   - 这一阶段只固化边界，不做大规模迁移；原则是先减少“继续变乱”的入口。
 - [ ] **P0.1** 📦 Git 提交：`[Docs/Test] Docs: define test layer boundaries and placement rules`
@@ -252,3 +252,5 @@ Phase 4 统一验证与 closeout
 | `Documents/Tools/Tool.md` | `RunTests.ps1` / `RunTestSuite.ps1` 工具说明 |
 | `Plugins/Angelscript/AGENTS.md` | 插件范围测试放置与命名规则 |
 | `Documents/Plans/Plan_TestModuleStandardization.md` | 本主题的首轮简版整理记录，可作为本计划的前置快照 |
+
+

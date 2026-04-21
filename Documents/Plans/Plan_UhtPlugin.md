@@ -234,10 +234,11 @@ AngelScript VM → CallFunctionCaller → ASAutoCaller::RedirectMethodCaller →
 ### P4.2 编辑器代码生成工具评估
 
 - 结论：保留旧编辑器生成器代码作为 **debug-only** 辅助路径，不再视为主流程。
-- 证据：`Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp` 中菜单项已重命名为 `Legacy Native Bind Generator (Debug Only)`，并明确说明主流程已切换到 `AngelscriptUHTTool`。
+- 证据：`Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp` 中菜单项已重命名为 `Legacy Native Bind Generator (Debug Only)`，并明确说明主流程已切换到 `AngelscriptUHTTool`。
 
 ### P4.3 生成策略验证
 
 - 生成器已按模块分片输出 `AS_FunctionTable_<Module>.cpp`，并对 editor-only 模块生成 `#if WITH_EDITOR` 包裹。
 - 自动化验证：`Saved/Automation/Direct_121146_GeneratedFunctionTable/Reports/index.json` 中 `EditorOutputsUseWithEditorGuard` 通过。
 - 直接产物示例：`Plugins/Angelscript/Intermediate/Build/Win64/UnrealEditor/Inc/AngelscriptRuntime/UHT/AS_FunctionTable_UMGEditor.cpp` 以 `#if WITH_EDITOR` 开头，而 `AS_FunctionTable_Engine.cpp` 不包含该前置 guard。
+

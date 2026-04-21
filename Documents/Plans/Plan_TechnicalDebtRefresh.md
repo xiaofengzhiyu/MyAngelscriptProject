@@ -12,7 +12,7 @@
 4. Bind 层与生成代码层出现了新一轮治理债：`Bind_BlueprintEvent.cpp:805`、`Bind_FName.cpp:83`、`Bind_BlueprintType.cpp:156` 仍保留明确 hack / 注释缺口；`FunctionCallers` 生成文件族已经成为需要独立 owner 的结构性债务，而不是“顺手清一点”的小修。
 5. 测试债已经分裂成三种性质完全不同的问题：`Plugins/Angelscript/Source/AngelscriptTest/Subsystem/AngelscriptSubsystemScenarioTests.cpp` 把 subsystem script generation 的编译失败当成当前能力边界；`Documents/Plans/Plan_KnownTestFailureFixes.md` 承接的是当前 `7` 个应通过但未通过的 live failures；`Plan_TestCoverageExpansion.md` 与 `Plan_StaticJITUnitTests.md` 面向的则是 zero / weak coverage。
 6. 插件交付债已经足够明确，不能继续埋在笼统 backlog 中：根 `README.md` 仍是 `NULL`，`Plugins/Angelscript/Angelscript.uplugin` 的 `DocsURL` / `MarketplaceURL` / `SupportURL` 仍为空，这些问题更适合由 `Plan_PluginEngineeringHardening.md` 承接，而不是继续混写进泛化技术债。
-7. 相对 Hazelight 参考源，当前仓库仍存在 parity debt，但必须先拆层：`Plugins/Angelscript/Source/AngelscriptEditor/Public/FunctionLibraries/EditorSubsystemLibrary.h` 仍是 `BlueprintCallable` 注解；`Plugins/Angelscript/Source/AngelscriptRuntime/FunctionLibraries/AngelscriptActorLibrary.h`、`AngelscriptComponentLibrary.h` 仍保留被注释掉的 `//UFUNCTION(ScriptCallable)` 痕迹；GAS / EnhancedInput 以内收形式存在于 runtime；Loader / 引擎补丁级能力不能被误写成普通插件 TODO。
+7. 相对 Hazelight 参考源，当前仓库仍存在 parity debt，但必须先拆层：`Plugins/Angelscript/Source/AngelscriptEditor/FunctionLibraries/EditorSubsystemLibrary.h` 仍是 `BlueprintCallable` 注解；`Plugins/Angelscript/Source/AngelscriptRuntime/FunctionLibraries/AngelscriptActorLibrary.h`、`AngelscriptComponentLibrary.h` 仍保留被注释掉的 `//UFUNCTION(ScriptCallable)` 痕迹；GAS / EnhancedInput 以内收形式存在于 runtime；Loader / 引擎补丁级能力不能被误写成普通插件 TODO。
 8. `StaticJIT` / `JIT` 债务目前被低估成“只差单元测试”，但代码和文档已经表明它至少分成四层：`StaticJITConfig.h` 中的跨平台与 Editor gating（`AS_CAN_GENERATE_JIT`、`AS_SKIP_JITTED_CODE`）、`AngelscriptStaticJIT.h` 中 `FJITDatabase` 的全局单例 / shared-state 边界、`PrecompiledData.h/.cpp` 在四阶段编译流中的结构恢复职责、以及 `Plan_AS238JITv2Port.md` 所记录的 V1/V2 接口迁移债。
 9. JIT 的代码生成与性能治理也还没有稳定 owner：`AngelscriptStaticJIT.cpp` 负责 `.as.jit.hpp` 生成、唯一符号命名和模块产物组织；`PrecompiledData.cpp` 仍保留一组手工 `TIMER_*` 指标；`Documents/Guides/TestPerformance.md` 已定义启动 / 热重载性能基线，却还没有把 StaticJIT 专项指标、生成产物验证和 Editor `AS_SKIP_JITTED_CODE` 的限制统一收口。
 
@@ -88,7 +88,7 @@ Runtime / Editor / Test 锚点（16 组）：
 - `Plugins/Angelscript/Source/AngelscriptRuntime/StaticJIT/PrecompiledData.cpp` — 预编译数据恢复与手工计时器锚点
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/AngelscriptPrecompiledDataTests.cpp` — StaticJIT 当前窄覆盖锚点
 - `Plugins/Angelscript/Source/AngelscriptTest/Subsystem/AngelscriptSubsystemScenarioTests.cpp` — negative tests / unsupported feature 锚点
-- `Plugins/Angelscript/Source/AngelscriptEditor/Public/FunctionLibraries/EditorSubsystemLibrary.h` — parity 注解差异锚点
+- `Plugins/Angelscript/Source/AngelscriptEditor/FunctionLibraries/EditorSubsystemLibrary.h` — parity 注解差异锚点
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Dump/AngelscriptStateDump.h` — runtime 观测 / JIT dump 锚点
 
 插件交付入口（2 个）：
@@ -281,3 +281,4 @@ Runtime / Editor / Test 锚点（16 组）：
 
 5. **JIT debt 记录方式会从“StaticJIT 零覆盖”扩成多层治理**：deterministic 单元覆盖、V2 接口迁移、代码生成/产物治理、平台/Editor gating 会被分层记录，而不是继续挂成单一测试缺口。
    - 影响文件：`Documents/Plans/Plan_TechnicalDebtRefresh.md`、`Documents/Plans/Plan_StaticJITUnitTests.md`、`Documents/Plans/Plan_AS238JITv2Port.md`
+

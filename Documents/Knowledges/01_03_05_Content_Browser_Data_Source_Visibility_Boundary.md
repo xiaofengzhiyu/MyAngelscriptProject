@@ -1,7 +1,7 @@
 # Content Browser Data Source 的脚本资产可见性边界
 
 > **所属模块**: Editor / Test / Dump 协作边界 → Content Browser Data Source / Visibility Boundary
-> **关键源码**: `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptContentBrowserDataSource.h`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptContentBrowserDataSource.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.h`
+> **关键源码**: `Plugins/Angelscript/Source/AngelscriptEditor/ContentBrowser/AngelscriptContentBrowserDataSource.h`, `Plugins/Angelscript/Source/AngelscriptEditor/ContentBrowser/AngelscriptContentBrowserDataSource.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.h`
 
 这一节真正要钉死的，不是 Content Browser Data Source “把脚本资产显示出来了”，而是它**只负责可见性投影，不负责资产所有权和完整资产工作流**。当前设计非常克制：脚本 literal asset 的真实归属仍然在 Runtime 的 `FAngelscriptEngine::AssetsPackage`；Editor 侧的 `UAngelscriptContentBrowserDataSource` 只是把这批对象映射成 Content Browser 能理解的虚拟条目，并刻意把很多更深的资产能力留空。也正因为这种克制，它才保持了“Runtime 拥有资产，Editor 只负责看见它们”的清晰边界。
 
@@ -176,3 +176,4 @@ for (UObject* Object : Assets)
 - 它只枚举 `FAngelscriptEngine::Get().AssetsPackage` 下的对象，再映射成 `/All/Angelscript/` 视图
 - 类过滤、类型属性、缩略图和 `FAssetData` 支持说明它愿意接入 Editor 浏览协议；大量返回 `false` 的方法则说明它刻意不越界成完整资产系统
 - 因此这条边界可以概括为：Runtime 持有资产，Editor 让资产“看得见”，但不伪装成完整的原生内容管线
+

@@ -4,7 +4,7 @@
 
 当前项目的测试体系已经具备较完整的覆盖面，但在“目录落点、文件命名、Automation 前缀、执行入口”四个维度上仍存在明显的历史漂移：
 
-1. `AngelscriptRuntime/Tests`、`AngelscriptEditor/Private/Tests`、`AngelscriptTest` 三条测试线已经形成事实分层，但规则更多散落在代码和历史文档中，没有单一规范入口。
+1. `AngelscriptRuntime/Tests`、`AngelscriptEditor/Tests`、`AngelscriptTest` 三条测试线已经形成事实分层，但规则更多散落在代码和历史文档中，没有单一规范入口。
 2. 部分 Native / ASSDK 测试文件名没有显式带 `ASSDK`，部分测试文件缺少统一的 `Angelscript` 前缀，后续搜索和维护成本偏高。
 3. `RunTests.ps1` 已经能稳定执行单前缀，但常用 smoke / native / scenario 波次还没有具名 suite，导致执行流程仍依赖手工拼命令。
 
@@ -17,7 +17,7 @@
 ## 当前事实状态
 
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` 事实前缀为 `Angelscript.CppTests.*`
-- `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` 事实前缀为 `Angelscript.Editor.*`
+- `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` 事实前缀为 `Angelscript.Editor.*`
 - `Plugins/Angelscript/Source/AngelscriptTest/` 事实前缀为 `Angelscript.TestModule.*`
 - Native 层原先存在未显式带 `ASSDK` 的历史文件名：`AngelscriptSmokeTest.cpp`、`AngelscriptEngineTests.cpp`、`AngelscriptExecuteTests.cpp`、`AngelscriptGlobalVarTests.cpp`；本轮已统一迁为 `AngelscriptASSDK*Tests.cpp`
 - `Preprocessor/PreprocessorTests.cpp` 原先缺少统一的 `Angelscript` 前缀；本轮已迁为 `AngelscriptPreprocessorTests.cpp`
@@ -55,3 +55,5 @@
 2. `Tools/RunTestSuite.ps1` 可以作为固定 smoke / native / scenario 样本波次的统一入口。
 3. ASSDK / Preprocessor 这几类最典型的命名异常已经得到修正，并且相关文档没有残留旧路径。
 4. `Plugins/Angelscript/AGENTS.md` 明确了未来新增测试的落点与命名边界。
+
+

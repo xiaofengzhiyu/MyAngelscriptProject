@@ -32,7 +32,7 @@
   - `Documents/Plans/Plan_AngelscriptUnitTestExpansion.md`
   - `Documents/Plans/Plan_ASInternalClassUnitTests.md`
   - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`
-  - `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`
+  - `Plugins/Angelscript/Source/AngelscriptEditor/Tests/`
   - `Plugins/Angelscript/Source/AngelscriptTest/`
 - **范围外**
   - 不默认修改 `ThirdParty/` 或 `Reference/` 下的运行时实现
@@ -202,3 +202,4 @@
 - `Template/` 目录不能代替真实主题目录；模板一旦复制成稳定回归，应迁回具体主题目录继续维护。
 - `Gauntlet` 只做 outer shell，不要把内层业务断言全部塞进去，否则调试成本会陡增。
 - 如果执行过程中发现现有目录比附件推荐落点更合理，应优先回写计划和附件，而不是硬按旧判断推进。
+

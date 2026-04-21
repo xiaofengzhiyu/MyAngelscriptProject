@@ -185,7 +185,7 @@
 > 目标：将 Editor 模块测试从 1 个扩展到覆盖 ClassReload、DirectoryWatcher、ContentBrowser 核心路径。
 
 - [ ] **P4.1** 新增 `Editor/AngelscriptClassReloadHelperTests.cpp`
-  - `AngelscriptEditor/Private/ClassReloadHelper.h/.cpp` 提供编辑器侧类/枚举/结构体热重载，是开发者日常体验的关键路径，零测试
+  - `AngelscriptEditor/HotReload/ClassReloadHelper.h/.cpp` 提供编辑器侧类/枚举/结构体热重载，是开发者日常体验的关键路径，零测试
   - 覆盖场景：
     - 脚本类变更后 `FClassReloadHelper` 正确重建 `UBlueprintGeneratedClass` 的引用
     - 枚举新增/删除值后相关蓝图不 crash
@@ -194,7 +194,7 @@
 - [ ] **P4.1** 📦 Git 提交：`[Test] Feat: ClassReloadHelper editor regression tests`
 
 - [ ] **P4.2** 新增 `Editor/AngelscriptDirectoryWatcherTests.cpp`
-  - `AngelscriptEditor/Private/AngelscriptDirectoryWatcherInternal.h/.cpp` 负责监视脚本文件变更并排队编译，Editor 模块内有一个内部测试，但 `AngelscriptTest/` 中无对应覆盖
+  - `AngelscriptEditor/HotReload/AngelscriptDirectoryWatcherInternal.h/.cpp` 负责监视脚本文件变更并排队编译，Editor 模块内有一个内部测试，但 `AngelscriptTest/` 中无对应覆盖
   - 覆盖场景：
     - 写入新 `.as` 文件后 watcher 排队事件
     - 修改已有 `.as` 文件后排队修改事件
@@ -283,3 +283,4 @@
 | Editor 测试需要 `AngelscriptEditor` 模块依赖 | P4 需修改 `AngelscriptTest.Build.cs` | 使用 `#if WITH_EDITOR` 条件编译隔离；Build.cs 中条件添加 Editor 依赖 |
 | 部分 Bind 文件内部实现使用 `asCALL_GENERIC`，脚本语法与 C++ API 不完全对应 | 测试脚本语法需要从 Bind 实现推断 | 先用编译兼容（`BuildModule` 成功即算通过）兜底，再逐步加运行断言 |
 | 新增测试过多导致编译时间增长 | CI 反馈变慢 | 控制每文件 300–500 行；Phase 间增量提交，及时观察编译时间 |
+

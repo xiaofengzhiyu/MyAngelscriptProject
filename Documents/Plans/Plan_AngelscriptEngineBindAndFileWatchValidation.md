@@ -9,7 +9,7 @@
 - 热重载后的 generated class / struct / delegate 是否保持正确，尤其是类名变化、旧类清理、`StaticClass()` 对应全局变量回填、旧对象/旧元数据隐藏与回收是否完整；
 - 启动 bind 和目录变化处理是否有可重复采集、可留痕、可比较的性能基线，而不是只看一次人工日志。
 
-本计划的目标是把这些验证需求拆成可执行的阶段性任务，优先复用现有 `Core`、`HotReload`、`AngelscriptRuntime/Tests`、`AngelscriptEditor/Private/Tests` 等落点，最终形成一套“能测、能记、能回归”的插件级验证基线。
+本计划的目标是把这些验证需求拆成可执行的阶段性任务，优先复用现有 `Core`、`HotReload`、`AngelscriptRuntime/Tests`、`AngelscriptEditor/Tests` 等落点，最终形成一套“能测、能记、能回归”的插件级验证基线。
 
 ## 范围与边界
 
@@ -29,8 +29,8 @@
 - bind 注册与执行信息目前由 `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h` / `AngelscriptBinds.cpp` 管理，已具备 `GetAllRegisteredBindNames()`、`GetBindInfoList()`、按 `BindOrder` 排序执行和禁用指定 bind name 的能力。
 - 引擎创建模式与脚本根发现已有单元测试基础：`Plugins/Angelscript/Source/AngelscriptRuntime/Tests/AngelscriptMultiEngineTests.cpp`、`Plugins/Angelscript/Source/AngelscriptRuntime/Tests/AngelscriptDependencyInjectionTests.cpp`、`Plugins/Angelscript/Source/AngelscriptRuntime/Tests/AngelscriptSubsystemTests.cpp`。
 - Bind 配置已有基础测试：`Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptBindConfigTests.cpp` 已覆盖全局禁用、engine-level 禁用和 unnamed bind 行为，但尚未形成“启动路径 + 创建模式 + 执行顺序 + 统计观测”的闭环。
-- 目录监视与热重载队列主链路：`Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp` 的 `OnScriptFileChanges()` 会把变更推入 `FileChangesDetectedForReload` / `FileDeletionsDetectedForReload`；`Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp` 的 `CheckForHotReload()` / `PerformHotReload()` 负责消费队列；`Tick()` 根据 PIE/Editor 决定 soft/full reload。
-- 类生成与 reload 修复主链路：`Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`、`Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.cpp` 已处理 full reload 下的新旧类替换、旧类重命名/隐藏、Subsystem reinstance、Blueprint 重新挂接等。
+- 目录监视与热重载队列主链路：`Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp` 的 `OnScriptFileChanges()` 会把变更推入 `FileChangesDetectedForReload` / `FileDeletionsDetectedForReload`；`Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp` 的 `CheckForHotReload()` / `PerformHotReload()` 负责消费队列；`Tick()` 根据 PIE/Editor 决定 soft/full reload。
+- 类生成与 reload 修复主链路：`Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`、`Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.cpp` 已处理 full reload 下的新旧类替换、旧类重命名/隐藏、Subsystem reinstance、Blueprint 重新挂接等。
 - HotReload 现有测试基础已经存在，并且目录组织与本计划目标高度贴合：
   - `Plugins/Angelscript/Source/AngelscriptTest/HotReload/AngelscriptHotReloadFunctionTests.cpp`
   - `Plugins/Angelscript/Source/AngelscriptTest/HotReload/AngelscriptHotReloadPropertyTests.cpp`
@@ -81,8 +81,8 @@
 - [ ] **P1.1** 📦 Git 提交：`[Runtime/Test] Chore: add startup bind observation seam`
 
 - [ ] **P1.2** 为 Editor 目录回调与热重载队列补 deterministic seam
-  - `OnScriptFileChanges()` 当前在 `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp` 中是静态函数，已经包含路径归一化、root 匹配、文件夹 add/remove 特殊分支。后续测试不应复制整段逻辑去断言结果，而是要提供一个最小测试入口，让 synthetic `FFileChangeData` 能进入真实处理路径。
-  - 测试 seam 优先落在 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` 或 editor 模块内部 helper，专门验证“回调输入 → 队列输出”；`Plugins/Angelscript/Source/AngelscriptTest/HotReload/` 则继续负责引擎消费队列、编译与 generated class 行为，避免一个文件既测 editor callback 又测 scenario reload，导致失败时定位困难。
+  - `OnScriptFileChanges()` 当前在 `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp` 中是静态函数，已经包含路径归一化、root 匹配、文件夹 add/remove 特殊分支。后续测试不应复制整段逻辑去断言结果，而是要提供一个最小测试入口，让 synthetic `FFileChangeData` 能进入真实处理路径。
+  - 测试 seam 优先落在 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` 或 editor 模块内部 helper，专门验证“回调输入 → 队列输出”；`Plugins/Angelscript/Source/AngelscriptTest/HotReload/` 则继续负责引擎消费队列、编译与 generated class 行为，避免一个文件既测 editor callback 又测 scenario reload，导致失败时定位困难。
   - 这一步要把 folder add / folder remove / non-`.as` 文件忽略 / rename-window 的输入构造方式固定下来，并明确哪些场景只需要 synthetic callback，哪些必须落到临时目录真实文件操作。
 - [ ] **P1.2** 📦 Git 提交：`[Editor/Test] Chore: add directory watcher callback seam`
 
@@ -155,8 +155,8 @@
 > 目标：先把 watcher 输入到 reload 队列输出的 deterministic 语义锁住，再谈真实 scenario 下的类切换与反馈消息。
 
 - [ ] **P4.1** 在 Editor 模块内新增目录回调到队列的单元测试
-  - 若 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` 尚不存在，本项先创建该目录，并在同一提交内把最小测试 bootstrap 与所需 `Build.cs` 依赖补齐，避免后续测试文件落地时再临时扩范围。
-  - 新增 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/AngelscriptDirectoryWatcherTests.cpp`，只验证 `OnScriptFileChanges()` 与相关 helper：`.as` 文件新增/修改应进入 `FileChangesDetectedForReload`，`.as` 文件删除应进入 `FileDeletionsDetectedForReload`，非 `.as` 文件应被忽略，新增目录应递归扫描其中脚本文件，删除目录应把已加载脚本映射成删除项。
+  - 若 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` 尚不存在，本项先创建该目录，并在同一提交内把最小测试 bootstrap 与所需 `Build.cs` 依赖补齐，避免后续测试文件落地时再临时扩范围。
+  - 新增 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/AngelscriptDirectoryWatcherTests.cpp`，只验证 `OnScriptFileChanges()` 与相关 helper：`.as` 文件新增/修改应进入 `FileChangesDetectedForReload`，`.as` 文件删除应进入 `FileDeletionsDetectedForReload`，非 `.as` 文件应被忽略，新增目录应递归扫描其中脚本文件，删除目录应把已加载脚本映射成删除项。
   - 这组测试应显式覆盖 root path 匹配、relative path 推导、路径标准化和重复入列去重，不要只测一条“Happy Path added file”。
   - 若当前 editor 模块还没有内部测试入口，需要在本项中一次性补齐最小 `Build.cs` 与测试 bootstrap；但范围只限 watcher callback 测试需要的依赖，不要顺手引入大量与本计划无关的 editor 测试设施。
 - [ ] **P4.1** 📦 Git 提交：`[Editor/HotReload] Test: add directory callback queue coverage`
@@ -214,7 +214,7 @@
 
 - [ ] **P6.1** 更新测试文档与目录登记
   - 更新 `Documents/Guides/Test.md`，补充 startup bind、watcher、rename、性能采样的推荐执行命令，以及何时使用 `-NullRHI`、何时需要 editor/internal tests、何时必须指定独立 `-ABSLOG` / `-ReportExportPath`。
-  - 按需更新 `Documents/Guides/TestCatalog.md`，登记新增 `Core / HotReload / Editor/Private/Tests` 测试文件、代表性测试点和推荐前缀，不让后续执行者再次从源码里手工搜“有没有 rename 测试”。
+  - 按需更新 `Documents/Guides/TestCatalog.md`，登记新增 `Core / HotReload / Editor/Tests` 测试文件、代表性测试点和推荐前缀，不让后续执行者再次从源码里手工搜“有没有 rename 测试”。
   - 如果本计划新增了专门的性能基线摘要文档或运行记录文档，也要在这里同步加导航说明，避免形成“有文档但没人知道在哪”的新债务。
 - [ ] **P6.1** 📦 Git 提交：`[Docs/Test] Docs: register bind watcher and performance validation entrypoints`
 
@@ -268,3 +268,5 @@
 - **风险 7：真实脚本语料回归与专题功能测试边界混乱**
   - 风险：当 `Script/Tests/*.as` 被当作 watcher/hot reload 的通用大杂烩探针时，后续某个语言专题改动可能会让回归变得难以解释。
   - 应对：在新增语料回归时，为每组脚本写清楚它们承担的是“真实脚本探针”还是“专题语义断言”，并把重语义断言继续留在原专题测试目录。
+
+

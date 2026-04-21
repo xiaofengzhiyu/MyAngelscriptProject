@@ -663,7 +663,7 @@
 
 ## 11. Editor — 编辑器
 
-> 源文件：`AngelscriptEditor/Private/Tests/AngelscriptDirectoryWatcherTests.cpp`
+> 源文件：`AngelscriptEditor/Tests/AngelscriptDirectoryWatcherTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
@@ -675,7 +675,7 @@
 | Editor.DirectoryWatcher.Queue.DuplicateStormDeduplicatesEntries | 事件风暴下同一路径重复变更保持去重入队 |
 
 
-> 源文件：`AngelscriptEditor/Private/Tests/AngelscriptBlueprintImpactScannerTests.cpp`
+> 源文件：`AngelscriptEditor/Tests/AngelscriptBlueprintImpactScannerTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
@@ -1076,3 +1076,4 @@
 | Dump.CSVWriter.SpecialCharacters | `FCSVWriter` 对逗号、双引号与换行字段做正确 CSV 转义 |
 | Dump.DumpAll.EndToEnd | `FAngelscriptStateDump::DumpAll()` 会生成 Phase 1-7 约定的全部 CSV 文件 |
 | Dump.DumpAll.Summary | `DumpSummary.csv` 会为每张表写出状态与行数；当前 `ToStringTypes` / `HotReloadState` / `CodeCoverage` 的 `NotAvailable` / `PartialExport` / `Skipped` 属于受 public API 与编译开关约束的预期结果 |
+

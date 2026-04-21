@@ -24,8 +24,8 @@
   - `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptAllScriptRootsCommandlet.cpp`
   它们都采用标准 `UCommandlet::Main(const FString& Params)` 模式，但不依赖 Editor 专属模块能力。
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptRuntimeModule.cpp` 已在 `IsRunningCommandlet()` 为真时初始化 Angelscript，这意味着新的 Editor commandlet 可以依赖运行期脚本引擎已被拉起，但仍需明确自己在 Editor 模块内的资产扫描职责。
-- `Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.cpp` 已经拥有最接近需求的 Blueprint 依赖扫描逻辑：`PerformReinstance()` 中通过 `TObjectIterator<UBlueprint>`、`HasExternalDependencies()`、pin type 检查、`FArchiveReplaceObjectRef` 等手段找出依赖被重载 class/struct/delegate 的 Blueprint，并触发 `FBlueprintCompilationManager::ReparentHierarchies()` / `QueueForCompilation()` / `FlushCompilationQueueAndReinstance()`。这说明“怎么判断 Blueprint 依赖了脚本生成类型”已有生产逻辑，只是还未被抽成可复用扫描服务。
-- `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptDirectoryWatcherInternal.cpp` 与 `Private/Tests/AngelscriptDirectoryWatcherTests.cpp` 已经证明 Editor 模块内部 helper + `Angelscript.Editor.*` 自动化测试是当前仓内可接受的组织模式。commandlet 相关纯 Editor 功能应沿用这条路径，而不是直接堆到 `AngelscriptTest` 模块。
+- `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.cpp` 已经拥有最接近需求的 Blueprint 依赖扫描逻辑：`PerformReinstance()` 中通过 `TObjectIterator<UBlueprint>`、`HasExternalDependencies()`、pin type 检查、`FArchiveReplaceObjectRef` 等手段找出依赖被重载 class/struct/delegate 的 Blueprint，并触发 `FBlueprintCompilationManager::ReparentHierarchies()` / `QueueForCompilation()` / `FlushCompilationQueueAndReinstance()`。这说明“怎么判断 Blueprint 依赖了脚本生成类型”已有生产逻辑，只是还未被抽成可复用扫描服务。
+- `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/AngelscriptDirectoryWatcherInternal.cpp` 与 `Private/Tests/AngelscriptDirectoryWatcherTests.cpp` 已经证明 Editor 模块内部 helper + `Angelscript.Editor.*` 自动化测试是当前仓内可接受的组织模式。commandlet 相关纯 Editor 功能应沿用这条路径，而不是直接堆到 `AngelscriptTest` 模块。
 - `Plugins/Angelscript/Source/AngelscriptTest/Blueprint/AngelscriptBlueprintSubclassRuntimeTests.cpp` 与 `Blueprint/AngelscriptBlueprintSubclassActorTests.cpp` 已覆盖“Blueprint 子类继承脚本父类”的真实场景，包括 transient Blueprint 创建、编译、世界内生成和行为继承。这正是后续验证 impact scanner 是否能识别“Blueprint 继承脚本类”最值得复用的测试基础。
 - 当前仓内还没有“扫描整个项目 Blueprint 资产并按 AS 变更过滤结果”的公共服务，也没有现成的 `Angelscript.Editor.*` / `Angelscript.TestModule.*` 测试族专门锁住这条能力。
 
@@ -47,10 +47,10 @@
 - `Private/ClassReloadHelper.h` — 让 reload 流程改为复用共享扫描结果/共享分析 helper
 - `Private/ClassReloadHelper.cpp` — 从 `PerformReinstance()` 中抽出 Blueprint 依赖发现逻辑，避免 commandlet 重复实现
 - `Private/AngelscriptEditorModule.cpp` — 若需要注册共享服务、命令入口辅助或初始化 seam，则在这里做最小同步
-- `Private/BlueprintImpact/AngelscriptBlueprintImpactScanner.h` — 新增 Blueprint impact 扫描请求/结果/分析接口
-- `Private/BlueprintImpact/AngelscriptBlueprintImpactScanner.cpp` — 新增扫描与过滤实现
-- `Private/BlueprintImpact/AngelscriptBlueprintImpactCommandlet.h` — 新增 Editor commandlet 声明
-- `Private/BlueprintImpact/AngelscriptBlueprintImpactCommandlet.cpp` — 新增 Editor commandlet 入口实现
+- `BlueprintImpact/AngelscriptBlueprintImpactScanner.h` — 新增 Blueprint impact 扫描请求/结果/分析接口
+- `BlueprintImpact/AngelscriptBlueprintImpactScanner.cpp` — 新增扫描与过滤实现
+- `BlueprintImpact/AngelscriptBlueprintImpactCommandlet.h` — 新增 Editor commandlet 声明
+- `BlueprintImpact/AngelscriptBlueprintImpactCommandlet.cpp` — 新增 Editor commandlet 入口实现
 - `Private/Tests/AngelscriptBlueprintImpactScannerTests.cpp` — 新增 Editor 内部测试，覆盖 request/filter/dependency matching
 
 `Plugins/Angelscript/Source/AngelscriptTest/Blueprint/`（场景验证）
@@ -83,7 +83,7 @@
 
 - [ ] **P0.3** 冻结代码分层和测试分层
   - commandlet 只做参数解析、引擎/编辑器环境准备、调用 scanner、打印摘要；所有可判定逻辑都下沉到 `BlueprintImpact` helper/service 中，确保可单测。
-  - Editor 内部 deterministic 逻辑放 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`，Automation 前缀使用 `Angelscript.Editor.*`；真实脚本父类与 Blueprint 子类场景放 `Plugins/Angelscript/Source/AngelscriptTest/Blueprint/`，Automation 前缀沿用 `Angelscript.TestModule.*` 家族，不在 `Native/` 或 `Runtime/Tests/` 里混放。
+  - Editor 内部 deterministic 逻辑放 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/`，Automation 前缀使用 `Angelscript.Editor.*`；真实脚本父类与 Blueprint 子类场景放 `Plugins/Angelscript/Source/AngelscriptTest/Blueprint/`，Automation 前缀沿用 `Angelscript.TestModule.*` 家族，不在 `Native/` 或 `Runtime/Tests/` 里混放。
   - 与 `ClassReloadHelper` 的关系要在本阶段锁住：扫描服务是 reload 与 commandlet 的共享底座，后续若只在 commandlet 内单独实现一份，视为偏离计划。
 - [ ] **P0.3** 📦 Git 提交：`[Editor/Plan] Docs: freeze scanner and test layering`
 
@@ -114,7 +114,7 @@
 > 目标：让 Editor 模块真正拥有一个可执行的 commandlet 入口，但保持其足够薄，只做 orchestration，不吞掉业务判断。
 
 - [ ] **P2.1** 在 `AngelscriptEditor` 模块新增 commandlet 类与参数解析
-  - 新建 `UAngelscriptBlueprintImpactScanCommandlet`，文件放在 `Plugins/Angelscript/Source/AngelscriptEditor/Private/BlueprintImpact/` 或等价的 Editor-only 子目录，保持与 scanner 同主题聚合。
+  - 新建 `UAngelscriptBlueprintImpactScanCommandlet`，文件放在 `Plugins/Angelscript/Source/AngelscriptEditor/BlueprintImpact/` 或等价的 Editor-only 子目录，保持与 scanner 同主题聚合。
   - 参数解析至少要覆盖：全量扫描默认模式、显式 `ChangedScript=` 多值输入、从文件读取 changed script list；并做路径标准化，统一到 plugin 现有 relative path 表达，避免命令侧大小写/分隔符噪声污染扫描结果。
   - `Main()` 内禁止重写依赖判断逻辑；只允许把参数转成 scanner request、触发资产枚举与扫描、打印摘要并返回状态码。
   - 若实现后发现 `AngelscriptEditor` 模块内 commandlet 的 discoverability 还需要 `.uplugin` / 模块描述或加载时机同步，应在这一阶段一并收口，并把真实 `-run=` 烟雾验证作为后续验收前置，而不是留到文档阶段才发现入口不可用。
@@ -137,7 +137,7 @@
 > 目标：让 commandlet 的核心行为在不启动外部进程的情况下可稳定回归，尤其是参数、变更映射和依赖匹配逻辑。
 
 - [ ] **P3.1** 新增 Editor 内部 scanner 单元测试文件
-  - 在 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` 新增 `AngelscriptBlueprintImpactScannerTests.cpp`，Automation 前缀统一使用 `Angelscript.Editor.BlueprintImpact.*`。
+  - 在 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` 新增 `AngelscriptBlueprintImpactScannerTests.cpp`，Automation 前缀统一使用 `Angelscript.Editor.BlueprintImpact.*`。
   - 先覆盖 deterministic 辅助逻辑：changed script 输入归一化、空输入/重复输入去重、全量扫描请求与过滤扫描请求构造、返回结果中的命中原因聚合与排序。
   - 这一步不要求一上来就构造真实项目磁盘资产；对纯参数和结果聚合逻辑优先使用最小 in-memory fixture，保证失败能快速定位。
 - [ ] **P3.1** 📦 Git 提交：`[Editor/Test] Test: add blueprint impact request and result unit coverage`
@@ -205,7 +205,7 @@
 1. `AngelscriptEditor` 模块内存在一套独立的 Blueprint impact scan commandlet 实现，且 commandlet 入口只负责参数解析、调用扫描服务、输出摘要和返回状态码，没有复制 `ClassReloadHelper` 的依赖分析逻辑。
 2. `ClassReloadHelper` 与 commandlet 共享同一套 Blueprint 依赖识别能力，至少覆盖脚本父类继承命中、节点/变量/pin 类型依赖命中，以及对象引用替换扫描命中等当前已有生产语义。
 3. commandlet 至少支持全量扫描和显式 changed script 过滤两条路径，并能稳定输出受影响 Blueprint 资产及命中原因。
-4. `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` 下存在 `Angelscript.Editor.BlueprintImpact.*` 自动化测试，覆盖参数/请求构造、资产枚举过滤、依赖匹配等 commandlet 相关核心功能。
+4. `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` 下存在 `Angelscript.Editor.BlueprintImpact.*` 自动化测试，覆盖参数/请求构造、资产枚举过滤、依赖匹配等 commandlet 相关核心功能。
 5. `Plugins/Angelscript/Source/AngelscriptTest/Blueprint/` 下存在真实脚本父类 → Blueprint 子类 impact 场景回归，证明 scanner 对真实 Blueprint 资产关系成立，而不是只对伪造夹具成立。
 6. `Documents/Guides/Test.md`、`Documents/Guides/TestCatalog.md` 与 `Documents/Tools/Tool.md` 已同步记录新增测试入口和 commandlet 使用方式，后续维护者无需再次全仓搜索才能复现。
 7. 实现完成后已存在一条真实 `-run=` commandlet 烟雾验证记录，证明 `AngelscriptEditor` 模块内的 commandlet 在 commandlet 模式下可发现、可执行，而不是只在源码层面存在。
@@ -237,3 +237,4 @@
    - 首批实现完成后，用户运行 commandlet 得到的是“受影响资产列表 + 命中原因”，而不是自动修复结果；这是有意限制范围，避免把扫描工具和批量修改工具混为一体。
 2. **全量扫描模式可能比带变更过滤模式更慢**
    - 由于首批优先保证正确性，全量模式允许走“AssetRegistry 枚举 + 按需加载候选 Blueprint”的较慢路径；性能优化不阻塞首批功能落地。
+

@@ -105,7 +105,7 @@
   - [x] 2.4.3 Runtime / Editor Bind 模块分工 → `02_04_Bind_System_And_Native_Binding_Generation.md`
   - [x] 2.4.4 `FAngelscriptBindState` 注册时序与执行生命周期 → `02_04_Bind_System_And_Native_Binding_Generation.md`
   - [x] 2.4.5 `FAngelscriptBindDatabase` 在 cooked 场景中的缓存职责 → `02_04_Bind_System_And_Native_Binding_Generation.md`
-  - 关键源码: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp`
+  - 关键源码: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/`, `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp`
   - 关键概念: BindDatabase, BindState, ASRuntimeBind, ASEditorBind, Generated Artifacts
   - 现有材料: `Documents/Plans/Plan_UnrealCSharpArchitectureAbsorption.md`, `Documents/Plans/Plan_HazelightBindModuleMigration.md`
   - [x] 补充审查：本章已覆盖 Bind 注册、生成产物、Runtime/Editor 分工与 cooked 缓存职责，未追加新专题
@@ -123,7 +123,7 @@
   - [x] 2.6.1 Runtime FunctionLibraries 的组织方式 → `02_06_FunctionLibrary_And_Script_Visible_API_Surface.md`
   - [x] 2.6.2 Editor FunctionLibraries 与运行时隔离 → `02_06_FunctionLibrary_And_Script_Visible_API_Surface.md`
   - [x] 2.6.3 脚本层 API 暴露边界与常见模式 → `02_06_FunctionLibrary_And_Script_Visible_API_Surface.md`
-  - 关键源码: `Plugins/Angelscript/Source/AngelscriptRuntime/FunctionLibraries/`, `Plugins/Angelscript/Source/AngelscriptEditor/Public/FunctionLibraries/`
+  - 关键源码: `Plugins/Angelscript/Source/AngelscriptRuntime/FunctionLibraries/`, `Plugins/Angelscript/Source/AngelscriptEditor/FunctionLibraries/`
   - 关键概念: Function Library, Script-visible API, Editor-only Exposure
   - 现有材料: `Plugins/Angelscript/AGENTS.md`
   - [x] 补充审查：本章已覆盖 Runtime/Editor 库分离与脚本 API 暴露模式，未追加新专题
@@ -156,7 +156,7 @@
   - [x] 3.1.3 Editor / Runtime 在重载中的职责划分 → `03_01_Hot_Reload_And_File_Change_Pipeline.md`
   - [x] 3.1.4 DirectoryWatcher 与轮询保底策略 → `03_01_Hot_Reload_And_File_Change_Pipeline.md`
   - [x] 3.1.5 编译失败重试、排队与延迟恢复 → `03_01_Hot_Reload_And_File_Change_Pipeline.md`
-  - 关键源码: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/`
+  - 关键源码: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`, `Plugins/Angelscript/Source/AngelscriptEditor/`
   - 关键概念: File Change Detection, Directory Watcher, Reload Requirement, Rebind, Soft Reload, Full Reload
   - 现有材料: `Documents/Plans/Plan_UnrealCSharpArchitectureAbsorption.md`
   - [x] 补充审查：本章已覆盖变更感知、reload requirement 与恢复链，未追加新专题
@@ -310,3 +310,5 @@
 - [x] A.3 外部参考对照表 → `Appendix_A3_External_Reference_Comparison_Table.md`
 - [x] A.4 测试专题到运行时子系统映射表 → `Appendix_A4_Test_Topic_To_Runtime_Subsystem_Mapping.md`
 - [x] A.5 关键生成链路 ASCII 流程图索引 → `Appendix_A5_Key_Generation_Pipeline_ASCII_Flow_Index.md`
+
+

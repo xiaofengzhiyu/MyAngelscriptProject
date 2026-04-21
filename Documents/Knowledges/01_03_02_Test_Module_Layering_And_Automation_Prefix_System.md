@@ -3,7 +3,7 @@
 > **所属模块**: Editor / Test / Dump 协作边界 → Test 模块分层 / Automation Prefix
 > **关键源码**: `Plugins/Angelscript/AGENTS.md`, `Documents/Guides/Test.md`, `Documents/Guides/TestConventions.md`, `Plugins/Angelscript/Source/AngelscriptTest/AngelscriptTestModule.cpp`, `Plugins/Angelscript/Source/AngelscriptTest/`
 
-这一节真正要讲清楚的，不是 `AngelscriptTest` 目录下有哪些文件夹，而是为什么这个测试模块必须按层级和前缀被刻意拆开。当前仓库里同时存在 `AngelscriptRuntime/Tests/`、`AngelscriptEditor/Private/Tests/`、`AngelscriptTest/Native/`、`AngelscriptTest/Debugger/`、`Actor/`、`HotReload/` 等多条测试线；如果不先把“它们分别验证哪一层、为什么用不同前缀、为什么不能混放”说明白，后续任何新增测试都会迅速失去边界。
+这一节真正要讲清楚的，不是 `AngelscriptTest` 目录下有哪些文件夹，而是为什么这个测试模块必须按层级和前缀被刻意拆开。当前仓库里同时存在 `AngelscriptRuntime/Tests/`、`AngelscriptEditor/Tests/`、`AngelscriptTest/Native/`、`AngelscriptTest/Debugger/`、`Actor/`、`HotReload/` 等多条测试线；如果不先把“它们分别验证哪一层、为什么用不同前缀、为什么不能混放”说明白，后续任何新增测试都会迅速失去边界。
 
 ## 先把总规则钉死
 
@@ -24,13 +24,13 @@
 当前测试体系最上面的切分，不是在 `AngelscriptTest/` 目录内部，而是在整个插件源码层面：
 
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` → `Angelscript.CppTests.*`
-- `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` → `Angelscript.Editor.*`
+- `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` → `Angelscript.Editor.*`
 - `Plugins/Angelscript/Source/AngelscriptTest/` → `Angelscript.TestModule.*`
 
 `Plugins/Angelscript/AGENTS.md` 已经把这三条边界写成硬规则：
 
 - Runtime 内部测试只放在 `Runtime/Tests/`，前缀统一 `Angelscript.CppTests.*`
-- Editor 内部测试只放在 `Editor/Private/Tests/`，前缀统一 `Angelscript.Editor.*`
+- Editor 内部测试只放在 `Editor/Tests/`，前缀统一 `Angelscript.Editor.*`
 - `Source/AngelscriptTest/` 使用 `Angelscript.TestModule.*` 前缀
 
 这层分割非常关键，因为它实际表达的是三种不同的依赖面：
@@ -192,3 +192,4 @@ void FAngelscriptTestModule::StartupModule()
 - 顶层必须先区分 `Angelscript.CppTests.*`、`Angelscript.Editor.*`、`Angelscript.TestModule.*` 三条线
 - 在 `AngelscriptTest` 内部，`Native` / `Learning` 采用层级优先命名，`Actor` / `Component` / `HotReload` 等采用主题优先命名
 - Automation 前缀不仅表达分类，还直接决定标准 runner、suite 和回归入口，因此必须与目录层级严格对齐
+

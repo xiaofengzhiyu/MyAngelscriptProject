@@ -15,7 +15,7 @@
 | 层级 | 代码路径 | Automation 前缀 | 用途 | 推荐 helper |
 | --- | --- | --- | --- | --- |
 | Runtime 内部 C++ | `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` | `Angelscript.CppTests.*` | 运行时内部状态、共享引擎、隔离、覆盖率、预编译数据等 | Runtime 私有头 + `StartAngelscriptHeaders.h` |
-| Editor 内部 | `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` | `Angelscript.Editor.*` | Editor 专有行为，例如 watcher / source navigation / debugger seam | Editor 私有实现 + editor-only helper |
+| Editor 内部 | `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` | `Angelscript.Editor.*` | Editor 专有行为，例如 watcher / source navigation / debugger seam | Editor 私有实现 + editor-only helper |
 | Native Core | `Plugins/Angelscript/Source/AngelscriptTest/Native/` | `Angelscript.TestModule.Native.*` | 只验证公共 AngelScript API / ASSDK 桥接层，不引入 `FAngelscriptEngine` | `AngelscriptNativeTestSupport.h` / `AngelscriptTestAdapter.h` |
 | Runtime 集成 | `Plugins/Angelscript/Source/AngelscriptTest/Core/`、`Angelscript/`、`Bindings/`、`Internals/`、`Compiler/`、`Preprocessor/`、`FileSystem/`、`ClassGenerator/` | `Angelscript.TestModule.*` | 基于 `FAngelscriptEngine` 的编译、绑定、语言行为与内部机制验证 | `Shared/AngelscriptTestEngineHelper.*` |
 | Debugger 场景 | `Plugins/Angelscript/Source/AngelscriptTest/Debugger/` | `Angelscript.TestModule.Debugger.*` | 附着运行中的 production-like engine，验证握手、断点、步进等调试链路 | `Shared/AngelscriptDebuggerTestSession.*` / `Shared/AngelscriptDebuggerTestClient.*` / `Shared/AngelscriptDebuggerScriptFixture.*` |
@@ -135,3 +135,4 @@
 3. **修正典型命名异常**：优先处理 ASSDK Native 文件名和缺少 `Angelscript` 前缀的 Preprocessor 测试文件。
 
 更大范围的批量重命名（例如 `ScriptExamples`、`WorldSubsystem`、`GameInstanceSubsystem` 这类历史前缀）仍保持兼容优先，后续若要整体改，需要单独计划、分批迁移、并同步更新回归入口与文档。
+

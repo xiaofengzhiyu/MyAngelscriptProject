@@ -1,7 +1,7 @@
 # Bind 系统与 Native 绑定生成
 
 > **所属模块**: 类型系统与生成链路 → Bind System / Native Binding Generation
-> **关键源码**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/`, `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp`, `Documents/Plans/Plan_HazelightBindModuleMigration.md`, `Documents/Plans/Plan_UnrealCSharpArchitectureAbsorption.md`
+> **关键源码**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.h`, `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptBinds.cpp`, `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/`, `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp`, `Documents/Plans/Plan_HazelightBindModuleMigration.md`, `Documents/Plans/Plan_UnrealCSharpArchitectureAbsorption.md`
 
 这一节要回答的核心问题是：插件怎么把 UE 原生 API 变成脚本世界可见的绑定面。当前实现并不是“运行时扫描反射后一把梭注册”，而是**手写 Bind、生成产物、运行时注册态和 cooked 缓存职责共同协作**。
 
@@ -191,3 +191,4 @@ call descriptor
 2. 如果脚本引擎里已经存在同名/同声明的 hand-written API，则 generated reflective fallback **不得** 因为 runtime reflection 可行就重复注册。
 
 这条规则既是性能保护，也是兼容性保护。对测试来说，它意味着控制样本不能只看 reflective 正例，还要持续验证 hand-written GAS、native actor/component 等既有 direct path 没有被回退路径侵蚀。
+

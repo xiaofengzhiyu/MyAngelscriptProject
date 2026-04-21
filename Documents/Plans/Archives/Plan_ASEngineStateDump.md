@@ -141,8 +141,8 @@
 
 | 子系统 | 位置 | 状态要点 |
 |--------|------|----------|
-| `FClassReloadHelper::ReloadState()` | `AngelscriptEditor/Private/ClassReloadHelper.h` | `ReloadClasses`、`NewClasses`、`ReloadEnums`、`NewEnums`、`ReloadStructs`、`ReloadDelegates` |
-| `UScriptEditorMenuExtension::RegisteredExtensions` | `AngelscriptEditor/Public/EditorMenuExtensions/` | 全局注册的编辑器菜单扩展列表 |
+| `FClassReloadHelper::ReloadState()` | `AngelscriptEditor/HotReload/ClassReloadHelper.h` | `ReloadClasses`、`NewClasses`、`ReloadEnums`、`NewEnums`、`ReloadStructs`、`ReloadDelegates` |
+| `UScriptEditorMenuExtension::RegisteredExtensions` | `AngelscriptEditor/EditorMenuExtensions/` | 全局注册的编辑器菜单扩展列表 |
 
 ---
 
@@ -732,7 +732,7 @@
 > 目标：将编辑器侧的热重载重绑映射和菜单扩展注册表导出为 CSV（表 26-27）。编辑器 dump 仅在 `WITH_EDITOR` 下可用。
 
 - [ ] **P7.1** 在 `AngelscriptEditor` 模块中实现 `FAngelscriptEditorStateDump` 扩展
-  - 在 `AngelscriptEditor/Private/` 新建 `AngelscriptEditorStateDump.cpp`
+  - 在 `AngelscriptEditor/` 新建 `AngelscriptEditorStateDump.cpp`
   - 不创建独立头文件；通过 Runtime 模块的 `FAngelscriptStateDump` 提供的 **扩展点委托** 注册编辑器 dump 逻辑
   - `FAngelscriptStateDump` 需在 Phase 1 中预留 `static TMulticastDelegate<void(const FString& OutputDir)> OnDumpExtensions` 委托
   - Editor 模块在 `FAngelscriptEditorModule::StartupModule()` 中绑定此委托
@@ -788,3 +788,5 @@
 7. **条件编译**：`FAngelscriptDebugServer`（`WITH_AS_DEBUGSERVER`）、`FAngelscriptCodeCoverage`（`WITH_AS_COVERAGE`）、Editor 状态（`WITH_EDITOR`）均受条件编译控制。Dump 代码需对应使用 `#if` 包裹，未编译的表在 Summary 中标记 Skipped。
 8. **编辑器依赖方向**：Runtime 不应依赖 Editor。编辑器 dump 通过**委托扩展点**实现（Editor 向 Runtime 注册回调），而非 Runtime 直接 include 编辑器头文件。
 9. **MOSTLY_PUBLIC 子系统的降级策略**：对于 `FAngelscriptCodeCoverage`（`FilesToCoverage` private），可通过已知模块名调用 `GetLineCoverage()` 逐个查询；对于 `FAngelscriptDebugServer` 的客户端数，可用 `HasAnyClients()` 导出布尔值替代精确计数。这些降级在功能上足够诊断使用。
+
+

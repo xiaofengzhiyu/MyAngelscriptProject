@@ -19,8 +19,8 @@
    - `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptAttributeSet.h`
    - `Plugins/Angelscript/Source/AngelscriptRuntime/Debugging/AngelscriptDebugServer.h`
    - `Plugins/Angelscript/Source/AngelscriptRuntime/Testing/Network/FakeNetDriver.h`
-   - `Plugins/Angelscript/Source/AngelscriptEditor/Private/ClassReloadHelper.h`
-   - `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptContentBrowserDataSource.h`
+   - `Plugins/Angelscript/Source/AngelscriptEditor/HotReload/ClassReloadHelper.h`
+   - `Plugins/Angelscript/Source/AngelscriptEditor/ContentBrowser/AngelscriptContentBrowserDataSource.h`
 
 这些区域要么是 cooked/build critical path，要么是 Editor / Networking / GAS 等用户感知强、回归成本高的插件能力面；如果没有更明确的单元测试分层和执行入口，后续继续补测试会越来越散，无法支撑插件级稳定交付。
 
@@ -35,7 +35,7 @@
 
 - **范围内**
   - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`
-  - `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`（本计划中允许新增）
+  - `Plugins/Angelscript/Source/AngelscriptEditor/Tests/`（本计划中允许新增）
   - `Plugins/Angelscript/Source/AngelscriptTest/`
   - `Documents/Guides/Test.md`
   - `Documents/Guides/TestCatalog.md`
@@ -96,7 +96,7 @@ Plugins/Angelscript/Source/
 ### 已确认的关键事实
 
 1. `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` 已存在，适合作为 **纯 C++ / 窄范围 Runtime 单元测试层**。
-2. `Plugins/Angelscript/Source/AngelscriptEditor/Private/` 目前没有系统化测试目录，Editor 内部 helper 仍缺稳定测试入口。
+2. `Plugins/Angelscript/Source/AngelscriptEditor/` 目前没有系统化测试目录，Editor 内部 helper 仍缺稳定测试入口。
 3. `Plugins/Angelscript/Source/AngelscriptTest/AngelscriptTest.Build.cs` 已依赖 `CQTest`、`UnrealEd`、`AngelscriptEditor`，说明现有 Test 模块具备承载 EditorContext / 快速回归测试的基础条件。
 4. `Config/DefaultEngine.ini` 当前没有 `AutomationTestSettings` 分组配置，测试组仍主要依赖路径前缀手工筛选。
 5. `Documents/Guides/TestCatalog.md` 的 documented baseline 仍是 `275/275 PASS`，但源码扫描显示插件内已注册约 `352` 个 automation/spec 测试入口；Phase 0 必须先收敛文档与实际清单。
@@ -120,8 +120,8 @@ Plugins/Angelscript/Source/
 3. **Debug / Networking / Editor 工具链路径**
    - `Debugging/AngelscriptDebugServer.h`
    - `Testing/Network/FakeNetDriver.h`
-   - `AngelscriptEditor/Private/ClassReloadHelper.h`
-   - `AngelscriptEditor/Private/AngelscriptContentBrowserDataSource.h`
+   - `AngelscriptEditor/HotReload/ClassReloadHelper.h`
+   - `AngelscriptEditor/ContentBrowser/AngelscriptContentBrowserDataSource.h`
 
 ## 目标测试分层与目录策略
 
@@ -131,7 +131,7 @@ Plugins/Angelscript/Source/
    - 目录：`Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`
    - 适用：序列化、缓存、数据库、网络驱动、引擎生命周期、无 World/Asset 依赖的逻辑
 2. **Editor Unit（Editor 内部 helper / 数据源）**
-   - 目录：`Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`
+   - 目录：`Plugins/Angelscript/Source/AngelscriptEditor/Tests/`
    - 适用：Class reload、Content Browser、Editor-only helper、菜单/索引/数据源逻辑
 3. **Plugin Fast Tests（带轻量引擎 helper 的快速回归）**
    - 目录：`Plugins/Angelscript/Source/AngelscriptTest/{Shared,Core,Internals,Bindings,Compiler,Preprocessor,ClassGenerator}`
@@ -147,7 +147,7 @@ Plugins/Angelscript/Source/
 | 当前目录 | 目标分层 | 处理规则 |
 | --- | --- | --- |
 | `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` | Runtime Unit | 保持为纯 C++ / 窄依赖测试层，优先承接缓存、序列化、引擎生命周期、网络驱动类测试 |
-| `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` | Editor Unit | 本计划新增；只承接强 Editor-only helper / data source / reload 决策逻辑 |
+| `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` | Editor Unit | 本计划新增；只承接强 Editor-only helper / data source / reload 决策逻辑 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Shared/` | Plugin Fast Tests | 承接共享 helper 与 helper 自测，不承接 Runtime / Editor 私有逻辑 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Core/` | Plugin Fast Tests | 承接引擎封装、配置、兼容性、快速核心回归 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/` | Plugin Fast Tests | 承接脚本语言行为、执行、类型、函数、对象模型等快速回归 |
@@ -157,7 +157,7 @@ Plugins/Angelscript/Source/
 | `Plugins/Angelscript/Source/AngelscriptTest/Preprocessor/` | Plugin Fast Tests | 承接预处理、include/import、宏、错误恢复等快速测试 |
 | `Plugins/Angelscript/Source/AngelscriptTest/ClassGenerator/` | Plugin Fast Tests | 承接类生成与最小 class compile/spawn 前验证 |
 | `Plugins/Angelscript/Source/AngelscriptTest/FileSystem/` | Plugin Fast Tests | 承接文件系统与磁盘辅助路径验证，默认不归入 Scenario |
-| `Plugins/Angelscript/Source/AngelscriptTest/Editor/` | Plugin Fast Tests | 保留现有轻量 EditorContext 回归；强 Editor 私有 helper 后续迁往 `AngelscriptEditor/Private/Tests/` |
+| `Plugins/Angelscript/Source/AngelscriptTest/Editor/` | Plugin Fast Tests | 保留现有轻量 EditorContext 回归；强 Editor 私有 helper 后续迁往 `AngelscriptEditor/Tests/` |
 | `Plugins/Angelscript/Source/AngelscriptTest/Actor/` | Scenario / Integration | 保持 Actor 生命周期、交互、属性与 spawned actor 行为测试 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Blueprint/` | Scenario / Integration | 保持 Blueprint 子类化与运行时行为测试 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Component/` | Scenario / Integration | 保持组件生命周期与默认组件场景测试 |
@@ -237,7 +237,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
   - 新增“源码扫描口径”小节，记录插件源码当前约 `352` 个 automation/spec 入口的事实，并区分：
     - `Plugins/Angelscript/Source/AngelscriptTest/`
     - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`
-    - 后续新增的 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`
+    - 后续新增的 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/`
   - 目的不是马上更新成最终全量数字，而是先把“文档基线”和“源码注册清单”两套口径分开，避免误读
 - [ ] **P0.1** 📦 Git 提交：`[Test/Coverage] Docs: separate documented baseline from live test inventory`
 
@@ -245,7 +245,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
   - 明确 Runtime Unit / Editor Unit / Plugin Fast Tests / Scenario / Examples 五层定义
   - 明确新增测试应优先放置的位置：
     - Runtime 逻辑 → `AngelscriptRuntime/Tests/`
-    - Editor helper → `AngelscriptEditor/Private/Tests/`
+    - Editor helper → `AngelscriptEditor/Tests/`
     - 需要 `Shared` helper 的脚本/绑定/预处理器测试 → `AngelscriptTest/<Theme>/`
   - 明确“不要继续新增长尾 `Examples/` 能力验证”的规则
 - [ ] **P0.2** 📦 Git 提交：`[Test/Coverage] Docs: define test tiers and placement rules`
@@ -332,7 +332,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
 - [ ] **P1.4** 📦 Git 提交：`[Test/Shared] Refactor: add common helper utilities for repeatable unit tests`
 
 - [ ] **P1.5** 提前完成 Editor test bootstrap 冒烟
-  - 在 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/` 创建 1 个最小测试文件（可为 `AngelscriptEditorSmokeTests.cpp`）
+  - 在 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/` 创建 1 个最小测试文件（可为 `AngelscriptEditorSmokeTests.cpp`）
   - 只验证：Editor 模块内测试可编译、可注册、可通过 `Automation RunTests` 被发现并执行
   - 该步骤不承接真实 class reload / content browser 逻辑，只作为后续 Phase 4 的先决门槛
 - [ ] **P1.5** 📦 Git 提交：`[Editor/Test] Test: bootstrap editor unit test entrypoint early`
@@ -572,14 +572,14 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
 > 目标：为目前最薄弱的 Editor / Debug 区域建立可持续扩展的测试入口，而不是继续只有一个 SourceNavigation 用例。
 
 - [ ] **P4.1** 为 Editor 模块建立测试目录和最小依赖
-  - 新建 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/`
+  - 新建 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/`
   - 必要时修改 `Plugins/Angelscript/Source/AngelscriptEditor/AngelscriptEditor.Build.cs`
   - 保证 Editor unit tests 可以在 `WITH_AUTOMATION_TESTS` 下独立编译，不强耦合 `AngelscriptTest` 模块
   - 如 `FClassReloadHelper` 或相关 helper 需要跨模块访问，优先选择“测试留在 Editor 模块内部”；只有在确有必要时才补 `ANGELSCRIPTEDITOR_API`
   - 若 `ContentBrowserData`、`ContentBrowser`、`AssetRegistry` 等模块依赖不足，在这一阶段一次性补齐，不要拖到具体测试实现时再分散调整
 - [ ] **P4.1** 📦 Git 提交：`[Editor/Test] Chore: add editor unit test entrypoint and dependencies`
 
-- [ ] **P4.2** 新增 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/AngelscriptClassReloadHelperTests.cpp`
+- [ ] **P4.2** 新增 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/AngelscriptClassReloadHelperTests.cpp`
   - 覆盖 class reload helper 的依赖判断、最小重载路径、失败回退
   - 优先验证“给定输入状态 → reload 决策 / 辅助动作”这一类 deterministic 逻辑
   - 最少拆成以下具体测试：
@@ -617,7 +617,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
       - Assert：接口参与 reload 时强制 `bRefreshAllActions`
 - [ ] **P4.2** 📦 Git 提交：`[Editor/Reload] Test: add class reload helper coverage`
 
-- [ ] **P4.3** 新增 `Plugins/Angelscript/Source/AngelscriptEditor/Private/Tests/AngelscriptContentBrowserDataSourceTests.cpp`
+- [ ] **P4.3** 新增 `Plugins/Angelscript/Source/AngelscriptEditor/Tests/AngelscriptContentBrowserDataSourceTests.cpp`
   - 覆盖 content browser data source 的枚举、过滤、路径转换、非法输入处理
   - 避免上来就做真实资源扫描；先做 deterministic 单元测试
   - 最少拆成以下具体测试：
@@ -781,7 +781,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
   - 应对：Phase 0 先把 documented baseline 与 live inventory 分开记录，Phase 5 再回写新增覆盖。
 - **Editor 测试依赖过重，导致构建面突然扩大**
   - 风险：把本应落在 `AngelscriptTest` 的 fast tests 过早塞进 `AngelscriptEditor`，引入大量额外依赖。
-  - 应对：只把强 Editor 内部 helper 测试放进 `AngelscriptEditor/Private/Tests/`；其余仍走 `AngelscriptTest`。
+  - 应对：只把强 Editor 内部 helper 测试放进 `AngelscriptEditor/Tests/`；其余仍走 `AngelscriptTest`。
 - **Networking / GAS 过早变成重量级集成场景**
   - 风险：测试一开始就需要 World、Pawn、多人会话，导致成本过高。
   - 应对：本计划先固定 FakeNetDriver / wrapper / baseline 路径，复杂场景后移。
@@ -791,3 +791,6 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
 - **测试耗时失控**
   - 风险：新增覆盖后，所有测试都堆到一个长命令里，CI 与本地验证都变慢。
   - 应对：优先按组执行，并始终保留 `Smoke` / `RuntimeUnit` / `Fast` 三个快速入口。
+
+
+

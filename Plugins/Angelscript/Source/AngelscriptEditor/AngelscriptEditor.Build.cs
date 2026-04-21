@@ -10,6 +10,9 @@ namespace UnrealBuildTool.Rules
 			PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 			bUseUnity = false;
 
+			PublicIncludePaths.Add(ModuleDirectory);
+			PrivateIncludePaths.Add(ModuleDirectory);
+
 			PublicDependencyModuleNames.AddRange(new string[]
 			{
 				"Core",

@@ -1,7 +1,7 @@
 #include "../Shared/AngelscriptTestEngineHelper.h"
 #include "../Shared/AngelscriptTestUtilities.h"
 
-#include "AngelscriptSourceCodeNavigation.h"
+#include "SourceNavigation/AngelscriptSourceCodeNavigation.h"
 #include "ClassGenerator/ASClass.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"

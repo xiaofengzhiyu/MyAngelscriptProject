@@ -9,7 +9,7 @@
 - `Plugins/Angelscript/Angelscript.uplugin` 当前只暴露 `AngelscriptRuntime`、`AngelscriptEditor`、`AngelscriptTest` 三个模块。
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptRuntimeModule.cpp` 会在编辑器 / commandlet 下进入 `FAngelscriptEngine::Initialize()`，由 `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp` 内收预处理、编译、类生成、热重载与调试服务。
 - `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.h` 与 `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp` 已经负责基于脚本描述符生成 `UASClass` / `UASStruct`，并在 soft reload / full reload 之间做切换。
-- `Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp` 已经提供 `GenerateNativeBinds()`，可以扫描 UClass 并生成 `ASRuntimeBind_*` / `ASEditorBind_*` 模块。
+- `Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp` 已经提供 `GenerateNativeBinds()`，可以扫描 UClass 并生成 `ASRuntimeBind_*` / `ASEditorBind_*` 模块。
 
 `UnrealCSharp` 的价值不是“把 Mono / C# 工具链原样搬进当前插件”，而是提供一套更清晰的工程参考：
 
@@ -215,7 +215,7 @@
 - [ ] **P1.1** 📦 Git 提交：`[P3] Docs: capture UnrealCSharp architecture terminology`
 
 - [ ] **P1.2** 固定当前插件的一一映射与非目标项
-  - 以 `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`、`Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`、`Plugins/Angelscript/Source/AngelscriptEditor/Private/AngelscriptEditorModule.cpp` 为证据，把当前插件中对应 `runtime compile`、`class generation`、`native bind generation`、`hot reload` 的落点列清楚。
+  - 以 `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`、`Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`、`Plugins/Angelscript/Source/AngelscriptEditor/Core/AngelscriptEditorModule.cpp` 为证据，把当前插件中对应 `runtime compile`、`class generation`、`native bind generation`、`hot reload` 的落点列清楚。
   - 同时显式写出哪些 `UnrealCSharp` 能力是当前插件不应直接追的，例如 `Mono Domain`、Roslyn Source Generator、程序集编译、GCHandle 管理等，后续任何实现计划都不应把这些项重新列回主 backlog。
   - 这一步完成后，后续所有任务都能明确地区分“边界优化”与“语言本体差异”。
 - [ ] **P1.2** 📦 Git 提交：`[P3] Docs: map Angelscript architecture against UnrealCSharp`
@@ -317,3 +317,4 @@
 ### 风险 5：本地 `SourceCodeGenerator` 参考快照不完整
 
 `UnrealCSharp.uplugin` 声明了 `SourceCodeGenerator`，但当前本地 `Reference/UnrealCSharp/Source/SourceCodeGenerator/` 未展开可读实现文件；后续如果要进一步研究独立程序式生成入口，需要再次对照官方仓库或文档确认该部分真实职责，不应只凭本地快照下结论。
+
