@@ -2,6 +2,7 @@
 #include "BlueprintImpact/AngelscriptBlueprintImpactScanner.h"
 
 #include "Core/AngelscriptEngine.h"
+#include "Core/AngelscriptRuntimeModule.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "HAL/FileManager.h"
@@ -76,7 +77,14 @@ bool FAngelscriptBlueprintImpactCommandletMergeChangedScriptsTest::RunTest(const
 		return false;
 	}
 
-	FAngelscriptEngine& Engine = FAngelscriptEngine::Get();
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptEngine* EnginePtr = FAngelscriptEngine::TryGetCurrentEngine();
+	if (!TestNotNull(TEXT("BlueprintImpact.CommandletMergesInlineAndFileChangedScripts requires a live Angelscript engine on the context stack"), EnginePtr))
+	{
+		return false;
+	}
+	FAngelscriptEngine& Engine = *EnginePtr;
 	const bool bOriginalDidInitialCompileSucceed = Engine.bDidInitialCompileSucceed;
 	ON_SCOPE_EXIT
 	{
@@ -177,7 +185,13 @@ bool FAngelscriptBlueprintImpactCommandletFailedAssetLoadsReturnExitCode3Test::R
 		return false;
 	}
 
-	FAngelscriptEngine& Engine = FAngelscriptEngine::Get();
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptEngine* EnginePtr = FAngelscriptEngine::TryGetCurrentEngine();
+	if (!TestNotNull(TEXT("BlueprintImpact.CommandletFailedAssetLoadsReturnExitCode3 requires a live Angelscript engine on the context stack"), EnginePtr))
+	{
+		return false;
+	}
+	FAngelscriptEngine& Engine = *EnginePtr;
 	const bool bOriginalDidInitialCompileSucceed = Engine.bDidInitialCompileSucceed;
 	ON_SCOPE_EXIT
 	{

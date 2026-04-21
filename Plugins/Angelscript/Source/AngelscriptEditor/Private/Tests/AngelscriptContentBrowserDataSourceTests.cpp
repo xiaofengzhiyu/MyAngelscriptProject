@@ -1,6 +1,8 @@
 #include "AngelscriptContentBrowserDataSource.h"
 
 #include "AngelscriptEngine.h"
+#include "AngelscriptRuntimeModule.h"
+#include "AngelscriptRuntimeModule.h"
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetThumbnail.h"
@@ -143,6 +145,8 @@ using namespace AngelscriptEditor_Private_Tests_AngelscriptContentBrowserDataSou
 
 bool FAngelscriptContentBrowserDataSourceFilterAndAttributesTest::RunTest(const FString& Parameters)
 {
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptRuntimeModule::InitializeAngelscript();
 	if (!TestTrue(TEXT("ContentBrowserDataSource test requires the Angelscript engine to be initialized"), FAngelscriptEngine::IsInitialized()))
 	{
 		return false;
@@ -287,6 +291,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptContentBrowserDataSourceRejectsStalePayloadTest::RunTest(const FString& Parameters)
 {
+	FAngelscriptRuntimeModule::InitializeAngelscript();
 	if (!TestTrue(TEXT("Stale payload ContentBrowserDataSource test requires the Angelscript engine to be initialized"), FAngelscriptEngine::IsInitialized()))
 	{
 		return false;

@@ -1,6 +1,8 @@
 #include "AngelscriptContentBrowserDataSource.h"
 
 #include "AngelscriptEngine.h"
+#include "AngelscriptRuntimeModule.h"
+#include "AngelscriptRuntimeModule.h"
 
 #include "ContentBrowserItem.h"
 #include "ContentBrowserItemData.h"
@@ -157,6 +159,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptContentBrowserDataSourceDoesItemPassFilterTest::RunTest(const FString& Parameters)
 {
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptRuntimeModule::InitializeAngelscript();
 	if (!TestTrue(TEXT("ContentBrowserDataSource DoesItemPassFilter test requires the Angelscript engine to be initialized"), FAngelscriptEngine::IsInitialized()))
 	{
 		return false;
@@ -241,6 +245,7 @@ bool FAngelscriptContentBrowserDataSourceDoesItemPassFilterTest::RunTest(const F
 
 bool FAngelscriptContentBrowserDataSourceCompileFilterReuseClearsStateTest::RunTest(const FString& Parameters)
 {
+	FAngelscriptRuntimeModule::InitializeAngelscript();
 	if (!TestTrue(TEXT("ContentBrowserDataSource CompileFilter reuse test requires the Angelscript engine to be initialized"), FAngelscriptEngine::IsInitialized()))
 	{
 		return false;

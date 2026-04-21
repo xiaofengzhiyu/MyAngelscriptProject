@@ -2,6 +2,8 @@
 #include "BlueprintImpact/AngelscriptBlueprintImpactScanCommandlet.h"
 
 #include "Core/AngelscriptEngine.h"
+#include "Core/AngelscriptRuntimeModule.h"
+#include "Core/AngelscriptRuntimeModule.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "HAL/FileManager.h"
@@ -365,7 +367,16 @@ bool FAngelscriptBlueprintImpactCommandletInvalidFileTest::RunTest(const FString
 	// EngineNotReady (exit code 2) if the flag is false. Automation context may leave the
 	// flag off in some clean test-engine configurations, so force-set it here to isolate
 	// the InvalidArguments (exit code 1) path we actually want to cover.
-	FAngelscriptEngine& Engine = FAngelscriptEngine::Get();
+	// Use TryGetCurrentEngine() instead of Get() to avoid asserting when earlier tests in
+	// the same run popped the global context stack without restoring it.
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptEngine* EnginePtr = FAngelscriptEngine::TryGetCurrentEngine();
+	if (!TestNotNull(TEXT("BlueprintImpact.CommandletInvalidFile should have a scoped Angelscript engine available"), EnginePtr))
+	{
+		return false;
+	}
+	FAngelscriptEngine& Engine = *EnginePtr;
 	const bool bOriginalDidInitialCompileSucceed = Engine.bDidInitialCompileSucceed;
 	ON_SCOPE_EXIT
 	{
@@ -389,7 +400,14 @@ bool FAngelscriptBlueprintImpactCommandletEngineNotReadyTest::RunTest(const FStr
 		return false;
 	}
 
-	FAngelscriptEngine& Engine = FAngelscriptEngine::Get();
+	// Same rationale as CommandletInvalidFile above — tolerate a missing engine context.
+	FAngelscriptRuntimeModule::InitializeAngelscript();
+	FAngelscriptEngine* EnginePtr = FAngelscriptEngine::TryGetCurrentEngine();
+	if (!TestNotNull(TEXT("BlueprintImpact.CommandletEngineNotReady should have a scoped Angelscript engine available"), EnginePtr))
+	{
+		return false;
+	}
+	FAngelscriptEngine& Engine = *EnginePtr;
 	const bool bOriginalDidInitialCompileSucceed = Engine.bDidInitialCompileSucceed;
 	ON_SCOPE_EXIT
 	{
