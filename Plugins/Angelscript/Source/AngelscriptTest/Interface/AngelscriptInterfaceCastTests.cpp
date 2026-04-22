@@ -76,7 +76,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceCastFastPathGuardsAndPositivePathTest,
 	"Angelscript.TestModule.Interface.CastFastPath.GuardsAndPositivePath",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-interface): CastFastPath scenario module fails to generate UUIDamageableCastFastPath type on UE 5.7
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptScenarioInterfaceCastSuccessTest::RunTest(const FString& Parameters)
 {

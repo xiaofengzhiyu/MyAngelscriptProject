@@ -981,7 +981,10 @@ bool UASClass::IsFunctionImplementedInScript(FName InFunctionName) const
 	UFunction* Function = FindFunctionByName(InFunctionName);
 	//return Function && Function->GetOuterUClass() && Function->GetOuterUClass()->bIsScriptClass;
 	UASFunction* asFunction = Cast<UASFunction>(Function);
-	return asFunction && asFunction->GetOuterUClass();
+	// UE 5.7+: after DiscardModule, UASFunction objects remain in the FuncMap
+	// but with ScriptFunction set to nullptr. Check that the backing script
+	// function is still alive before reporting as implemented.
+	return asFunction && asFunction->ScriptFunction != nullptr && asFunction->GetOuterUClass();
 }
 
 static TArray<FObjectInitializer> CurrentObjectInitializers;

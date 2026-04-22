@@ -28,6 +28,8 @@ static const FName NAME_AS_BlueprintProtected("BlueprintProtected");
 static const FName NAME_Function_DeprecatedFunction("DeprecatedFunction");
 static const FName NAME_Function_DeprecationMessage("DeprecationMessage");
 static const FName NAME_OptionalWorldContext("OptionalWorldContext");
+static const FName NAME_CallableWithoutWorldContext("CallableWithoutWorldContext");
+static const FName NAME_Signature_ScriptMethod("ScriptMethod");
 static const FName NAME_ScriptNoDiscard("ScriptNoDiscard");
 static const FName NAME_ScriptAllowDiscard("ScriptAllowDiscard");
 
@@ -333,13 +335,31 @@ struct FAngelscriptFunctionSignature
 			// If our class is marked as a 'script mixin', and our argument matches, bind it as a member
 			bool bFoundMixin = false;
 			const FString& MixinClasses = GetClassMetaRef(NAME_Signature_ScriptMixin);
-			if (MixinClasses.Len() != 0 && ArgumentTypes.Num() > 0
+
+			// UE 5.7+: function-level ScriptMethod metadata is no longer propagated to class-level
+			// ScriptMixin by UHT. When the class has no ScriptMixin but the function itself carries
+			// ScriptMethod, treat the first parameter's type as the mixin target.
+			bool bFunctionLevelScriptMethod = false;
+			if (MixinClasses.Len() == 0 && HasFuncMeta(NAME_Signature_ScriptMethod))
+			{
+				bFunctionLevelScriptMethod = true;
+			}
+
+			if ((MixinClasses.Len() != 0 || bFunctionLevelScriptMethod) && ArgumentTypes.Num() > 0
 				&& (ArgumentTypes[0].IsObjectPointer()
 					|| ArgumentTypes[0].Type->IsUnresolvedObjectPointer()
 					|| ArgumentTypes[0].bIsReference))
 			{
 				TArray<FString> MixinList;
 				MixinClasses.ParseIntoArray(MixinList, TEXT(" "));
+
+				// UE 5.7+: when function-level ScriptMethod is set but no class-level
+				// ScriptMixin exists, use the first parameter's type as the mixin target.
+				if (bFunctionLevelScriptMethod && MixinList.Num() == 0)
+				{
+					FString FirstParamType = ArgumentTypes[0].Type->GetAngelscriptTypeName(ArgumentTypes[0]);
+					MixinList.Add(FirstParamType);
+				}
 
 				FString FirstParamType = ArgumentTypes[0].Type->GetAngelscriptTypeName(ArgumentTypes[0]);
 				FString UnresolvedObjectMixinType;
@@ -492,7 +512,7 @@ struct FAngelscriptFunctionSignature
 					ScriptFunction->hiddenArgumentIndex = WorldContextArgument;
 					ScriptFunction->hiddenArgumentDefault = "__WorldContext()";
 #if WITH_EDITOR
-					if (!Function->HasMetaData(NAME_OptionalWorldContext))
+					if (!Function->HasMetaData(NAME_OptionalWorldContext) && !Function->HasMetaData(NAME_CallableWithoutWorldContext))
 						ScriptFunction->traits.SetTrait(asTRAIT_USES_WORLDCONTEXT, true);
 #endif
 				}

@@ -98,7 +98,7 @@ using namespace AngelscriptTest_Bindings_AngelscriptGameplayFunctionLibraryTests
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptGameplayFunctionLibraryAsyncSaveLoadDelegatesTest,
 	"Angelscript.TestModule.FunctionLibraries.AsyncSaveLoadDelegates",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#test-regression): crashes the automation runner at AngelscriptGameplayFunctionLibraryTests.cpp:191 inside InvokeGeneratedVoidMethod->UGameplayStatics::SaveGameToMemory in headless automation (AngelscriptGASTestAttributeSet loses the 'MissingAttr' property; GAS attribute registration requires a running UAngelscriptGameInstanceSubsystem). Disabled again until GAS attributes can be registered without the subsystem. Verified failing via full automation run on UE 5.7.
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptGameplayFunctionLibraryImmediateFailureCallbacksTest,
@@ -233,7 +233,8 @@ class UAsyncSaveLoadScriptHarness : UObject
 	TestEqual(TEXT("Async load helper should forward the original user index"), Recorder->LoadUserIndex, UserIndex);
 	TestFalse(TEXT("Async load helper should return a non-null save object for an existing slot"), Recorder->bLoadReceivedNullObject);
 	TestTrue(TEXT("Async load helper should dispatch the callback on the game thread"), Recorder->bLoadCallbackOnGameThread);
-	TestEqual(TEXT("Async load helper should deserialize the saved marker"), Recorder->LoadedMarker, ExpectedMarker - 1);
+	// UE 5.7: save/load roundtrip correctly preserves the original marker value.
+	TestEqual(TEXT("Async load helper should deserialize the saved marker"), Recorder->LoadedMarker, ExpectedMarker);
 
 	Recorder->ResetLoadState();
 	LoadParams.SlotName = MissingSlotName;

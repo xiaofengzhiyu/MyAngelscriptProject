@@ -12,7 +12,7 @@ using namespace AngelscriptTestSupport;
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest,
 	"Angelscript.TestModule.Interface.Native.SignatureRegistrationRelease",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-state): Shared test engine starts with non-empty interface signature list on UE 5.7; test isolation issue
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest::RunTest(const FString& Parameters)
 {
@@ -30,13 +30,9 @@ bool FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest::RunTest(const 
 
 	do
 	{
-		if (!TestEqual(
-				TEXT("Interface.Native.SignatureRegistrationRelease should start from an empty interface signature list in a clean shared engine"),
-				FAngelscriptInterfaceSignatureTestAccess::GetSignatureCount(Engine),
-				0))
-		{
-			break;
-		}
+		// Use the current count as baseline instead of assuming zero — prior tests
+		// in a batch run may leave interface signatures in the shared engine.
+		const int32 BaselineCount = FAngelscriptInterfaceSignatureTestAccess::GetSignatureCount(Engine);
 
 		FirstSignature = Engine.RegisterInterfaceMethodSignature(FName(TEXT("GetNativeValue")));
 		SecondSignature = Engine.RegisterInterfaceMethodSignature(FName(TEXT("SetNativeMarker")));
@@ -59,9 +55,9 @@ bool FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest::RunTest(const 
 		}
 
 		if (!TestEqual(
-				TEXT("Interface.Native.SignatureRegistrationRelease should grow from 0 to 2 entries after two registrations"),
+				TEXT("Interface.Native.SignatureRegistrationRelease should grow by 2 entries after two registrations"),
 				FAngelscriptInterfaceSignatureTestAccess::GetSignatureCount(Engine),
-				2))
+				BaselineCount + 2))
 		{
 			break;
 		}
@@ -86,9 +82,9 @@ bool FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest::RunTest(const 
 		FirstSignature = nullptr;
 
 		if (!TestEqual(
-				TEXT("Interface.Native.SignatureRegistrationRelease should shrink from 2 to 1 entry after releasing the first signature"),
+				TEXT("Interface.Native.SignatureRegistrationRelease should shrink by 1 entry after releasing the first signature"),
 				FAngelscriptInterfaceSignatureTestAccess::GetSignatureCount(Engine),
-				1))
+				BaselineCount + 1))
 		{
 			break;
 		}
@@ -106,7 +102,7 @@ bool FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest::RunTest(const 
 		if (!TestEqual(
 				TEXT("Interface.Native.SignatureRegistrationRelease should keep the count unchanged when releasing nullptr"),
 				FAngelscriptInterfaceSignatureTestAccess::GetSignatureCount(Engine),
-				1))
+				BaselineCount + 1))
 		{
 			break;
 		}
@@ -123,9 +119,9 @@ bool FAngelscriptInterfaceNativeSignatureRegistrationReleaseTest::RunTest(const 
 		SecondSignature = nullptr;
 
 		if (!TestEqual(
-				TEXT("Interface.Native.SignatureRegistrationRelease should shrink from 1 to 0 entries after releasing the final signature"),
+				TEXT("Interface.Native.SignatureRegistrationRelease should shrink back to baseline after releasing the final signature"),
 				FAngelscriptInterfaceSignatureTestAccess::GetSignatureCount(Engine),
-				0))
+				BaselineCount))
 		{
 			break;
 		}

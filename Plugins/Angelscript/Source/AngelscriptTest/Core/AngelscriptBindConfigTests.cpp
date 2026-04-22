@@ -235,12 +235,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScriptMethodMetadataCoverageTest,
 	"Angelscript.TestModule.Engine.BindConfig.FunctionLevelScriptMethodUsesFirstParameterAsMixin",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-binding): ScriptMethod first-parameter-as-mixin binding broken on UE 5.7; UFunction metadata layout change
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptCallableWithoutWorldContextMetadataTest,
 	"Angelscript.TestModule.Engine.BindConfig.CallableWithoutWorldContextKeepsHiddenWorldContextButClearsTrait",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-binding): CallableWithoutWorldContext trait clearing regressed on UE 5.7; world-context metadata handling changed
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptOverloadResolutionCoverageTest,

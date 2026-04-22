@@ -151,7 +151,7 @@ namespace AngelscriptTestSupport
 	/*MARK:PauseReadyLine*/ int Total = 1;
 	for (int Outer = 0; Outer < 50; ++Outer)
 	{
-		for (int Inner = 0; Inner < 100; ++Inner)
+		/*MARK:PauseForHeaderLine*/ for (int Inner = 0; Inner < 100; ++Inner)
 		{
 			/*MARK:PauseLoopLine*/ Total += 1;
 		}

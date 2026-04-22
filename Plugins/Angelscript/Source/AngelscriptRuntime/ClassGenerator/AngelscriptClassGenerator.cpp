@@ -3088,6 +3088,12 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 			NewClass->Bind();
 			NewClass->StaticLink(true);
 			NewClass->AssembleReferenceTokenStream();
+
+			// Set ScriptTypePtr so FindBoundScriptTypeInfo and other runtime
+			// lookups can resolve the interface UASClass back to its AS type.
+			UASClass* InterfaceASClass = CastChecked<UASClass>(NewClass);
+			InterfaceASClass->ScriptTypePtr = InterfaceDesc->ScriptType;
+
 			NewClass->GetDefaultObject(true);
 		}
 	}
