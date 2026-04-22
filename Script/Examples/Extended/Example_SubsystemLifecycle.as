@@ -2,65 +2,101 @@
  * Subsystem lifecycle example.
  *
  * Unreal Engine provides several subsystem types that are automatically
- * created and destroyed with their outer object. Script classes can
- * derive from these to add modular, self-contained gameplay systems.
+ * created and destroyed with their outer object. AngelScript classes can
+ * derive from the Script* base classes to add modular, self-contained
+ * gameplay systems with full lifecycle and tick support.
  *
- * NOTE: WorldSubsystem and GameInstanceSubsystem support in this plugin
- * is still being finalized. This example uses property-based patterns
- * to demonstrate how subsystems are typically used.
+ * Available subsystem base classes:
+ *   - UScriptWorldSubsystem       (per-world, with tick and streaming)
+ *   - UScriptGameInstanceSubsystem (per-game-instance, with tick)
+ *   - UScriptLocalPlayerSubsystem  (per-local-player)
+ *   - UScriptEngineSubsystem       (engine lifetime, with tick)
+ *
+ * Each subsystem type is automatically instantiated by the engine when
+ * its outer object is created, and destroyed when the outer is torn down.
+ * Use Initialize / Deinitialize to hook into the lifecycle, and
+ * Tick for per-frame updates.
+ *
+ * NOTE: The C++ events are named BP_Initialize, BP_Deinitialize, and
+ * BP_Tick, but AngelScript exposes them with the stripped ScriptName
+ * prefix — so use Initialize, Deinitialize, and Tick in script.
+ *
+ * The preprocessor auto-generates a static Get() method for each
+ * subsystem subclass. The returned type is the concrete subclass,
+ * e.g.:
+ *   UMyWorldSystem System = UMyWorldSystem::Get();
+ *
+ * Note: The Get() method relies on Cast<> which requires the UClass
+ * to be fully registered. It works at runtime but may fail during
+ * initial hot-compile if the class has never been loaded before.
  */
 
 /**
- * A script component that acts as a self-contained subsystem-like module.
- * This pattern is the most portable way to create modular gameplay systems
- * in AngelScript without depending on specific subsystem base class availability.
+ * A world subsystem that tracks per-world state and ticks every frame.
+ * Created automatically when a world is initialized; destroyed with it.
  */
-class UExampleGameModule : UActorComponent
+UCLASS()
+class UExampleWorldTracker : UScriptWorldSubsystem
 {
-	UPROPERTY(BlueprintReadOnly, Category = "Module")
-	int InitCounter = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Example")
+	int TickCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Module")
-	bool bIsInitialized = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Example")
+	bool bIsActive = false;
 
 	UFUNCTION(BlueprintOverride)
-	void BeginPlay()
+	void Initialize()
 	{
-		InitCounter += 1;
-		bIsInitialized = true;
-		Log(f"ExampleGameModule initialized (count: {InitCounter})");
+		bIsActive = true;
+		Log("ExampleWorldTracker: Initialized");
 	}
 
 	UFUNCTION(BlueprintOverride)
-	void EndPlay(EEndPlayReason EndPlayReason)
+	void Deinitialize()
 	{
-		bIsInitialized = false;
-		Log("ExampleGameModule deinitialized");
+		bIsActive = false;
+		Log("ExampleWorldTracker: Deinitialized");
 	}
 
-	UFUNCTION(BlueprintPure)
-	int GetInitCount()
+	UFUNCTION(BlueprintOverride)
+	void Tick(float DeltaTime)
 	{
-		return InitCounter;
+		TickCount += 1;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Example")
+	int GetCurrentTickCount()
+	{
+		return TickCount;
 	}
 };
 
 /**
- * An actor that hosts the game module component,
- * demonstrating the subsystem-like lifecycle pattern.
+ * A game instance subsystem that persists across level transitions.
+ * Created once when the game instance is initialized; destroyed on shutdown.
  */
-class AExampleSubsystemHost : AActor
+UCLASS()
+class UExampleSessionTracker : UScriptGameInstanceSubsystem
 {
-	UPROPERTY()
-	UExampleGameModule GameModule;
+	UPROPERTY(BlueprintReadOnly, Category = "Example")
+	int SessionInitCount = 0;
 
 	UFUNCTION(BlueprintOverride)
-	void BeginPlay()
+	void Initialize()
 	{
-		if (GameModule != nullptr)
-		{
-			int Count = GameModule.GetInitCount();
-			Log(f"SubsystemHost: module init count = {Count}");
-		}
+		SessionInitCount += 1;
+		Log(f"ExampleSessionTracker: Session initialized (count: {SessionInitCount})");
+	}
+
+	UFUNCTION(BlueprintOverride)
+	void Deinitialize()
+	{
+		Log("ExampleSessionTracker: Session deinitialized");
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Example")
+	int GetSessionInitCount()
+	{
+		return SessionInitCount;
 	}
 };

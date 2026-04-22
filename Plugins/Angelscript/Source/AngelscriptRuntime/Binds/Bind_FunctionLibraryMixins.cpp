@@ -74,9 +74,13 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FunctionLibraryMixins((int32)F
 			});
 	}
 
+	// UCurveFloat: guard with HasMethod (name-based) instead of GetMethodByDecl.
+	// Bind_Defaults (EOrder::Late+100) auto-registers these via ScriptMixin on
+	// URuntimeFloatCurveMixinLibrary. The auto-generated declaration string may
+	// differ from the hand-written one, causing GetMethodByDecl to miss the
+	// existing method and trigger asALREADY_REGISTERED (-13).
 	auto CurveFloat_ = FAngelscriptBinds::ExistingClass("UCurveFloat");
-	asITypeInfo* CurveFloatType = CurveFloat_.GetTypeInfo();
-	if (CurveFloatType == nullptr || CurveFloatType->GetMethodByDecl("FCurveKeyHandle AddAutoCurveKey(float32 InTime, float32 InValue)") == nullptr)
+	if (!CurveFloat_.HasMethod(TEXT("AddAutoCurveKey")))
 	{
 		CurveFloat_.Method(
 			"FCurveKeyHandle AddAutoCurveKey(float32 InTime, float32 InValue)",
@@ -85,7 +89,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_FunctionLibraryMixins((int32)F
 				return URuntimeFloatCurveMixinLibrary::AddAutoCurveKey(Curve, InTime, InValue);
 			});
 	}
-	if (CurveFloatType == nullptr || CurveFloatType->GetMethodByDecl("void SetKeyInterpMode(FCurveKeyHandle KeyHandle, ERichCurveInterpMode NewInterpMode, bool bAutoSetTangents)") == nullptr)
+	if (!CurveFloat_.HasMethod(TEXT("SetKeyInterpMode")))
 	{
 		CurveFloat_.Method(
 			"void SetKeyInterpMode(FCurveKeyHandle KeyHandle, ERichCurveInterpMode NewInterpMode, bool bAutoSetTangents)",

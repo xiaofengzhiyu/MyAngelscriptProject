@@ -1,49 +1,25 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Shared/AngelscriptNativeScriptTestObject.h"
-
-#include "BaseClasses/ScriptGameInstanceSubsystem.h"
-#include "BaseClasses/ScriptWorldSubsystem.h"
-#include "Components/ActorTestSpawner.h"
-#include "Engine/GameInstance.h"
-#include "Engine/World.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
-#include "Subsystems/GameInstanceSubsystem.h"
-#include "Subsystems/WorldSubsystem.h"
-#include "TestGameInstance.h"
 
 // Test Layer: UE Scenario
+// Validates script classes subclassing UScriptWorldSubsystem and
+// UScriptGameInstanceSubsystem. The preprocessor auto-generates a Get()
+// static method whose Cast<SubClass>(Subsystem::GetXxxSubsystem(...))
+// expression requires correct TObjectPtr ↔ UObject* type routing in the
+// binding layer.
+//
+// These tests assert compile SUCCESS after the CPF_TObjectPtr fix in
+// Bind_BlueprintType.cpp restored correct type-finder routing.
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
 
-namespace AngelscriptTest_Subsystem_AngelscriptSubsystemScenarioTests_Private
-{
-	using namespace AngelscriptScenarioTestUtils;
-
-	constexpr float SubsystemScenarioDeltaTime = 0.016f;
-
-	void InitializeSubsystemScenarioSpawner(FActorTestSpawner& Spawner)
-	{
-		Spawner.InitializeGameSubsystems();
-	}
-
-	UAngelscriptNativeScriptTestObject* GetScenarioNativeRecorder(FAutomationTestBase& Test)
-	{
-		UAngelscriptNativeScriptTestObject* NativeRecorder = GetMutableDefault<UAngelscriptNativeScriptTestObject>();
-		Test.TestNotNull(TEXT("Scenario native recorder should exist"), NativeRecorder);
-		if (NativeRecorder != nullptr)
-		{
-			NativeRecorder->bNativeFlag = false;
-			NativeRecorder->NameCounts.Reset();
-		}
-		return NativeRecorder;
-	}
-}
-
-using namespace AngelscriptTest_Subsystem_AngelscriptSubsystemScenarioTests_Private;
+// ============================================================================
+// World Subsystem compilation tests — validate script subclassing compiles
+// ============================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioWorldSubsystemLifecycleTest,
@@ -77,10 +53,9 @@ bool FAngelscriptScenarioWorldSubsystemLifecycleTest::RunTest(const FString& Par
 	};
 
 	ECompileResult CompileResult = ECompileResult::FullyHandled;
-	UE_SET_LOG_VERBOSITY(Angelscript, Fatal);
 	const bool bCompiled = CompileModuleWithResult(
 		&Engine,
-		ECompileType::SoftReloadOnly,
+		ECompileType::FullReload,
 		ModuleName,
 		TEXT("ScenarioWorldSubsystemLifecycle.as"),
 		TEXT(R"AS(
@@ -88,25 +63,20 @@ UCLASS()
 class UScenarioWorldLifecycleTracker : UScriptWorldSubsystem
 {
 	UFUNCTION(BlueprintOverride)
-	void BP_Initialize()
+	void Initialize()
 	{
 	}
 
 	UFUNCTION(BlueprintOverride)
-	void BP_Deinitialize()
+	void Deinitialize()
 	{
 	}
 }
 )AS"),
 		CompileResult);
-	UE_SET_LOG_VERBOSITY(Angelscript, Log);
 
-	if (!TestFalse(TEXT("Scenario world subsystem script generation remains unsupported on this branch"), bCompiled))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Scenario world subsystem lifecycle should currently fail compilation on this branch"), CompileResult, ECompileResult::Error);
+	// CPF_TObjectPtr fix landed: subsystem subclass should now compile successfully.
+	TestTrue(TEXT("Script world subsystem lifecycle subclass should compile after TObjectPtr fix"), bCompiled);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;
@@ -124,10 +94,9 @@ bool FAngelscriptScenarioWorldSubsystemTickTest::RunTest(const FString& Paramete
 	};
 
 	ECompileResult CompileResult = ECompileResult::FullyHandled;
-	UE_SET_LOG_VERBOSITY(Angelscript, Fatal);
 	const bool bCompiled = CompileModuleWithResult(
 		&Engine,
-		ECompileType::SoftReloadOnly,
+		ECompileType::FullReload,
 		ModuleName,
 		TEXT("ScenarioWorldSubsystemTick.as"),
 		TEXT(R"AS(
@@ -135,20 +104,15 @@ UCLASS()
 class UScenarioWorldTicker : UScriptWorldSubsystem
 {
 	UFUNCTION(BlueprintOverride)
-	void BP_Tick(float DeltaTime)
+	void Tick(float DeltaTime)
 	{
 	}
 }
 )AS"),
 		CompileResult);
-	UE_SET_LOG_VERBOSITY(Angelscript, Log);
 
-	if (!TestFalse(TEXT("Scenario world subsystem ticking remains unsupported on this branch"), bCompiled))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Scenario world subsystem tick should currently fail compilation on this branch"), CompileResult, ECompileResult::Error);
+	// CPF_TObjectPtr fix landed: subsystem subclass should now compile successfully.
+	TestTrue(TEXT("Script world subsystem tick subclass should compile after TObjectPtr fix"), bCompiled);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;
@@ -166,10 +130,9 @@ bool FAngelscriptScenarioWorldSubsystemActorAccessTest::RunTest(const FString& P
 	};
 
 	ECompileResult CompileResult = ECompileResult::FullyHandled;
-	UE_SET_LOG_VERBOSITY(Angelscript, Fatal);
 	const bool bCompiled = CompileModuleWithResult(
 		&Engine,
-		ECompileType::SoftReloadOnly,
+		ECompileType::FullReload,
 		ModuleName,
 		TEXT("ScenarioWorldSubsystemActorAccess.as"),
 		TEXT(R"AS(
@@ -177,7 +140,7 @@ UCLASS()
 class UScenarioWorldActorWatcher : UScriptWorldSubsystem
 {
 	UFUNCTION(BlueprintOverride)
-	void BP_Tick(float DeltaTime)
+	void Tick(float DeltaTime)
 	{
 		GetWorld().GetPersistentLevel().GetActors().Num();
 	}
@@ -189,14 +152,9 @@ class AScenarioWorldSubsystemActorAccessActor : AActor
 }
 )AS"),
 		CompileResult);
-	UE_SET_LOG_VERBOSITY(Angelscript, Log);
 
-	if (!TestFalse(TEXT("Scenario world subsystem actor access remains unsupported on this branch"), bCompiled))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Scenario world subsystem actor access should currently fail compilation on this branch"), CompileResult, ECompileResult::Error);
+	// CPF_TObjectPtr fix landed: subsystem subclass should now compile successfully.
+	TestTrue(TEXT("Script world subsystem actor access subclass should compile after TObjectPtr fix"), bCompiled);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;
@@ -214,10 +172,9 @@ bool FAngelscriptScenarioGameInstanceSubsystemLifecycleTest::RunTest(const FStri
 	};
 
 	ECompileResult CompileResult = ECompileResult::FullyHandled;
-	UE_SET_LOG_VERBOSITY(Angelscript, Fatal);
 	const bool bCompiled = CompileModuleWithResult(
 		&Engine,
-		ECompileType::SoftReloadOnly,
+		ECompileType::FullReload,
 		ModuleName,
 		TEXT("ScenarioGameInstanceSubsystemLifecycle.as"),
 		TEXT(R"AS(
@@ -225,25 +182,20 @@ UCLASS()
 class UScenarioGameInstanceLifecycleTracker : UScriptGameInstanceSubsystem
 {
 	UFUNCTION(BlueprintOverride)
-	void BP_Initialize()
+	void Initialize()
 	{
 	}
 
 	UFUNCTION(BlueprintOverride)
-	void BP_Deinitialize()
+	void Deinitialize()
 	{
 	}
 }
 )AS"),
 		CompileResult);
-	UE_SET_LOG_VERBOSITY(Angelscript, Log);
 
-	if (!TestFalse(TEXT("Scenario game-instance subsystem script generation remains unsupported on this branch"), bCompiled))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Scenario game-instance subsystem lifecycle should currently fail compilation on this branch"), CompileResult, ECompileResult::Error);
+	// CPF_TObjectPtr fix landed: subsystem subclass should now compile successfully.
+	TestTrue(TEXT("Script game-instance subsystem lifecycle subclass should compile after TObjectPtr fix"), bCompiled);
 	ASTEST_END_SHARE_CLEAN
 
 	return true;

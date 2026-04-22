@@ -154,8 +154,8 @@ struct FUObjectType : TAngelscriptPODType<UObject*>
 			return false;
 		if (ObjectProp->HasAnyPropertyFlags(CPF_UObjectWrapper))
 			return false;
-		//if (ObjectProp->HasAnyPropertyFlags(CPF_TObjectPtr))
-		//	return false;
+		if (ObjectProp->HasAnyPropertyFlags(CPF_TObjectPtr))
+			return false;
 
 		if (Class != nullptr)
 		{
@@ -1901,7 +1901,7 @@ struct FObjectPtrType : TAngelscriptCppType<TObjectPtr<UObject>>
 		check(ObjectClass);
 
 		auto* Property = new FObjectProperty(Params.Outer, Params.PropertyName, RF_Public);
-		//Property->PropertyFlags |= CPF_TObjectPtr;
+		Property->PropertyFlags |= CPF_TObjectPtr;
 		Property->PropertyClass = ObjectClass;
 
 		return Property;
@@ -1912,9 +1912,8 @@ struct FObjectPtrType : TAngelscriptCppType<TObjectPtr<UObject>>
 		const FObjectProperty* ObjectPtrProp = CastField<FObjectProperty>(Property);
 		if (ObjectPtrProp == nullptr)
 			return false;
-		//WILL-EDIT
-		//if ((ObjectPtrProp->PropertyFlags & CPF_TObjectPtr) == 0)
-		//	return false;
+		if ((ObjectPtrProp->PropertyFlags & CPF_TObjectPtr) == 0)
+			return false;
 
 		UClass* AssociatedClass = GetObjectClass(Usage);
 		if (AssociatedClass != nullptr)
@@ -2513,8 +2512,7 @@ static void BindUClassLookup()
 		}
 
 		// Detect TObjectPtr properties
-		//if ((ObjectProperty->PropertyFlags & CPF_TObjectPtr) != 0)
-		if ((ObjectProperty->PropertyFlags) != 0)
+		if ((ObjectProperty->PropertyFlags & CPF_TObjectPtr) != 0)
 		{
 			FAngelscriptTypeUsage InnerType = FAngelscriptTypeUsage::FromClass(ObjectProperty->PropertyClass);
 			if (!InnerType.IsValid())
@@ -2531,8 +2529,7 @@ static void BindUClassLookup()
 
 		const FClassProperty* ClassProperty = CastField<FClassProperty>(Property);
 
-		//if (ClassProperty != nullptr && (ClassProperty->PropertyFlags & CPF_TObjectPtr) != 0)
-		if (ClassProperty != nullptr && (ClassProperty->PropertyFlags) != 0)
+		if (ClassProperty != nullptr && (ClassProperty->PropertyFlags & CPF_TObjectPtr) != 0)
 		{
 			FAngelscriptTypeUsage InnerType = FAngelscriptTypeUsage::FromClass(ClassProperty->PropertyClass);
 			if (!InnerType.IsValid())
