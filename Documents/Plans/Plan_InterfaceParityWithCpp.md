@@ -124,45 +124,46 @@ ThirdParty（仅列已有注入，本计划不新增）：
 
 > 目标：把"同名匹配"升级为"同名 + 参数类型/数量 + 返回类型 + const 限定"的全签名匹配，让实现类缺参或改参时在编译期就暴露。
 
-- [ ] **P1.1** 扩展 `FInterfaceMethodSignature`（`Core/AngelscriptEngine.h:59-62`）
+- [x] **P1.1** 扩展 `FInterfaceMethodSignature`（`Core/AngelscriptEngine.h:59-62`）
   - 现状只存 `FName FunctionName`，`FinalizeClass` 的校验路径只能 `FindFunctionByName`，改签名的实现类编译期完全无感；运行时走到方法调用时才因类型不匹配崩溃或行为异常
-  - 新增字段：`TArray<FAngelscriptTypeUsage> ParamTypes`、`FAngelscriptTypeUsage ReturnType`、`uint32 FunctionFlags = 0`、`bool bIsConst = false`
+  - 新增字段：`TArray<FAngelscriptTypeUsage> ParamTypes`、`FAngelscriptTypeUsage ReturnType`、`uint32 FunctionFlags = 0`、`bool bIsConst = false`、`bool bSignatureResolved = false`
   - `FAngelscriptTypeUsage` 已在 `Core/AngelscriptType.h` 定义并被 BlueprintType 绑定层大量复用，直接引用即可
-  - 同步扩展 `FAngelscriptEngine::RegisterInterfaceMethodSignature` 的参数签名并更新所有调用点
-- [ ] **P1.1** 📦 Git 提交：`[Interface] Feat: expand FInterfaceMethodSignature with full param/return types`
+  - 保留原 `RegisterInterfaceMethodSignature(FName)` 重载供预处理器占位使用；新增带完整参数的重载 + `PopulateInterfaceMethodSignature` setter，供后续 Phase 回写
+- [x] **P1.1** 📦 Git 提交：`[Interface] Feat: expand FInterfaceMethodSignature with full param/return types`（commit `f8aff18`，构建 417/417 通过）
 
-- [ ] **P1.2** 签名生成：脚本定义接口路径
-  - `Preprocessor/AngelscriptPreprocessor.cpp` 中识别到接口 chunk 的方法声明后，在 `RegisterObjectMethod` 之前解析出参数类型链与返回类型，写入新扩展的 Signature
-  - 类型解析复用 `FAngelscriptTypeUsage::Parse`（若无则照 `FAngelscriptFunctionSignature` 里的模式扩展一个；与 `Bind_BlueprintType.cpp` 走同一套）
-  - 方法为 `const` 时（AS 声明里带 `const` 后缀）`bIsConst = true`
-- [ ] **P1.2** 📦 Git 提交：`[Interface] Feat: fill signature from script interface declarations`
+- [x] **P1.2** 签名生成：脚本定义接口路径
+  - 预处理器阶段（`AngelscriptPreprocessor.cpp:1211`）只能拿到方法名 — 此时 AS method 尚未编译，`FromParam/FromReturn` 无法调用；保留原处的占位 `RegisterInterfaceMethodSignature(FName)` 不动
+  - 真正的完整签名填充延迟到 `AngelscriptClassGenerator.cpp` 的接口 UFunction 生成循环（原行号 2962-3086）：每个方法生成 UFunction 的同时，把已收集的 `SignatureParamTypes`、`SignatureReturnType`、`NewFunction->FunctionFlags`、`(FunctionFlags & FUNC_Const) != 0` 通过 `ScriptMethod->GetUserData()` 取回 Signature 并调 `PopulateInterfaceMethodSignature` 写回
+  - 不依赖字符串解析（原字符串只用于方法名提取），类型信息全部来自权威的 `asIScriptFunction` — 避免与 UFunction 生成路径漂移
+- [x] **P1.2** 📦 Git 提交：`[Interface] Feat: fill signature from script interface declarations`（commit `19468d4`，增量构建通过）
 
-- [ ] **P1.3** 签名生成：C++ UInterface 自动绑定路径
-  - `Bind_BlueprintType.cpp` 的 Phase 5（接口方法自动注册，行号以 `FInterfaceMethodSignature* Sig = FAngelscriptEngine::Get().RegisterInterfaceMethodSignature(...)` 为锚，约 1661 附近）把参数和返回类型从 UFunction 的 `FProperty` 链读出来写入 Signature
-  - 用已有的 `FAngelscriptTypeUsage::FromProperty`（在 Bind 层多处使用）完成 `FProperty → FAngelscriptTypeUsage` 转换
-  - C++ 侧带 `CPF_ReturnParm` 的 `FProperty` 作为返回类型，其它 `FProperty` 按顺序进 `ParamTypes`
-- [ ] **P1.3** 📦 Git 提交：`[Interface] Feat: fill signature from C++ UInterface reflection`
+- [x] **P1.3** 签名生成：C++ UInterface 自动绑定路径
+  - `Bind_BlueprintType.cpp` 的 Phase 5 原本只向 `RegisterInterfaceMethodSignature(FName)` 传方法名；上下文中 `ReturnType`、`ArgumentTypes`、`Function->HasAnyFunctionFlags(FUNC_Const)`、`Function->FunctionFlags` 早就通过 `TFieldIterator<FProperty>(Function)` + `FAngelscriptTypeUsage::FromProperty` 准备完毕
+  - 改走 P1.1 新增的完整签名 Register 重载，一次性落地 `ParamTypes/ReturnType/FunctionFlags/bIsConst/bSignatureResolved=true`
+  - 这是最干净的入口点，不需要任何补齐逻辑，也无需读第二遍 `FProperty` 链
+- [x] **P1.3** 📦 Git 提交：`[Interface] Feat: fill signature from C++ UInterface reflection`（commit `0fddf4a`，增量构建通过）
 
-- [ ] **P1.4** 升级 `FinalizeClass` 的接口方法校验
-  - `ClassGenerator/AngelscriptClassGenerator.cpp` 在 `FinalizeClass` 的接口完整性校验段（沿 `ImplementedInterfaces` 遍历）里，把当前的 `FindFunctionByName` 单步扩展为"找到函数后对比签名"
-  - 不匹配时 `UE_LOG(LogAngelscript, Error, ...)` 输出期望签名 vs 实际签名的可读字符串（复用 `FAngelscriptTypeUsage::ToString` 风格）
-  - 保留"Signature 尚未升级（ParamTypes 为空）时跳过签名对比仅做名字校验"的降级路径，保证首次升级过程不会让现有脚本立刻编译失败
-- [ ] **P1.4** 📦 Git 提交：`[Interface] Feat: FinalizeClass matches interface methods by full signature`
+- [x] **P1.4** 升级 `FinalizeClass` 的接口方法校验
+  - `ClassGenerator/AngelscriptClassGenerator.cpp` 在 `FinalizeClass` 的接口完整性校验段（沿 `ImplementedInterfaces` 遍历，原行号 5440-5458）里，把当前的 `FindFunctionByName` 单步扩展为"找到函数后对比签名"
+  - 校验实现不走 `FInterfaceMethodSignature`，而直接读两端 UFunction 的 `FProperty` 链 — 接口 UFunction 两条生成路径都已自带完整 FProperty，绕过了"降级路径"讨论，实现更简单
+  - 用 `FProperty::SameType` 做 canonical 比较；对 `FFloatProperty`/`FDoubleProperty` 互换做一次 narrow relaxation，原因：AS fork 的类型映射目前会让脚本接口端生成 `FFloatProperty`、实现类端生成 `FDoubleProperty`（这是一个 pre-existing 行为，不在本 Phase 修复）
+  - 不匹配时给 `ScriptCompileError` 输出"期望签名 vs 实际签名"的可读 ProperyClass + 参数列表
+- [x] **P1.4** 📦 Git 提交：`[Interface] Feat: FinalizeClass matches interface methods by full signature`（commit `876b865`，25/25 + 2/2 接口测试全部通过）
 
-- [ ] **P1.5** 升级 Full Reload 的 minimal UFunction 存根（仅当签名对比需要 FProperty 链时）
-  - `DoFullReloadClass` 现在生成的接口 UFunction 存根只有 `FuncName`，没有 `FProperty` 链；Phase 1 的校验不需要存根本身有 FProperty（签名直接存在 `FInterfaceMethodSignature` 里），但后续 Phase 4 的 BlueprintNativeEvent 语义需要
-  - 本 Phase 先把接口 UFunction 存根的 `FProperty` 链补齐（按 `FInterfaceMethodSignature::ParamTypes` / `ReturnType` 生成对应 `FObjectProperty` / `FIntProperty` / `FStrProperty` 等），为 Phase 4 铺路
-  - 新建类路径与 Full Reload 路径共用同一份 `GenerateInterfaceUFunctionStub(FInterfaceMethodSignature&)` 辅助函数，避免双重维护
-- [ ] **P1.5** 📦 Git 提交：`[Interface] Feat: generate full FProperty chain for interface UFunction stubs`
+- [x] **P1.5** 升级 Full Reload 的 minimal UFunction 存根（已无需单独执行）
+  - code-explorer 报告确认：脚本接口 UFunction 存根路径（`AngelscriptClassGenerator.cpp:2962-3086`）**早已**通过 `FAngelscriptTypeUsage::FromReturn/FromParam` + `AddFunctionReturnType`/`AddFunctionArgument` 生成完整 `FProperty` 链 — 并非 minimal
+  - 真正 minimal 的是 **C++ UInterface 自动绑定路径**注册到 AS 侧的 method 存根，但那条路径引用的是 UHT 生成的 UFunction（自带完整 FProperty 链），脚本端可直接用
+  - 因此 P1.4 采用的"读 UFunction FProperty 链进行签名对比"方案无需此 Phase 的额外铺垫；P1.5 转为文档记录
+- [x] **P1.5** 📦 Git 提交：无代码改动，此 Phase 转为 Plan 文档记录（已被 P1.4 回归间接验证）
 
-- [ ] **P1.6** 新增 `AngelscriptInterfaceSignatureTests.cpp` 5 个用例
+- [x] **P1.6** 新增 `AngelscriptInterfaceSignatureTests.cpp` 5 个用例
   - 放在 `Plugins/Angelscript/Source/AngelscriptTest/Interface/`，测试路径 `Angelscript.TestModule.Interface.Signature.*`
-  - `Signature.ArgCountMismatch` — 实现方法少一个/多一个参数 → 编译期诊断
-  - `Signature.ArgTypeMismatch` — 参数类型不同 → 编译期诊断
-  - `Signature.ReturnTypeMismatch` — 返回类型不同 → 编译期诊断
+  - `Signature.ArgCountMismatch` — 实现方法少一个参数 → 编译期诊断 `"mismatching signature"`
+  - `Signature.ArgTypeMismatch` — 参数类型 `int` → `FString` → 编译期诊断
+  - `Signature.ReturnTypeMismatch` — 返回类型 `int` → `bool` → 编译期诊断
   - `Signature.ConstMismatch` — 接口方法标 const 但实现未标 → 编译期诊断
-  - `Signature.ExactMatch` — 正确签名正例，验证不回归
-- [ ] **P1.6** 📦 Git 提交：`[Test/Interface] Feat: add interface signature validation tests`
+  - `Signature.ExactMatch` — 正确签名正例，验证无回归
+- [x] **P1.6** 📦 Git 提交：`[Test/Interface] Feat: add interface signature validation tests`（commit `522cc58`，30/30 接口测试全通过）
 
 ### Phase 2：`TScriptInterface<I>` 属性与参数桥接
 
