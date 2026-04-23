@@ -3,7 +3,7 @@
 ## 状态
 
 - **优先级**: P2
-- **状态**: 未开始
+- **状态**: ✅ Phase 1-4 已完成（2026-04-23）；Phase 5 待执行
 - **关联**: TestConventions.md、TESTING_GUIDE.md、Plugin AGENTS.md
 
 ## 背景
@@ -165,15 +165,72 @@
 
 **此 Phase 不阻塞前两个 Phase，可以在日常修改文件时顺手清理。**
 
-## Phase 4: C++ 类名清理（可选，最低优先级）
+## Phase 4: C++ 类名清理 ✅ 已完成
 
-`IMPLEMENT_SIMPLE_AUTOMATION_TEST` 中的 C++ 类名（如 `FAngelscriptScenarioActorBeginPlayTest`）是内部符号，不影响测试路径。可在触及文件时顺手重命名，不需要专项批量处理。
+`IMPLEMENT_SIMPLE_AUTOMATION_TEST` 中的 C++ 类名（如 `FAngelscriptScenarioActorBeginPlayTest`）和内联脚本类名（`class AScenarioXxx`）已批量替换为 `FAngelscriptTestXxx`/`class ATestXxx`。
+
+## Phase 5: 领域内部结构体名称清理（待执行）
+
+Compiler/Preprocessor/Learning 测试文件中的内部数据结构名称仍含 `Scenario`。虽然这些是文件内部的，但命名不一致，应一并清理。
+
+**注意**：Phase 5 的替换比 Phase 1-4 复杂得多。每个文件里的结构体名各不相同（`FScenario`、`FDeclaredImportErrorScenario`、`FInvalidPropertySpecifierScenario`、`FLearningHotReloadDecisionScenario`...），且每个名字的声明和所有引用必须同步替换。批量正则容易产生名字不一致导致编译错误。
+
+**推荐做法**：逐文件修改，每次修改一个文件后立即构建验证，而不是批量替换。
+
+**受影响文件分组（按难度）：**
+
+**简单（只有 `FScenario` + `BuildScenarios()` + `ScenarioLabel`）**：
+- `Compiler/AngelscriptCompilerPipelineFunctionFlagTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineBlueprintEventWrapperTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineDelegateRuntimeTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineFormatStringTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineMetadataSpecifierTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineNamespaceTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineNamingTests.cpp`
+- `Compiler/AngelscriptCompilerPipelinePropertyDefaultTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineRangeForTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineRecompileTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineControlFlowTests.cpp`
+- `Compiler/AngelscriptCompilerPipelineGlobalUFunctionTests.cpp`
+
+**复杂（有独特结构体名）**：
+- `Compiler/AngelscriptCompilerPipelineImportTests.cpp` — `FDeclaredImportErrorScenario`
+- `Compiler/AngelscriptCompilerPipelinePropertyMetadataTests.cpp` — `FPropertyCallbackValidationScenario`
+- `Preprocessor/AngelscriptPreprocessorLiteralTests.cpp` — `FPrefixedLiteralBoundaryScenario` + `RunPrefixedLiteralBoundaryScenario()`
+- `Preprocessor/AngelscriptPreprocessorPropertyMacroErrorTests.cpp` — `FInvalidPropertySpecifierScenario`
+- `Preprocessor/AngelscriptPreprocessorFunctionMacroErrorTests.cpp` — 独特结构体名
+- `Preprocessor/AngelscriptPreprocessorDirectiveErrorTests.cpp` — 独特结构体名
+- `Preprocessor/AngelscriptPreprocessorComponentSpecifierTests.cpp` — 独特结构体名
+- `Preprocessor/AngelscriptPreprocessorImportModeTests.cpp` — 独特结构体名
+- `Learning/Runtime/AngelscriptLearningCompilerTraceTests.cpp` — `FLearningXxxScenario`
+- `Learning/Runtime/AngelscriptLearningHotReloadDecisionTraceTests.cpp` — `FLearningHotReloadDecisionScenario`
+- `Learning/Runtime/AngelscriptLearningReloadAndClassAnalysisTests.cpp` — 独特名
+- `Learning/Runtime/AngelscriptLearningRestoreAndBytecodePersistenceTests.cpp` — 独特名
+
+**其他**：
+- `Delegate/AngelscriptDelegateTests.cpp` — `FScenarioIntStringParams`、`InitializeDelegateScenarioSpawner`
+- `Core/AngelscriptRuntimeModuleTests.cpp` — 独特名
+- 等
+
+**执行步骤（每个文件）**：
+- [ ] 确认文件中所有 `Scenario` 的用法（结构体声明 + 所有引用）
+- [ ] 替换结构体名（声明 + 所有引用保持一致）
+- [ ] 构建单文件验证
+- [ ] 提交
 
 ## 验收标准
 
-- [ ] `grep -r "Scenario" Plugins/Angelscript/Source/AngelscriptTest/` 在 Phase 1-2 完成后，文件名和工具命名空间中不再出现 "Scenario"
-- [ ] 全量 Interface + Actor + Component + Delegate + GC + HotReload + Subsystem 测试通过
-- [ ] 文档中不再使用 "Scenario" 作为测试类别术语
+### Phase 1-4（已完成）
+- [x] 文件名中不再有 `*ScenarioTests.cpp`、`AngelscriptScenarioTestUtils.h`
+- [x] 工具命名空间 `AngelscriptScenarioTestUtils` → `AngelscriptFunctionalTestUtils`
+- [x] 脚本模块名 `ScenarioXxx` → `TestXxx`（27 个文件）
+- [x] C++ 类名 `FAngelscriptScenarioXxx` → `FAngelscriptTestXxx`（27 个文件）
+- [x] 内联脚本类名 `class AScenarioXxx` → `class ATestXxx`（27 个文件）
+- [x] 全量 Interface 测试 25/25 通过
+
+### Phase 5（待执行）
+- [ ] `grep -r "FScenario\|ScenarioLabel\|BuildScenarios\|FPrefixedLiteralBoundary[Ss]cenario" AngelscriptTest/` 结果为零
+- [ ] 全量 Compiler + Preprocessor + Learning 测试通过
 
 ## 风险
 
