@@ -1,7 +1,7 @@
-#include "AngelscriptSettings.h"
+﻿#include "AngelscriptSettings.h"
 #include "AngelscriptType.h"
 #include "ClassGenerator/ASClass.h"
-#include "Shared/AngelscriptScenarioTestUtils.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Containers/StringConv.h"
@@ -14,7 +14,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 namespace AngelscriptTest_Core_AngelscriptDebuggerAutoEvaluationTests_Private
 {

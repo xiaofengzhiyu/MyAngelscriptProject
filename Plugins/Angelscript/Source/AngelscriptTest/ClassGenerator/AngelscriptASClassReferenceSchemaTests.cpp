@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptNativeScriptTestObject.h"
 #include "Shared/AngelscriptTestMacros.h"
 
@@ -15,7 +15,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 namespace AngelscriptTest_ClassGenerator_AngelscriptASClassReferenceSchemaTests_Private
 {

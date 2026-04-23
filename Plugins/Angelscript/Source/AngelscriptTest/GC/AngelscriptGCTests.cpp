@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Core/AngelscriptComponent.h"
@@ -15,7 +15,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_GC_AngelscriptGCScenarioTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	void InitializeGCScenarioSpawner(FActorTestSpawner& Spawner)
 	{

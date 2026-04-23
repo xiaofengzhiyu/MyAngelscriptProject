@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "ClassGenerator/ASClass.h"
@@ -13,7 +13,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_HotReload_AngelscriptHotReloadVersionChainTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	static const FName VersionChainModuleName(TEXT("HotReloadVersionChain"));
 	static const FString VersionChainFilename(TEXT("HotReloadVersionChain.as"));

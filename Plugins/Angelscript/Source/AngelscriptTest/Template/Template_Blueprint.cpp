@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "../Shared/AngelscriptTestUtilities.h"
 
 #include "Engine/Blueprint.h"
@@ -14,7 +14,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 namespace TemplateBlueprintTest
 {

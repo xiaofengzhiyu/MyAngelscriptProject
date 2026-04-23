@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Components/ActorTestSpawner.h"
@@ -12,7 +12,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_HotReload_AngelscriptHotReloadScenarioTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 void InitializeHotReloadScenarioSpawner(FActorTestSpawner& Spawner)
 	{
 		Spawner.InitializeGameSubsystems();

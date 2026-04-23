@@ -1,4 +1,4 @@
-#include "../Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "../Shared/AngelscriptFunctionalTestUtils.h"
 #include "../Shared/AngelscriptTestMacros.h"
 
 #include "Components/ActorTestSpawner.h"
@@ -15,7 +15,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_Bindings_AngelscriptWorldCollisionAsyncSweepBindingsTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	static const FName WorldCollisionAsyncSweepModuleName(TEXT("ASWorldCollisionAsyncSweepCallbacks"));
 	static const FString WorldCollisionAsyncSweepFilename(TEXT("WorldCollisionAsyncSweepCallbacks.as"));

@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Components/ActorTestSpawner.h"
@@ -12,7 +12,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_HotReload_AngelscriptHotReloadLifecycleTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	static const FName LifecycleModuleName(TEXT("HotReloadLifecycle"));
 	static const FString LifecycleFilename(TEXT("HotReloadLifecycle.as"));

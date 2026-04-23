@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "../Shared/AngelscriptTestUtilities.h"
 
 #include "Components/ActorTestSpawner.h"
@@ -11,7 +11,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 namespace TemplateWorldTickTest
 {
@@ -40,7 +40,7 @@ namespace TemplateWorldTickTest
 
 		void BeginPlay(AActor& Actor) const
 		{
-			AngelscriptScenarioTestUtils::BeginPlayActor(Actor);
+			AngelscriptFunctionalTestUtils::BeginPlayActor(Actor);
 		}
 
 		void Tick(float DeltaTime, int32 NumTicks) const

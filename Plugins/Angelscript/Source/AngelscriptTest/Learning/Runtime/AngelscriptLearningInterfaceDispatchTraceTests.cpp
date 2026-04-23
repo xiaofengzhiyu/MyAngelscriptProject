@@ -1,5 +1,5 @@
-#include "../../Shared/AngelscriptLearningTrace.h"
-#include "../../Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "../../Shared/AngelscriptLearningTrace.h"
+#include "../../Shared/AngelscriptFunctionalTestUtils.h"
 #include "../../Shared/AngelscriptTestEngineHelper.h"
 #include "../../Shared/AngelscriptTestUtilities.h"
 #include "../../Shared/AngelscriptTestMacros.h"
@@ -11,7 +11,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptLearningInterfaceDispatchTraceTest,

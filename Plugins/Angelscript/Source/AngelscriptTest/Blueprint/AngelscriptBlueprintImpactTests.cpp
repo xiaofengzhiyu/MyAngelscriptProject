@@ -1,5 +1,5 @@
-#include "BlueprintImpact/AngelscriptBlueprintImpactScanner.h"
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "BlueprintImpact/AngelscriptBlueprintImpactScanner.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -17,7 +17,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 namespace BlueprintImpactScenarioTest
 {

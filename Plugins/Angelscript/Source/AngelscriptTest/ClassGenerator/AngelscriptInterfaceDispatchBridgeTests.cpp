@@ -1,7 +1,7 @@
-#include "Core/AngelscriptBinds.h"
+﻿#include "Core/AngelscriptBinds.h"
 #include "Core/AngelscriptEngine.h"
 #include "Shared/AngelscriptNativeInterfaceTestTypes.h"
-#include "Shared/AngelscriptScenarioTestUtils.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "ClassGenerator/AngelscriptClassGenerator.h"
@@ -13,7 +13,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
-using namespace AngelscriptScenarioTestUtils;
+using namespace AngelscriptFunctionalTestUtils;
 
 namespace InterfaceDispatchBridgeTests
 {

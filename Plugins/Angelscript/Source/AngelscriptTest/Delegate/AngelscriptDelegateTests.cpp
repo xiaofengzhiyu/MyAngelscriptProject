@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 
 #include "Shared/AngelscriptNativeScriptTestObject.h"
 
@@ -15,7 +15,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_Delegate_AngelscriptDelegateScenarioTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	FAngelscriptEngine& AcquireFreshDelegateEngine()
 	{

@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Core/AngelscriptComponent.h"
@@ -17,7 +17,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_Component_AngelscriptComponentScenarioTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	constexpr float ComponentScenarioDeltaTime = 0.016f;
 

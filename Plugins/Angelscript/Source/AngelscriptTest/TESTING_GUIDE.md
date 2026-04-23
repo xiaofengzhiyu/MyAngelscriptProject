@@ -1,4 +1,4 @@
-# Angelscript Test Conventions & Macro Guide
+﻿# Angelscript Test Conventions & Macro Guide
 
 ## Overview
 
@@ -252,6 +252,6 @@ The following scenarios should use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` directly w
 - **Debugger session helpers**: `Shared/AngelscriptDebuggerTestSession.h`
 - **Debugger client helpers**: `Shared/AngelscriptDebuggerTestClient.h`
 - **Debugger script fixtures**: `Shared/AngelscriptDebuggerScriptFixture.h`
-- **Scenario test utils**: `Shared/AngelscriptScenarioTestUtils.h`
+- **Scenario test utils**: `Shared/AngelscriptFunctionalTestUtils.h`
 - **Native test support**: `Native/AngelscriptNativeTestSupport.h`
 - **Native test adapter**: `Native/AngelscriptTestAdapter.h`

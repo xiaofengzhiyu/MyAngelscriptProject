@@ -1,5 +1,5 @@
-#include "AngelscriptGASTestTypes.h"
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "AngelscriptGASTestTypes.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #define protected public

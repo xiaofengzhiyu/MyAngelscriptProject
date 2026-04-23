@@ -1,4 +1,4 @@
-#include "Shared/AngelscriptScenarioTestUtils.h"
+﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "ClassGenerator/AngelscriptClassGenerator.h"
@@ -13,7 +13,7 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_Inheritance_AngelscriptInheritanceScenarioTests_Private
 {
-	using namespace AngelscriptScenarioTestUtils;
+	using namespace AngelscriptFunctionalTestUtils;
 
 	void InitializeInheritanceScenarioSpawner(FActorTestSpawner& Spawner)
 	{
