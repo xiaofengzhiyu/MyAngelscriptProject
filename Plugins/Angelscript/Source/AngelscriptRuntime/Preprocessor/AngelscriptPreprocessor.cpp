@@ -1135,17 +1135,96 @@ void FAngelscriptPreprocessor::AnalyzeClasses(FFile& File, FChunk& Chunk)
 			FString Body = Chunk.Content.Mid(OpenBrace + 1, CloseBrace - OpenBrace - 1);
 			TArray<FString> Lines;
 			Body.ParseIntoArrayLines(Lines);
+
+			// Phase 4: parse UFUNCTION() specifiers on interface methods so the
+			// generated UFunction stub can carry the correct FUNC_* flags. The
+			// default (no UFUNCTION macro, or `BlueprintImplementableEvent` alone)
+			// is `FUNC_Event | FUNC_BlueprintEvent` — a pure script-overridable
+			// event. `BlueprintNativeEvent` additionally adds `FUNC_Native` so
+			// UHT/C++ implementors can supply a `_Implementation` default path.
+			// `BlueprintCallable` / `BlueprintPure` add the matching flags.
+			const uint32 DefaultInterfaceMethodFlags = FUNC_Event | FUNC_BlueprintEvent;
+			uint32 PendingFlags = DefaultInterfaceMethodFlags;
+			bool bHasPendingFlags = false;
+
+			auto ParseInterfaceUFunctionSpecifiers = [&](const FString& UFunctionLine) -> uint32
+			{
+				// Extract the argument list between "UFUNCTION(" and its matching ")".
+				int32 OpenParen = UFunctionLine.Find(TEXT("("));
+				int32 LastClose = UFunctionLine.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
+				if (OpenParen == INDEX_NONE || LastClose <= OpenParen + 1)
+				{
+					// Empty `UFUNCTION()` — treat as BlueprintImplementableEvent equivalent.
+					return DefaultInterfaceMethodFlags;
+				}
+
+				FString Arguments = UFunctionLine.Mid(OpenParen + 1, LastClose - OpenParen - 1);
+				TArray<FSpecifier> Specs = ParseSpecifiers(Arguments);
+
+				uint32 Flags = DefaultInterfaceMethodFlags;
+				for (const FSpecifier& Spec : Specs)
+				{
+					// AS fork uses `BlueprintEvent` as a generic script-overridable
+					// event specifier, which already implies FUNC_Event|FUNC_BlueprintEvent.
+					// `BlueprintImplementableEvent` is a C++-ism that maps to the same
+					// baseline; `BlueprintNativeEvent` is the one that adds FUNC_Native.
+					static const FName NAME_BlueprintNativeEvent("BlueprintNativeEvent");
+					static const FName NAME_BlueprintImplementableEvent("BlueprintImplementableEvent");
+					static const FName NAME_BlueprintCallable_Local("BlueprintCallable");
+					static const FName NAME_BlueprintPure_Local("BlueprintPure");
+
+					if (Spec.Name == NAME_BlueprintNativeEvent)
+					{
+						Flags |= FUNC_Native;
+					}
+					else if (Spec.Name == NAME_BlueprintImplementableEvent)
+					{
+						// Explicit BlueprintImplementableEvent — strip FUNC_Native if
+						// some other specifier tried to set it (defensive; ordering
+						// within a single UFUNCTION is not guaranteed).
+						Flags &= ~FUNC_Native;
+					}
+					else if (Spec.Name == NAME_BlueprintCallable_Local)
+					{
+						Flags |= FUNC_BlueprintCallable;
+					}
+					else if (Spec.Name == NAME_BlueprintPure_Local)
+					{
+						Flags |= FUNC_BlueprintCallable | FUNC_BlueprintPure;
+					}
+					// Other specifiers (Category, Meta, DisplayName, ...) are
+					// ignored here — they belong to the eventual UFunction's
+					// metadata pass, not to FunctionFlags.
+				}
+				return Flags;
+			};
+
 			for (const FString& Line : Lines)
 			{
 				FString Trimmed = Line.TrimStartAndEnd();
-				// Skip empty lines, comments, and UFUNCTION macros
-				if (Trimmed.Len() == 0 || Trimmed.StartsWith(TEXT("//")) || Trimmed.StartsWith(TEXT("UFUNCTION")))
+				// Skip empty lines and comments.
+				if (Trimmed.Len() == 0 || Trimmed.StartsWith(TEXT("//")))
 					continue;
+
+				// UFUNCTION macro rows cache their specifiers for the next
+				// method declaration on the following non-empty non-comment line.
+				if (Trimmed.StartsWith(TEXT("UFUNCTION")))
+				{
+					PendingFlags = ParseInterfaceUFunctionSpecifiers(Trimmed);
+					bHasPendingFlags = true;
+					continue;
+				}
+
 				// Remove trailing semicolon
 				if (Trimmed.EndsWith(TEXT(";")))
 					Trimmed = Trimmed.Left(Trimmed.Len() - 1).TrimEnd();
 				if (Trimmed.Len() > 0)
+				{
 					ClassDesc->InterfaceMethodDeclarations.Add(NormalizeInterfaceMethodDeclaration(Trimmed));
+					ClassDesc->InterfaceMethodFlags.Add(bHasPendingFlags ? PendingFlags : DefaultInterfaceMethodFlags);
+					PendingFlags = DefaultInterfaceMethodFlags;
+					bHasPendingFlags = false;
+				}
 			}
 		}
 

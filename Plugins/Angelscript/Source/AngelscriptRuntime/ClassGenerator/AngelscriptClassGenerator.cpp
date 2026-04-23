@@ -2960,8 +2960,18 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 			};
 
 			// Create UFunctions for each interface method declaration
-			for (const FString& MethodDecl : InterfaceDesc->InterfaceMethodDeclarations)
+			for (int32 MethodIndex = 0; MethodIndex < InterfaceDesc->InterfaceMethodDeclarations.Num(); ++MethodIndex)
 			{
+				const FString& MethodDecl = InterfaceDesc->InterfaceMethodDeclarations[MethodIndex];
+				// Phase 4: Pull the per-method UFUNCTION-specifier flags parsed by
+				// the preprocessor. When the preprocessor didn't record flags for
+				// this index (legacy modules pre-Phase-4 or rebuilt arrays out of
+				// sync), fall back to the old default of FUNC_Event|FUNC_BlueprintEvent
+				// which keeps behavior identical to prior releases.
+				const uint32 ParsedMethodFlags = InterfaceDesc->InterfaceMethodFlags.IsValidIndex(MethodIndex)
+					? InterfaceDesc->InterfaceMethodFlags[MethodIndex]
+					: (uint32)(FUNC_Event | FUNC_BlueprintEvent);
+
 				// Parse "ReturnType MethodName(ParamType ParamName, ...)" format
 				int32 ParenPos = MethodDecl.Find(TEXT("("));
 				if (ParenPos == INDEX_NONE)
@@ -2977,7 +2987,13 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 				asIScriptFunction* ScriptMethod = ResolveInterfaceScriptMethod(InterfaceScriptType, MethodDecl, FuncName);
 
 				UFunction* NewFunction = NewObject<UFunction>(NewClass, *FuncName, RF_Public);
-				NewFunction->FunctionFlags = FUNC_Event | FUNC_BlueprintEvent | FUNC_Public;
+				// Phase 4: honor the UFUNCTION specifier parsed by the preprocessor
+				// (BlueprintNativeEvent → includes FUNC_Native; BlueprintPure →
+				// FUNC_BlueprintPure|FUNC_BlueprintCallable; bare declaration →
+				// FUNC_Event|FUNC_BlueprintEvent baseline). `FUNC_Public` is always
+				// added here because the stub is visible from the implementing
+				// script class.
+				NewFunction->FunctionFlags = (EFunctionFlags)(ParsedMethodFlags | FUNC_Public);
 				NewFunction->ReturnValueOffset = MAX_uint16;
 				NewFunction->FirstPropertyToInit = nullptr;
 				NewFunction->NumParms = 0;

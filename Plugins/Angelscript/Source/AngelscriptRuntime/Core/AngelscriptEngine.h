@@ -1161,6 +1161,21 @@ struct FAngelscriptClassDesc
 	 * Only populated for interface classes (bIsInterface == true). */
 	TArray<FString> InterfaceMethodDeclarations;
 
+	/* UE FUNC_* flags parsed from the UFUNCTION() specifier on each interface
+	 * method declaration, aligned by index with `InterfaceMethodDeclarations`.
+	 * - Default (no UFUNCTION macro or `BlueprintImplementableEvent`) produces
+	 *   `FUNC_Event | FUNC_BlueprintEvent` — a pure scripted event where only
+	 *   implementations dispatch.
+	 * - `BlueprintNativeEvent` adds `FUNC_Native` so UHT/C++ implementors
+	 *   can supply a `_Implementation` default.
+	 * - `BlueprintPure` / `BlueprintCallable` add the matching flags so the
+	 *   interface method is callable from script/blueprint without needing
+	 *   an override.
+	 * The `FUNC_Public` / `FUNC_Const` / `FUNC_HasOutParms` bits are added
+	 * by the class generator based on visibility / signature, so they are
+	 * intentionally NOT part of this array. */
+	TArray<uint32> InterfaceMethodFlags;
+
 	/* Name of the config file to use. */
 	FString ConfigName;
 
