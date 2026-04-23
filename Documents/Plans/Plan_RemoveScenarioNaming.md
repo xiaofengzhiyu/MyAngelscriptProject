@@ -173,50 +173,117 @@
 
 Compiler/Preprocessor/Learning 测试文件中的内部数据结构名称仍含 `Scenario`。虽然这些是文件内部的，但命名不一致，应一并清理。
 
-**注意**：Phase 5 的替换比 Phase 1-4 复杂得多。每个文件里的结构体名各不相同（`FScenario`、`FDeclaredImportErrorScenario`、`FInvalidPropertySpecifierScenario`、`FLearningHotReloadDecisionScenario`...），且每个名字的声明和所有引用必须同步替换。批量正则容易产生名字不一致导致编译错误。
+**注意**：Phase 5 的替换比 Phase 1-4 复杂得多。每个文件里的结构体名各不相同，且每个名字的声明和所有引用必须同步替换。批量正则容易产生名字不一致导致编译错误。
 
 **推荐做法**：逐文件修改，每次修改一个文件后立即构建验证，而不是批量替换。
 
-**受影响文件分组（按难度）：**
+**受影响的完整文件列表（共 82 个，通过 `grep -rl "Scenario" AngelscriptTest/` 得到）：**
 
-**简单（只有 `FScenario` + `BuildScenarios()` + `ScenarioLabel`）**：
-- `Compiler/AngelscriptCompilerPipelineFunctionFlagTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineBlueprintEventWrapperTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineDelegateRuntimeTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineFormatStringTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineMetadataSpecifierTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineNamespaceTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineNamingTests.cpp`
-- `Compiler/AngelscriptCompilerPipelinePropertyDefaultTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineRangeForTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineRecompileTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineControlFlowTests.cpp`
-- `Compiler/AngelscriptCompilerPipelineGlobalUFunctionTests.cpp`
+```
+Subsystem/AngelscriptSubsystemTests.cpp
+Subsystem/AngelscriptGameInstanceSubsystemRuntimeTests.cpp
+Debugger/AngelscriptDebuggerStepOutEdgeTests.cpp
+Debugger/AngelscriptDebuggerSessionInfrastructureTests.cpp
+Debugger/AngelscriptDebuggerPauseTests.cpp
+Debugger/AngelscriptDebuggerLifecycleTests.cpp
+Debugger/AngelscriptDebuggerDataBreakpointTests.cpp
+Debugger/AngelscriptDebuggerCrossFileSteppingTests.cpp
+Shared/AngelscriptDebuggerScriptFixture.cpp
+Core/AngelscriptRuntimeModuleTests.cpp
+Core/AngelscriptGASActorBaseTests.cpp
+Core/AngelscriptGASAbilitySystemTests.cpp
+Core/AngelscriptGASAbilitySystemCallbackTests.cpp
+Core/AngelscriptComponentProcessEventTests.cpp
+Component/AngelscriptComponentTests.cpp
+Compiler/AngelscriptCompilerPipelineRecompileTests.cpp
+Compiler/AngelscriptCompilerPipelineRangeForTests.cpp
+Compiler/AngelscriptCompilerPipelinePropertyMetadataTests.cpp
+Compiler/AngelscriptCompilerPipelinePropertyDefaultTests.cpp
+Compiler/AngelscriptCompilerPipelineNamingTests.cpp
+Compiler/AngelscriptCompilerPipelineNamespaceTests.cpp
+Compiler/AngelscriptCompilerPipelineMetadataSpecifierTests.cpp
+Compiler/AngelscriptCompilerPipelineImportTests.cpp
+Compiler/AngelscriptCompilerPipelineGlobalUFunctionTests.cpp
+Compiler/AngelscriptCompilerPipelineFunctionFlagTests.cpp
+Compiler/AngelscriptCompilerPipelineFormatStringTests.cpp
+Compiler/AngelscriptCompilerPipelineDelegateRuntimeTests.cpp
+Compiler/AngelscriptCompilerPipelineControlFlowTests.cpp
+Compiler/AngelscriptCompilerPipelineBlueprintEventWrapperTests.cpp
+Learning/Runtime/AngelscriptLearningScriptClassToBlueprintTraceTests.cpp
+Learning/Runtime/AngelscriptLearningRestoreAndBytecodePersistenceTests.cpp
+Learning/Runtime/AngelscriptLearningReloadAndClassAnalysisTests.cpp
+Learning/Runtime/AngelscriptLearningHotReloadDecisionTraceTests.cpp
+Learning/Runtime/AngelscriptLearningCompilerTraceTests.cpp
+ClassGenerator/AngelscriptScriptClassStructureTests.cpp
+ClassGenerator/AngelscriptScriptClassShapeTests.cpp
+ClassGenerator/AngelscriptScriptClassCreationTests.cpp
+ClassGenerator/AngelscriptLiteralAssetPostInitTests.cpp
+ClassGenerator/AngelscriptInterfaceDispatchBridgeTests.cpp
+ClassGenerator/AngelscriptASFunctionWorldContextTests.cpp
+ClassGenerator/AngelscriptASFunctionProcessEventTests.cpp
+ClassGenerator/AngelscriptASFunctionOptimizedCallTests.cpp
+ClassGenerator/AngelscriptASClassReplicationTests.cpp
+ClassGenerator/AngelscriptASClassReferenceSchemaTests.cpp
+ClassGenerator/AngelscriptASClassObjectConstructionTests.cpp
+ClassGenerator/AngelscriptASClassHelperTests.cpp
+ClassGenerator/AngelscriptASClassConstructionContextTests.cpp
+ClassGenerator/AngelscriptASClassComponentMetadataTests.cpp
+ClassGenerator/AngelscriptASClassComponentConstructionTests.cpp
+ClassGenerator/AngelscriptASClassActorConstructionTests.cpp
+ClassGenerator/AngelscriptASClassTickSettingsTests.cpp
+Preprocessor/AngelscriptPreprocessorPropertyMacroErrorTests.cpp
+Preprocessor/AngelscriptPreprocessorLiteralTests.cpp
+Preprocessor/AngelscriptPreprocessorImportModeTests.cpp
+Preprocessor/AngelscriptPreprocessorFunctionMacroErrorTests.cpp
+Preprocessor/AngelscriptPreprocessorDirectiveErrorTests.cpp
+Preprocessor/AngelscriptPreprocessorComponentSpecifierTests.cpp
+Blueprint/AngelscriptBlueprintSubclassRuntimeTests.cpp
+Blueprint/AngelscriptBlueprintSubclassActorTests.cpp
+Blueprint/AngelscriptBlueprintImpactTests.cpp
+Actor/AngelscriptScriptSpawnedActorOverrideTests.cpp
+Actor/AngelscriptActorPropertyTests.cpp
+Actor/AngelscriptActorLifecycleTests.cpp
+Actor/AngelscriptActorInteractionTests.cpp
+Delegate/AngelscriptDelegateTests.cpp
+GC/AngelscriptGCTests.cpp
+HotReload/AngelscriptHotReloadTests.cpp
+HotReload/AngelscriptHotReloadLifecycleTests.cpp
+HotReload/AngelscriptHotReloadVersionChainTests.cpp
+Inheritance/AngelscriptInheritanceFunctionalTests.cpp
+Interface/AngelscriptInterfaceAdvancedTests.cpp
+Interface/AngelscriptInterfaceCastTests.cpp
+Interface/AngelscriptInterfaceNativeTests.cpp
+Interface/AngelscriptInterfaceLifecycleTests.cpp
+Interface/AngelscriptInterfaceDeclareTests.cpp
+Interface/AngelscriptInterfaceImplementTests.cpp
+Bindings/AngelscriptConsoleCommandLifecycleBindingsTests.cpp
+Bindings/AngelscriptConsoleCommandArgumentBindingsTests.cpp
+Bindings/AngelscriptWorldBindingsTests.cpp
+Core/AngelscriptGASAbilitySystemTests.cpp  (补充)
+... (运行 git grep -rl "Scenario" 获取最新完整列表)
+```
 
-**复杂（有独特结构体名）**：
-- `Compiler/AngelscriptCompilerPipelineImportTests.cpp` — `FDeclaredImportErrorScenario`
-- `Compiler/AngelscriptCompilerPipelinePropertyMetadataTests.cpp` — `FPropertyCallbackValidationScenario`
-- `Preprocessor/AngelscriptPreprocessorLiteralTests.cpp` — `FPrefixedLiteralBoundaryScenario` + `RunPrefixedLiteralBoundaryScenario()`
-- `Preprocessor/AngelscriptPreprocessorPropertyMacroErrorTests.cpp` — `FInvalidPropertySpecifierScenario`
-- `Preprocessor/AngelscriptPreprocessorFunctionMacroErrorTests.cpp` — 独特结构体名
-- `Preprocessor/AngelscriptPreprocessorDirectiveErrorTests.cpp` — 独特结构体名
-- `Preprocessor/AngelscriptPreprocessorComponentSpecifierTests.cpp` — 独特结构体名
-- `Preprocessor/AngelscriptPreprocessorImportModeTests.cpp` — 独特结构体名
-- `Learning/Runtime/AngelscriptLearningCompilerTraceTests.cpp` — `FLearningXxxScenario`
-- `Learning/Runtime/AngelscriptLearningHotReloadDecisionTraceTests.cpp` — `FLearningHotReloadDecisionScenario`
-- `Learning/Runtime/AngelscriptLearningReloadAndClassAnalysisTests.cpp` — 独特名
-- `Learning/Runtime/AngelscriptLearningRestoreAndBytecodePersistenceTests.cpp` — 独特名
+**每个文件中常见的 Scenario 用法及建议替换**：
 
-**其他**：
-- `Delegate/AngelscriptDelegateTests.cpp` — `FScenarioIntStringParams`、`InitializeDelegateScenarioSpawner`
-- `Core/AngelscriptRuntimeModuleTests.cpp` — 独特名
-- 等
+| 当前名 | 建议改为 |
+|--------|----------|
+| `FScenario` (struct) | `FTestCase` |
+| `FXxxScenario` (struct) | `FXxxTestCase` |
+| `BuildScenarios()` | `BuildTestCases()` |
+| `const FXxx& Scenario` (loop var) | `const FXxx& TestCase` |
+| `Scenario.xxx` (member access) | `TestCase.xxx` |
+| `ScenarioLabel` | `TestCaseLabel` |
+| `RunXxxScenario()` | `RunXxxTestCase()` |
+| `InitializeXxxScenario()` | `InitializeXxxTestCase()` |
+| `TArray<FXxxScenario>` | `TArray<FXxxTestCase>` |
+| `InteractionScenarioDeltaTime` | `InteractionDeltaTime` |
+| `"Scenario xxx..."` (string msg) | `"Test xxx..."` |
 
 **执行步骤（每个文件）**：
-- [ ] 确认文件中所有 `Scenario` 的用法（结构体声明 + 所有引用）
-- [ ] 替换结构体名（声明 + 所有引用保持一致）
-- [ ] 构建单文件验证
-- [ ] 提交
+- [ ] 确认文件中所有 `Scenario` 的用法（`git grep -n "Scenario" <file>`）
+- [ ] 替换（声明 + 所有引用保持一致，可用 IDE 重构工具）
+- [ ] 构建单文件验证（`RunBuild.ps1`）
+- [ ] 提交（可按目录分批提交）
 
 ## 验收标准
 
