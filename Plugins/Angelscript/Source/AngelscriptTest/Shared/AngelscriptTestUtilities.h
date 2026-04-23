@@ -123,6 +123,17 @@ namespace AngelscriptTestSupport
 	}
 
 
+	/**
+	 * Creates a bare asCScriptEngine with minimal AngelScript SDK configuration.
+	 * Does NOT register any UE type bindings, script class generators, or reflection hooks.
+	 * Intended for AngelScriptSDK tests that need a pure script engine sandbox.
+	 */
+	inline asCScriptEngine* CreateBareScriptEngine()
+	{
+		asIScriptEngine* RawEngine = asCreateScriptEngine(ANGELSCRIPT_VERSION);
+		return static_cast<asCScriptEngine*>(RawEngine);
+	}
+
 	inline TUniquePtr<FAngelscriptEngine> CreateIsolatedFullEngine()
 	{
 		FAngelscriptEngineConfig Config;

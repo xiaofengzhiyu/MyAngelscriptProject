@@ -203,7 +203,7 @@ bool FTemplateComplexTest::RunTest(const FString& Parameters)
 | 模板 / 情景 | 首选目录 | 复制后的真实落点 |
 | --- | --- | --- |
 | simple unit template | `Plugins/Angelscript/Source/AngelscriptTest/Template/` | `Shared/`、`Core/`、`Bindings/` |
-| complex parameterized template | `Plugins/Angelscript/Source/AngelscriptTest/Template/` | `Core/`、`Compiler/`、`Internals/` |
+| complex parameterized template | `Plugins/Angelscript/Source/AngelscriptTest/Template/` | `Core/`、`Compiler/`、`AngelScriptSDK/` |
 | standalone UI template | `Plugins/Angelscript/Source/AngelscriptTest/Template/` | `Actor/`、`Subsystem/`、`Editor/` |
 | multiplayer/world template | `Plugins/Angelscript/Source/AngelscriptTest/Template/` | `Actor/`、`Component/`、`Subsystem/` |
 | latent wait template | `Plugins/Angelscript/Source/AngelscriptTest/Template/` | 所有需要等待的主题目录 |

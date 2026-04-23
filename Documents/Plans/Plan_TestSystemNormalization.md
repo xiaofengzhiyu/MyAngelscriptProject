@@ -88,7 +88,7 @@ Documents/Tools/（1 个）：
 
 Plugins/Angelscript/（1 个 guide 文件 + 多个测试目录）：
 - `Plugins/Angelscript/AGENTS.md` — 新增测试时的放置、命名、前缀规则
-- `Plugins/Angelscript/Source/AngelscriptTest/Native/*` — Native / ASSDK 文件名规范化
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/*` — Native / ASSDK 文件名规范化
 - `Plugins/Angelscript/Source/AngelscriptTest/Preprocessor/*` — 缺失项目前缀的历史文件名修正
 - `Plugins/Angelscript/Source/AngelscriptTest/Examples/*` — 后续是否迁回主题目录的 backlog
 - `Plugins/Angelscript/Source/AngelscriptTest/Subsystem/*` — 历史前缀保留或迁移方案
@@ -105,8 +105,8 @@ Tools/（2 个）：
 2. `AngelscriptEditor/Tests` 已经是 Editor 内部测试层，前缀实际为 `Angelscript.Editor.*`。
 3. `AngelscriptTest` 模块已经承载 Native、运行时集成、UE 场景、Learning、Examples 等多层测试，但此前没有单一文档统一解释这些层的边界。
 4. Native 层的两条事实子层已经存在：
-   - `Angelscript.TestModule.Native.*`：纯原生 AngelScript 公共 API 路径
-   - `Angelscript.TestModule.Native.ASSDK.*`：ASSDK 适配层 / 包装层回归
+   - `Angelscript.TestModule.AngelScriptSDK.*`：纯原生 AngelScript 公共 API 路径
+   - `Angelscript.TestModule.AngelScriptSDK.ASSDK.*`：ASSDK 适配层 / 包装层回归
 5. `Tools/RunTests.ps1` 能可靠执行单前缀回归，但在“固定一轮标准 smoke / scenario 样本”这类需求下，不够直接。
 6. `Examples/`、`ScriptExamples.*`、`WorldSubsystem.*`、`GameInstanceSubsystem.*` 等历史前缀并不一定错误，但它们确实已经被识别为“需要评估是否继续保留”的对象。
 
@@ -225,7 +225,7 @@ Tools/（2 个）：
    - 说明：之前如果有人直接沿用旧的 `Core.Parity` 写法，后续应统一改为与实际测试注册一致的 `Angelscript.TestModule.Parity`。
 
 2. **ASSDK / Preprocessor 文件名会发生一次性规范化**
-   - 影响位置：`Plugins/Angelscript/Source/AngelscriptTest/Native/`、`Plugins/Angelscript/Source/AngelscriptTest/Preprocessor/`
+   - 影响位置：`Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/`、`Plugins/Angelscript/Source/AngelscriptTest/Preprocessor/`
    - 说明：后续引用这些文件名的计划、目录文档和评审讨论都必须跟随新文件名，否则会继续制造“源码已改、文档未改”的漂移。
 
 ## 依赖关系

@@ -18,7 +18,7 @@
 
 这意味着 Static JIT 的绝大多数 deterministic 路径仍然没有单元测试保护：`PrecompiledData` 的类型/模块重建、`FScriptFunctionNativeForm` 的 native form 选择、`FJITDatabase` 的全局注册表状态等一旦漂移，只能靠更高层回归或人工排查发现。
 
-另外，`StaticJIT` 相关代码大量依赖 `FAngelscriptEngine` 与 `source/as_*.h` 内部类型，不适合放到 `Plugins/Angelscript/Source/AngelscriptTest/Native/`。首轮测试应继续沿用 `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` 的 `Angelscript.CppTests.*` 层级，保持与现有 `AngelscriptPrecompiledDataTests.cpp` 一致的内部测试模式。
+另外，`StaticJIT` 相关代码大量依赖 `FAngelscriptEngine` 与 `source/as_*.h` 内部类型，不适合放到 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/`。首轮测试应继续沿用 `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/` 的 `Angelscript.CppTests.*` 层级，保持与现有 `AngelscriptPrecompiledDataTests.cpp` 一致的内部测试模式。
 
 ### 目标
 
@@ -43,7 +43,7 @@
   - HotReload、Scenario、World/Actor/Blueprint 级场景测试
   - 与 Static JIT 单元测试无直接关系的运行时代码修复
 - **边界约束**
-  - 新增测试默认落在 `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`，使用 `Angelscript.CppTests.StaticJIT.*` 前缀；**不要**放进 `Plugins/Angelscript/Source/AngelscriptTest/Native/`。
+  - 新增测试默认落在 `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`，使用 `Angelscript.CppTests.StaticJIT.*` 前缀；**不要**放进 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/`。
   - 测试可以继续使用 `FAngelscriptEngine::CreateForTesting(...)`、`StartAngelscriptHeaders.h` 与 `source/as_*.h`，但要像现有 Runtime tests 一样，把 fixture 控制在最小范围内。
   - 由于 `StaticJITConfig.h` 在 `WITH_EDITOR` 下定义了 `AS_SKIP_JITTED_CODE`，首轮测试应验证**数据、绑定选择、注册表状态**，不要把“执行真正 jitted 代码”当作完成条件。
 
@@ -58,14 +58,14 @@
 | `Plugins/Angelscript/Source/AngelscriptRuntime/StaticJIT/StaticJITBinds.h` | `FScriptFunctionNativeForm` 与 `SCRIPT_NATIVE_*` 绑定入口 | 无 direct tests |
 | `Plugins/Angelscript/Source/AngelscriptRuntime/StaticJIT/AngelscriptStaticJIT.h` | `FAngelscriptStaticJIT`、`FStaticJITContext`、`FJITDatabase` | `FJITDatabase` 无 direct tests |
 | `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/AngelscriptPrecompiledDataTests.cpp` | Static JIT 现有 runtime test 入口 | 仅 2 个 regression，用例面过窄 |
-| `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptBytecodeTests.cpp` | 说明仓库允许通过内部 header 测低层引擎细节 | 可借鉴命名与 minimal fixture 方式，但 Static JIT 首轮仍以 Runtime tests 为主 |
+| `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptBytecodeTests.cpp` | 说明仓库允许通过内部 header 测低层引擎细节 | 可借鉴命名与 minimal fixture 方式，但 Static JIT 首轮仍以 Runtime tests 为主 |
 
 ### 测试层级决策
 
 本计划固定将 Static JIT 单元测试放在 `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/`，原因如下：
 
 1. 现有 `AngelscriptPrecompiledDataTests.cpp` 已证明 Runtime tests 层可以合法访问 `FAngelscriptEngine` 与 `source/as_*.h`，且命名是 `Angelscript.CppTests.StaticJIT.*`，最符合当前仓库事实。
-2. `Plugins/Angelscript/Source/AngelscriptTest/Native/` 的边界是“只用 `AngelscriptInclude.h` / `angelscript.h` 暴露的公共 API”，而 Static JIT 的预编译/绑定/数据库测试显然越过了这条边界。
+2. `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/` 的边界是“只用 `AngelscriptInclude.h` / `angelscript.h` 暴露的公共 API”，而 Static JIT 的预编译/绑定/数据库测试显然越过了这条边界。
 3. 首轮要补的是 deterministic 低层逻辑，不需要 World/Actor/Editor helper；放进 `AngelscriptRuntime/Tests/` 能避免把测试层级人为抬高。
 
 ## 建议文件落点
@@ -112,7 +112,7 @@ powershell.exe -ExecutionPolicy Bypass -File "Tools\RunTests.ps1" -TestPrefix "A
 
 - [ ] **P1.1** 扩展 `AngelscriptPrecompiledDataTests.cpp` 覆盖 `FAngelscriptPrecompiledDataType` 的核心分支
   - 当前文件只保护 editor-only/high-bit flag 回归，`InitFrom()` / `Create()` 的 primitive、object handle、reference、auto 等主分支仍然裸奔；这些分支一旦漂移，会直接污染 `PrecompiledFunction`、`PrecompiledProperty`、`PrecompiledGlobalVariable` 的所有重建路径。
-  - 继续沿用现有 `FAngelscriptEngine::CreateForTesting(..., EAngelscriptEngineCreationMode::Clone)` 与局部 `asCModule` / `asCObjectType` fixture，不额外新建测试层，也不把这类内部类型 round-trip 测试移到 `AngelscriptTest/Native/`。
+  - 继续沿用现有 `FAngelscriptEngine::CreateForTesting(..., EAngelscriptEngineCreationMode::Clone)` 与局部 `asCModule` / `asCObjectType` fixture，不额外新建测试层，也不把这类内部类型 round-trip 测试移到 `AngelscriptTest/AngelScriptSDK/`。
   - 至少为四类输入建立显式断言：primitive、object-handle、reference、auto。断言不仅看 `operator<<` 序列化后的字段，还要验证 `Create()` 还原出的 `asCDataType` 与原始输入在 token、handle、const、reference 语义上保持一致。
 - [ ] **P1.1** 📦 Git 提交：`[StaticJIT] Test: expand precompiled datatype roundtrip coverage`
 
@@ -127,7 +127,7 @@ powershell.exe -ExecutionPolicy Bypass -File "Tools\RunTests.ps1" -TestPrefix "A
 > 目标：让 Static JIT 绑定分发与运行时注册表这两块“失败后很难靠高层日志定位”的区域，至少拥有 deterministic、可重复的低层保护。
 
 - [ ] **P2.1** 新增 `AngelscriptStaticJITNativeFormTests.cpp`，覆盖 `FScriptFunctionNativeForm::GetNativeForm()` 与常见 native form 能力位
-  - `StaticJITBinds.h` 暴露的 `FScriptFunctionNativeForm` 是 Static JIT 能否走 native/custom/pointer call 的关键分发点，但当前仓库没有任何 direct test 保护 `GetNativeForm()`、`IsTrivialFunction()`、`CanCallNative()` 这类判定逻辑。
+  - `StaticJITBinds.h` 暴露的 `FScriptFunctionNativeForm` 是 Static JIT 能否走 AngelScriptSDK/custom/pointer call 的关键分发点，但当前仓库没有任何 direct test 保护 `GetNativeForm()`、`IsTrivialFunction()`、`CanCallNative()` 这类判定逻辑。
   - 通过最小绑定 fixture 注册至少一类 trivial native function、一类 native method，必要时补一类 UFunction/native constructor 场景，验证 `GetNativeForm()` 返回非空且能力位与绑定时声明的 trivial/custom 行为一致；同时补一个未绑定或不适用场景，防止“任何函数都误命中 native form”。
   - 该文件内部继续使用 `#if AS_CAN_GENERATE_JIT && WITH_DEV_AUTOMATION_TESTS` 与最小引擎夹具，不把测试设计成依赖真实 jitted 代码执行。
 - [ ] **P2.1** 📦 Git 提交：`[StaticJIT] Test: cover native form resolution and capabilities`
@@ -164,7 +164,7 @@ powershell.exe -ExecutionPolicy Bypass -File "Tools\RunTests.ps1" -TestPrefix "A
 2. 现有 `AngelscriptPrecompiledDataTests.cpp` 的高位 flag 回归继续保留并通过，没有被新覆盖重写掉。
 3. `Tools\RunTests.ps1 -TestPrefix "Angelscript.CppTests.StaticJIT"` 在当前 Windows editor 环境下可以作为稳定入口执行；若有平台/宏 gating，也有明确的测试内 skip 或文档说明。
 4. `Documents/Guides/Test.md` 与 `Documents/Guides/TestCatalog.md` 已同步 Static JIT 的测试层级、前缀与首轮执行结果。
-5. 整个首轮方案没有把 Static JIT 低层测试错误地下沉到 `Plugins/Angelscript/Source/AngelscriptTest/Native/`，也没有把非 deterministic 的 generated code 全文 snapshot 当作主要回归手段。
+5. 整个首轮方案没有把 Static JIT 低层测试错误地下沉到 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/`，也没有把非 deterministic 的 generated code 全文 snapshot 当作主要回归手段。
 
 ## 风险与注意事项
 

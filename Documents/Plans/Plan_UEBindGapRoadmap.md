@@ -267,7 +267,7 @@
 - 需要特别排除误判：`Source/AngelscriptRuntime/FunctionCallers/FunctionCallers_*.cpp` 虽然包含大量 `ERASE_METHOD_PTR(...)` 片段，但文件整体处于注释块中，不能视为当前插件已生效的自动覆盖面。
 - **Keep（值得纳入后续专题）**：`UMaterialInstanceDynamic::Set/GetScalar/Vector/TextureParameterValue`、`UMaterialParameterCollection` 运行时参数访问、`UWidgetAnimation` 播放与 started/finished 回调、`UPanelWidget` 子节点管理、`UGameplayStatics::CreateSaveGameObject/SaveGameToSlot/LoadGameFromSlot/DeleteGameInSlot`。
 - **Defer（可以后续考虑的高层便利层）**：`UKismetRenderingLibrary` 风格的 render target 创建/绘制 helper、`UPostProcessComponent` / `APostProcessVolume` 的高层 blendable/开关包装、`URuntimeVirtualTextureComponent` 这类高层运行时组件控制。
-- **Skip / Overreach（不进入当前路线）**：`UMaterialExpression` 图编辑、`UMaterialFunction`/material layer authoring、`FSceneView`、`FShader`、shader compilation、render pipeline internals、nDisplay、深层 virtual texture internals、渲染诊断/帧调试器等。这些要么是编辑器/渲染器内部能力，要么维护成本远超脚本运行时价值。
+- **Skip / Overreach（不进入当前路线）**：`UMaterialExpression` 图编辑、`UMaterialFunction`/material layer authoring、`FSceneView`、`FShader`、shader compilation、render pipeline AngelScriptSDK、nDisplay、深层 virtual texture AngelScriptSDK、渲染诊断/帧调试器等。这些要么是编辑器/渲染器内部能力，要么维护成本远超脚本运行时价值。
 - 结论：材质渲染方向里真正适合 Angelscript hand-bind 的，是 runtime convenience 层，而不是材质编辑器和渲染管线内部实现；因此这一组应以“表现层与游戏框架 convenience 专题”推进，不与物理/反射/网络混成单一 phase。
 
 ### G. Networking / RPC / Replication 专题

@@ -46,10 +46,11 @@
   - [x] 1.4.3 `StructUtils` / `EnhancedInput` / `GameplayAbilities` 等外部插件关系 → `01_04_03_External_Plugin_Relationships.md`
   - [x] 1.4.4 Runtime 的条件依赖与 Editor-Only 边界处理 → `01_04_04_Runtime_Conditional_Dependencies_And_Editor_Only_Boundary.md`
   - [x] 1.4.5 `.uplugin` `Plugins` 声明与 `Build.cs` 依赖的一致性约束 → `01_04_05_Plugin_Descriptor_And_BuildCs_Consistency.md`
+  - [x] 1.4.6 `AngelscriptTest` 原生 `UClass` 的 AS 可见性与加载时序缺口 → `01_04_06_AngelscriptTest_Load_Timing_And_Native_UClass_Bind_Visibility.md`
   - 关键源码: `Plugins/Angelscript/Angelscript.uplugin`, `Plugins/Angelscript/Source/*/*.Build.cs`
   - 关键概念: LoadingPhase, Module Type, Plugin Dependency
   - 现有材料: `AGENTS.md`
-  - [x] 补充审查：已追加 `1.4.4 Runtime 的条件依赖与 Editor-Only 边界处理` 与 `1.4.5 .uplugin Plugins 声明与 Build.cs 依赖的一致性约束`
+  - [x] 补充审查：已追加 `1.4.4 Runtime 的条件依赖与 Editor-Only 边界处理`、`1.4.5 .uplugin Plugins 声明与 Build.cs 依赖的一致性约束` 与 `1.4.6 AngelscriptTest 原生 UClass 的 AS 可见性与加载时序缺口`
 
 - [x] **1.5 UHT 工具链位置与边界**
   - [x] 1.5.1 `AngelscriptUHTTool` 的职责与输出物 → `01_05_01_AngelscriptUHTTool_Responsibilities_And_Outputs.md`

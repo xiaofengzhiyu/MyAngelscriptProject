@@ -1,4 +1,4 @@
-﻿# Angelscript Test Conventions & Macro Guide
+# Angelscript Test Conventions & Macro Guide
 
 ## Overview
 
@@ -16,6 +16,7 @@ This project uses a two-layer macro system defined in `Shared/AngelscriptTestMac
 | `ASTEST_CREATE_ENGINE_SHARE_FRESH()` | `FAngelscriptEngine&` | Shared cached Full test engine with `AcquireFreshSharedCloneEngine()` semantics before use. |
 | `ASTEST_CREATE_ENGINE_CLONE()` | `FAngelscriptEngine&` | Lightweight isolation. Shares source engine read-only state (bindings, types). |
 | `ASTEST_CREATE_ENGINE_NATIVE()` | `asIScriptEngine*` | Raw AngelScript SDK engine, no FAngelscriptEngine wrapper. |
+| `ASTEST_CREATE_ENGINE_BARE()` | `asCScriptEngine*` | Internal SDK engine for AngelScriptSDK tests. No UE bindings, minimal config. |
 
 ### Layer 2: Lifecycle (`ASTEST_BEGIN_* / ASTEST_END_*`)
 
@@ -27,6 +28,7 @@ This project uses a two-layer macro system defined in `Shared/AngelscriptTestMac
 | `ASTEST_BEGIN_SHARE_FRESH` / `ASTEST_END_SHARE_FRESH` | Creates `FAngelscriptEngineScope` after fresh shared-engine reacquire | None (reset semantics come from `ASTEST_CREATE_ENGINE_SHARE_FRESH()`) |
 | `ASTEST_BEGIN_CLONE` / `ASTEST_END_CLONE` | Creates `FAngelscriptEngineScope` | Auto-discards all active modules |
 | `ASTEST_BEGIN_NATIVE` / `ASTEST_END_NATIVE` | Validates non-null pointer | Auto `ShutDownAndRelease` |
+| `ASTEST_BEGIN_BARE` / `ASTEST_END_BARE` | Validates non-null `asCScriptEngine*` pointer | Auto `ShutDownAndRelease` |
 
 For the `SHARE` family, `ASTEST_BEGIN_*` is currently the canonical place to establish the engine scope, while `ASTEST_END_*` is intentionally kept as the paired lifecycle closeout point for future global control.
 
@@ -58,6 +60,9 @@ Need isolation but don't want Full engine cost?
 
 Testing raw AngelScript SDK APIs?
   YES --> ASTEST_CREATE_ENGINE_NATIVE + BEGIN/END_NATIVE
+
+Testing AngelScript SDK internal classes (asCBuilder, asCByteCode, asCParser)?
+  YES --> ASTEST_CREATE_ENGINE_BARE + BEGIN/END_BARE
 
 Testing engine creation itself / multi-engine interaction / production engine?
   YES --> Use IMPLEMENT_SIMPLE_AUTOMATION_TEST directly, no macros.
@@ -182,6 +187,25 @@ bool FMyNativeTest::RunTest(const FString& Parameters)
 }
 ```
 
+### BARE SDK Internal Test
+
+```cpp
+bool FMyBareSDKTest::RunTest(const FString& Parameters)
+{
+    asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
+    ASTEST_BEGIN_BARE
+
+    // Direct SDK internal class operations
+    asCModule* Module = static_cast<asCModule*>(BareEngine->GetModule("test", asGM_ALWAYS_CREATE));
+    asCBuilder Builder(BareEngine, Module);
+    asCByteCode ByteCode(&Builder);
+    // ...
+
+    ASTEST_END_BARE
+    return true;
+}
+```
+
 ### Test with Custom Logic (No Macros)
 
 ```cpp
@@ -253,5 +277,5 @@ The following scenarios should use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` directly w
 - **Debugger client helpers**: `Shared/AngelscriptDebuggerTestClient.h`
 - **Debugger script fixtures**: `Shared/AngelscriptDebuggerScriptFixture.h`
 - **Scenario test utils**: `Shared/AngelscriptFunctionalTestUtils.h`
-- **Native test support**: `Native/AngelscriptNativeTestSupport.h`
-- **Native test adapter**: `Native/AngelscriptTestAdapter.h`
+- **Native test support**: `AngelScriptSDK/AngelscriptNativeTestSupport.h`
+- **Native test adapter**: `AngelScriptSDK/AngelscriptTestAdapter.h`

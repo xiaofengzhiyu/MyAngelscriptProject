@@ -80,6 +80,23 @@ namespace BlueprintSubclassActorTest
 		}
 	}
 
+	void EndPlayWorld(FAngelscriptEngine& Engine, UWorld& World)
+	{
+		if (World.HasBegunPlay())
+		{
+			AWorldSettings* WorldSettings = World.GetWorldSettings();
+			if (WorldSettings != nullptr)
+			{
+				FAngelscriptEngineScope WorldScope(Engine, WorldSettings);
+				World.EndPlay(EEndPlayReason::LevelTransition);
+			}
+			else
+			{
+				World.EndPlay(EEndPlayReason::LevelTransition);
+			}
+		}
+	}
+
 }
 
 using namespace BlueprintSubclassActorTest;
@@ -167,6 +184,11 @@ class ATestActorBlueprintSubclassBeginPlay : AActor
 
 	FActorTestSpawner Spawner;
 	Spawner.InitializeGameSubsystems();
+	ON_SCOPE_EXIT
+	{
+		BlueprintSubclassActorTest::EndPlayWorld(Engine, Spawner.GetWorld());
+	};
+
 	AActor* Actor = SpawnScriptActor(*this, Spawner, BlueprintClass);
 	if (Actor == nullptr)
 	{

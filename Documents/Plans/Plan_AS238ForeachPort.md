@@ -102,7 +102,7 @@
 > 目标：编写测试覆盖 foreach 的各种场景，包括正例、错误路径、容器类型、`asEP_FOREACH_SUPPORT` 开关。
 
 - [ ] **P3.1** 编写 foreach 测试
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptForeachTests.cpp`，遵循 Native Core 层规则
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptForeachTests.cpp`，遵循 Native Core 层规则
   - 测试需要先注册一个支持 `opForBegin`/`opForEnd`/`opForNext`/`opForValue` 的测试容器类型
   - 测试用例清单：
     - **BasicIteration**：foreach 遍历容器，断言每个元素按顺序访问
@@ -156,7 +156,7 @@
 | `ThirdParty/angelscript/source/as_compiler.h` | 修改 | 方法声明 |
 | `ThirdParty/angelscript/source/as_texts.h` | 修改 | 错误信息对齐（方案 A） |
 | `ThirdParty/angelscript/source/as_scriptengine.cpp` | 修改 | `SetEngineProperty` tokenizer 联动 |
-| `AngelscriptTest/Native/AngelscriptForeachTests.cpp` | 新增 | foreach 语法测试 |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptForeachTests.cpp` | 新增 | foreach 语法测试 |
 | `AngelscriptTest/Bindings/AngelscriptForeachBindingsTests.cpp` | 新增 | 容器 foreach 集成测试 |
 | `AngelscriptChange.md` | 修改 | 登记变更 |
 

@@ -71,7 +71,7 @@ C3. 检查是否存在没有 //[UE++] 标记但明显被修改过的代码段（
 
 ### D. 测试覆盖
 
-D1. 统计 AngelscriptTest/ 下按子目录（Actor/、Bindings/、Blueprint/、Component/、Core/、Debugger/、Delegate/、Dump/、GC/、HotReload/、Interface/、Internals/、Preprocessor/、Subsystem/ 等）分组的 .cpp 文件数和测试宏定义数（IMPLEMENT_*_AUTOMATION_TEST、BEGIN_DEFINE_SPEC 等）。
+D1. 统计 AngelscriptTest/ 下按子目录（Actor/、Bindings/、Blueprint/、Component/、Core/、Debugger/、Delegate/、Dump/、GC/、HotReload/、Interface/、AngelScriptSDK/、Preprocessor/、Subsystem/ 等）分组的 .cpp 文件数和测试宏定义数（IMPLEMENT_*_AUTOMATION_TEST、BEGIN_DEFINE_SPEC 等）。
 
 D2. 对照 AngelscriptRuntime/ 的功能子目录（Core/、ClassGenerator/、Binds/、Debugging/、StaticJIT/、CodeCoverage/、Dump/、FunctionLibraries/、Preprocessor/、BaseClasses/），标记哪些子目录有专门的测试文件对准它，哪些没有。
 

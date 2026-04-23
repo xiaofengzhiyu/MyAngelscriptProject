@@ -34,13 +34,13 @@
 
 以下路径在本计划关闭时继续保留，不纳入本轮 `BEGIN/END` 宏化 closeout：
 
-- `Plugins/Angelscript/Source/AngelscriptTest/Native/*`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/*`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/*`
 - `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptNativeScriptHotReloadTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptEngineParityTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptBindConfigTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptEnginePerformanceTests.cpp`
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptRestoreTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptRestoreTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningExecutionTraceTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningPreprocessorTraceTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningRestoreAndBytecodePersistenceTests.cpp`

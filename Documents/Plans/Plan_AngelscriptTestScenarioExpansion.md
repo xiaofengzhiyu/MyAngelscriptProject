@@ -41,13 +41,13 @@
   - 不顺手重构无关的历史测试目录
 - **边界约束**
   - 测试分层以 `Documents/Guides/Test.md` 为准，新增测试先定层，再定目录。
-  - `Plugins/Angelscript/Source/AngelscriptTest/Native/` 继续只使用公共 API；内部类或 `source/as_*.h` 不得混入这个目录。
+  - `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/` 继续只使用公共 API；内部类或 `source/as_*.h` 不得混入这个目录。
   - `Template/` 目录只放“可复制的脚手架示例”或少量模板验证，不重新变成泛化场景桶。
   - 路径和命令一律使用工程相对路径或 `AgentConfig.ini` 约定，不写死本机绝对路径。
 
 ## 当前事实状态快照
 
-1. `Documents/Guides/TestCatalog.md` 已将测试按 `Shared / Core / Angelscript / Bindings / HotReload / Internals / Compiler / Preprocessor / ClassGenerator / FileSystem / Editor / Themed Integration Tests / Template` 分类。
+1. `Documents/Guides/TestCatalog.md` 已将测试按 `Shared / Core / Angelscript / Bindings / HotReload / AngelScriptSDK / Compiler / Preprocessor / ClassGenerator / FileSystem / Editor / Themed Integration Tests / Template` 分类。
 2. `Documents/Guides/Test.md` 已明确：
    - `NullRHI` 是当前非图形测试主路径。
    - `Gauntlet` 适合作为 outer shell 执行 `UE.EditorAutomation`、`UE.TargetAutomation`、`UE.Networking` 等。
@@ -77,7 +77,7 @@
 
 - [ ] **P0.2** 固定模板目录规则
   - 明确 `Template/` 目录只承接模板脚手架或模板自测，不承接长期膨胀的泛化场景用例。
-  - 真实要长期保留的 case，仍按 `Shared / Core / Bindings / HotReload / Internals / Actor / Blueprint / Component / Delegate / GC / Interface / Inheritance / Subsystem` 等具体主题目录落位。
+  - 真实要长期保留的 case，仍按 `Shared / Core / Bindings / HotReload / AngelScriptSDK / Actor / Blueprint / Component / Delegate / GC / Interface / Inheritance / Subsystem` 等具体主题目录落位。
   - 这一步的意义是让“模板”与“主题化真实测试”分开，后续复制模板时不把脚手架当成最终落点。
 - [ ] **P0.2** 📦 Git 提交：`[Docs/Test] Plan: freeze template-vs-theme directory policy`
 

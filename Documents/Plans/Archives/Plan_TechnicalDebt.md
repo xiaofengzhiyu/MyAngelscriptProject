@@ -21,7 +21,7 @@
 1. **构建兼容性风险仍存在**：`Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptType.h:732-740` 仍无条件声明 `TBaseStructure<FBox>` / `TBaseStructure<FBoxSphereBounds>` 特化，且保留了 `//WILL-EDIT` 标记；`Plugins/Angelscript/Source/AngelscriptRuntime/AngelscriptRuntime.Build.cs:28-29` 仍无条件 `OptimizeCode = CodeOptimization.Never`。
 2. **运行时安全待办注释仍未收口**：`Bind_BlueprintEvent.cpp:144,169,343,353` 仍缺事件/委托签名校验；`AngelscriptDebugServer.cpp:161,185` 仍有线程挂起与异常路径并发保护待办注释；`StaticJIT/StaticJITHeader.cpp:255` 仍明确写着异常路径对象销毁待审计。
 3. **弃用 API 与警告压制尚未清理干净**：`ThirdParty/angelscript/source/as_string.h:108` 仍使用 `FCrc::Strihash_DEPRECATED`；`StaticJIT/StaticJITHeader.h:65` 仍在文件级使用 `PRAGMA_DISABLE_DEPRECATION_WARNINGS`。
-4. **测试基础设施债务重心已经变化**：`Internals/AngelscriptMemoryTests.cpp` 已经有 5 个内存相关回归；`Internals/AngelscriptRestoreTests.cpp` 已经覆盖 round-trip 与 strip-debug-info 正向路径。当前债务不再是“从零补测试”，而是**补负向边界、把现有基线写进文档并维持不回退**。
+4. **测试基础设施债务重心已经变化**：`AngelScriptSDK/AngelscriptMemoryTests.cpp` 已经有 5 个内存相关回归；`AngelScriptSDK/AngelscriptRestoreTests.cpp` 已经覆盖 round-trip 与 strip-debug-info 正向路径。当前债务不再是“从零补测试”，而是**补负向边界、把现有基线写进文档并维持不回退**。
 5. **测试 helper 命名债务仍然很重**：`Shared/AngelscriptTestUtilities.h:86-147` 仍保留 `GetSharedTestEngine()`、`GetSharedInitializedTestEngine()`、`GetResetSharedTestEngine()`、`GetProductionEngine()` 等语义重叠入口。源码扫描显示这些 helper 名称在 `Plugins/Angelscript/Source/AngelscriptTest/` 下约有 306 处引用，分布于 66 个文件。
 6. **全局状态依赖仍在插件核心路径中**：`Core/AngelscriptEngine.h:118-123` 仍公开 `FAngelscriptEngine::Get()` 与 `CurrentWorldContext`；运行时调用点仍出现在 `Bind_SystemTimers.cpp`、`Bind_UUserWidget.cpp`、`AngelscriptGameInstanceSubsystem.cpp`、`ClassGenerator` 与测试辅助路径。
 7. **Bind 差距必须先审计再收敛**：当前仓库里能直接确认的只有 `Bind_BlueprintType.cpp:156-157` 仍注释掉 `CPF_TObjectPtr` 相关判断；`Bind_TOptional.cpp`、`Bind_UStruct.cpp`、`Bind_Delegates.cpp` 等文件与 Hazelight/UEAS2 参考源的差距，需要先建立符号级 diff 矩阵，不能继续沿用旧计划里未经复核的“固定缺口列表”。
@@ -74,9 +74,9 @@
 
 ### 已验证“不是空白”的区域
 
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptMemoryTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptMemoryTests.cpp`
   - 已覆盖 Construction、FreeUnused、ScriptNodeReuse、ByteInstructionReuse、PoolLeakTracking 五类回归
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptRestoreTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptRestoreTests.cpp`
   - 已覆盖 round-trip 与 strip-debug-info round-trip 正向路径
 - `Plugins/Angelscript/Source/AngelscriptRuntime/ThirdParty/angelscript/source/as_module.cpp:1731-1745`
   - `SaveByteCode()` 在当前带 compiler 的构建路径走正常写入，`asNOT_SUPPORTED` 只在 `AS_NO_COMPILER` 条件编译分支出现
@@ -183,7 +183,7 @@ powershell.exe -Command "Start-Process -FilePath '<EngineRoot>\Engine\Binaries\W
 - [x] **P1.3** 为 `Bind_BlueprintEvent.cpp` 补齐运行时签名校验
   - 在进入 `ProcessEvent`、`ProcessDelegate`、`ProcessMulticastDelegate` 前，核对当前脚本参数缓存与 `UFunction` / delegate 签名是否一致，不一致时记录错误并安全返回
   - 实现时既要覆盖 `ExecutePreamble()` / `ExecuteEvent()`，也要覆盖 delegate 与 multicast delegate 的通用入口，避免只修一种调用路径
-  - 测试应优先落在现有 `Bindings` 或 `Internals` 体系，不新增无主题归属的 catch-all 测试文件
+  - 测试应优先落在现有 `Bindings` 或 `AngelScriptSDK` 体系，不新增无主题归属的 catch-all 测试文件
 - [x] **P1.3** 📦 Git 提交：`[Binds] Fix: validate BlueprintEvent signatures before dispatch`
 
 - [x] **P1.4** 为 `AngelscriptDebugServer.cpp` 增加并发保护并固定线程模型说明
@@ -221,10 +221,10 @@ powershell.exe -Command "Start-Process -FilePath '<EngineRoot>\Engine\Binaries\W
 - [x] **P2.2** 📦 Git 提交：`[StaticJIT] Refactor: narrow deprecation warning suppression scope`
 
 - [x] **P2.3** 为 Restore 路径补负向边界测试
-  - 现有 `Internals/AngelscriptRestoreTests.cpp` 已有 round-trip 与 strip-debug-info 正向测试，因此本项不再重复“补 round-trip”，而是补空/损坏流、读取失败、边界条件恢复等负向场景
+  - 现有 `AngelScriptSDK/AngelscriptRestoreTests.cpp` 已有 round-trip 与 strip-debug-info 正向测试，因此本项不再重复“补 round-trip”，而是补空/损坏流、读取失败、边界条件恢复等负向场景
   - 如果需要覆盖 `AS_NO_COMPILER` 分支，则应显式标注这是条件编译/专用构建路径，不得把当前正常构建里的 `asSUCCESS` 事实写回成过时前提
   - 目标是让 Restore 测试同时锁住“当前支持能力”和“失败时不崩溃”的边界
-- [x] **P2.3** 📦 Git 提交：`[Test/Internals] Feat: add negative and corruption coverage for restore paths`
+- [x] **P2.3** 📦 Git 提交：`[Test/AngelScriptSDK] Feat: add negative and corruption coverage for restore paths`
 
 - [x] **P2.4** 澄清 `TestCatalog.md` 的基线口径，并按需扩展 Memory/Restore 条目
   - `Documents/Guides/TestCatalog.md` 已经登记了 `Restore` 与 `Memory` 章节，因此本项不是“首次补登记”，而是把“已编目基线 vs 实时扫描规模”的差异解释清楚
@@ -249,7 +249,7 @@ powershell.exe -Command "Start-Process -FilePath '<EngineRoot>\Engine\Binaries\W
 - [x] **P3.1** 📦 Git 提交：`[Test] Refactor: introduce explicit helper names and compatibility aliases`
 
 - [x] **P3.2** 先迁移基础设施与低耦合目录
-  - 首批目录固定为：`Shared/`、`Core/`、`Compiler/`、`Preprocessor/`、`Internals/`
+  - 首批目录固定为：`Shared/`、`Core/`、`Compiler/`、`Preprocessor/`、`AngelScriptSDK/`
   - 这些目录对 helper 的语义要求最直接，最适合作为“命名规则模板”验证场；任何在这里暴露出的命名问题，都要先收敛，再往大规模目录扩散
   - 每完成一批目录，都要做 focused regression，而不是攒到最后一起赌全量回归
 - [x] **P3.2** 📦 Git 提交：`[Test] Refactor: migrate infrastructure and low-coupling tests to explicit helper names`

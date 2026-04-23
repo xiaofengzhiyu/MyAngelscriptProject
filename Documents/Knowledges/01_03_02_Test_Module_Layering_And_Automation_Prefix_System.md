@@ -3,7 +3,7 @@
 > **所属模块**: Editor / Test / Dump 协作边界 → Test 模块分层 / Automation Prefix
 > **关键源码**: `Plugins/Angelscript/AGENTS.md`, `Documents/Guides/Test.md`, `Documents/Guides/TestConventions.md`, `Plugins/Angelscript/Source/AngelscriptTest/AngelscriptTestModule.cpp`, `Plugins/Angelscript/Source/AngelscriptTest/`
 
-这一节真正要讲清楚的，不是 `AngelscriptTest` 目录下有哪些文件夹，而是为什么这个测试模块必须按层级和前缀被刻意拆开。当前仓库里同时存在 `AngelscriptRuntime/Tests/`、`AngelscriptEditor/Tests/`、`AngelscriptTest/Native/`、`AngelscriptTest/Debugger/`、`Actor/`、`HotReload/` 等多条测试线；如果不先把“它们分别验证哪一层、为什么用不同前缀、为什么不能混放”说明白，后续任何新增测试都会迅速失去边界。
+这一节真正要讲清楚的，不是 `AngelscriptTest` 目录下有哪些文件夹，而是为什么这个测试模块必须按层级和前缀被刻意拆开。当前仓库里同时存在 `AngelscriptRuntime/Tests/`、`AngelscriptEditor/Tests/`、`AngelscriptTest/AngelScriptSDK/`、`AngelscriptTest/Debugger/`、`Actor/`、`HotReload/` 等多条测试线；如果不先把“它们分别验证哪一层、为什么用不同前缀、为什么不能混放”说明白，后续任何新增测试都会迅速失去边界。
 
 ## 先把总规则钉死
 
@@ -57,7 +57,7 @@ void FAngelscriptTestModule::StartupModule()
 这恰好说明它的职责不是在模块入口塞复杂逻辑，而是作为一个**承载大量主题测试目录的验证容器**。真正重要的结构体现在目录布局上。当前 `Source/AngelscriptTest/` 下已经存在：
 
 - `Native/`
-- `Core/`、`Bindings/`、`Internals/`、`Compiler/`、`Preprocessor/`、`FileSystem/`、`ClassGenerator/`
+- `Core/`、`Bindings/`、`AngelScriptSDK/`、`Compiler/`、`Preprocessor/`、`FileSystem/`、`ClassGenerator/`
 - `Debugger/`
 - `Actor/`、`Blueprint/`、`Component/`、`Delegate/`、`GC/`、`HotReload/`、`Interface/`、`Subsystem/`
 - `Learning/`
@@ -73,7 +73,7 @@ void FAngelscriptTestModule::StartupModule()
 
 - **Runtime 内部 C++**：`Angelscript.CppTests.*`
 - **Editor 内部**：`Angelscript.Editor.*`
-- **Native Core**：`Angelscript.TestModule.Native.*`
+- **Native Core**：`Angelscript.TestModule.AngelScriptSDK.*`
 - **Runtime 集成**：`Angelscript.TestModule.*`
 - **Debugger 场景**：`Angelscript.TestModule.Debugger.*`
 - **UE 场景层**：`Angelscript.TestModule.<Theme>.*`
@@ -100,7 +100,7 @@ void FAngelscriptTestModule::StartupModule()
 
 因此：
 
-- `Angelscript.TestModule.Native.Execute.*` 是合理的
+- `Angelscript.TestModule.AngelScriptSDK.Execute.*` 是合理的
 - `Angelscript.TestModule.Learning.Runtime.*` 是合理的
 - `Angelscript.TestModule.Actor.*`、`Angelscript.TestModule.Component.*` 是合理的
 - 但像 `Angelscript.TestModule.Actor.Scenario.*` 这种就属于重复表达层级，当前规则明确反对
@@ -109,7 +109,7 @@ void FAngelscriptTestModule::StartupModule()
 
 ## `Native/` 为什么被单独保护
 
-`Plugins/Angelscript/AGENTS.md` 第一条就把 `Source/AngelscriptTest/Native/` 单独拉出来强调：
+`Plugins/Angelscript/AGENTS.md` 第一条就把 `Source/AngelscriptTest/AngelScriptSDK/` 单独拉出来强调：
 
 - 它是 Native Core 测试层
 - 只使用 `AngelscriptInclude.h` / `angelscript.h` 暴露的公共 API
@@ -179,7 +179,7 @@ void FAngelscriptTestModule::StartupModule()
 
 - 只测 Runtime 私有实现 → `Angelscript.CppTests.*`
 - 只测 Editor 私有行为 → `Angelscript.Editor.*`
-- 测公共 API / ASSDK → `Angelscript.TestModule.Native.*`
+- 测公共 API / ASSDK → `Angelscript.TestModule.AngelScriptSDK.*`
 - 测一般引擎集成 → `Angelscript.TestModule.*`
 - 测 UE 场景最终行为 → `Angelscript.TestModule.<Theme>.*`
 - 测调试协议 → `Angelscript.TestModule.Debugger.*`

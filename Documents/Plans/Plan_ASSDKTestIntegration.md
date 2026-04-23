@@ -139,7 +139,7 @@ inline int ExecuteString(asIScriptEngine* engine, const char* code)
 
 > 目标：提供桥接上游测试模式到 UE Automation 的基础设施，使后续集成只需"包装+调用"。
 
-- [x] **P0.1** 创建 `Native/AngelscriptTestAdapter.h`
+- [x] **P0.1** 创建 `AngelScriptSDK/AngelscriptTestAdapter.h`
   - 上游测试用 `bool` 返回（`true` = 失败），UE Automation 用 `TestTrue()` / `TestEqual()`；需要桥接层把上游断言模式映射到 UE
   - 提供 `FASSDKBufferedOutStream`（缓存消息到 `std::string buffer`，等价于上游 `CBufferedOutStream`）、`FASSDKBytecodeStream`（内存 save/load，等价于上游 `CBytecodeStream`）、`ASSDK_TEST_FAILED` 宏（映射到 `AddError()`）
   - 提供 `RegisterASSDKAssert(asIScriptEngine*)` 注册脚本侧 `Assert()` 全局函数
@@ -148,125 +148,125 @@ inline int ExecuteString(asIScriptEngine* engine, const char* code)
   - 不依赖 `FAngelscriptEngine`，只依赖 `AngelscriptInclude.h`
 - [x] **P0.1** 📦 Git 提交：`[Test/Native] Feat: add AS SDK test adapter infrastructure`
 
-- [x] **P0.2** 创建 `Native/AngelscriptASSDKSmokeTest.cpp`
+- [x] **P0.2** 创建 `AngelScriptSDK/AngelscriptASSDKSmokeTest.cpp`
   - 用适配层创建引擎，编译含 `Assert(1 == 1)` 的脚本并执行，验证 `ASSDKExecuteString` 可用，验证 `FASSDKBufferedOutStream` 可缓存消息
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Smoke`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Smoke`
 - [x] **P0.2** 📦 Git 提交：`[Test/Native] Feat: add AS SDK adapter smoke test`
 
 ### Phase 1：集成引擎与执行核心测试
 
 > 目标：集成最基础的引擎创建、参数传递、执行、全局变量、栈管理测试。
 
-- [x] **P1.1** 创建 `Native/AngelscriptASSDKEngineTests.cpp`
+- [x] **P1.1** 创建 `AngelScriptSDK/AngelscriptASSDKEngineTests.cpp`
   - 包装 `testcreateengine.cpp`（引擎创建/多引擎/message callback 复用），这是 AS 引擎最底层的健康检查
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Engine.Create`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Engine.Create`
 - [x] **P1.1** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK engine creation tests`
 
-- [x] **P1.2** 创建 `Native/AngelscriptASSDKExecuteTests.cpp`
+- [x] **P1.2** 创建 `AngelScriptSDK/AngelscriptASSDKExecuteTests.cpp`
   - 包装 `testexecute.cpp`、`testexecute1arg.cpp`、`testexecute2args.cpp`、`testexecute4args.cpp`、`testexecute4argsf.cpp`、`testexecute32args.cpp`、`testexecute32mixedargs.cpp`、`testexecutemixedargs.cpp`、`testexecutethis32mixedargs.cpp`、`testexecutescript.cpp` 中的核心路径
   - 这 10 个文件覆盖 1/2/4/32/mixed args、float args、this 调用等，是 ABI 正确性的核心回归
   - 对其中用到 `ExecuteString()` 的地方使用 `ASSDKExecuteString` 替代
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Execute.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Execute.*`
 - [x] **P1.2** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK execution and argument tests`
 
-- [x] **P1.3** 创建 `Native/AngelscriptASSDKGlobalVarTests.cpp`
+- [x] **P1.3** 创建 `AngelScriptSDK/AngelscriptASSDKGlobalVarTests.cpp`
   - 包装 `testglobalvar.cpp`、`testenumglobvar.cpp`、`teststack.cpp`、`test_stack2.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.GlobalVar.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.GlobalVar.*`
 - [x] **P1.3** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK global variable and stack tests`
 
 ### Phase 2：集成类型系统与运算符测试
 
 > 目标：覆盖基本类型、运算符、控制流、类型转换。
 
-- [x] **P2.1** 创建 `Native/AngelscriptASSDKTypeTests.cpp`
+- [x] **P2.1** 创建 `AngelScriptSDK/AngelscriptASSDKTypeTests.cpp`
   - 包装 `test_bool.cpp`、`test_bits.cpp`、`test_int8.cpp`、`testint64.cpp`、`test_float.cpp`、`test_enum.cpp`、`test_typedef.cpp`、`test_auto.cpp`
   - 覆盖布尔/位运算/整型边界/浮点精度/枚举/typedef/auto 推导
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Type.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Type.*`
 - [x] **P2.1** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK type system tests`
 
-- [x] **P2.2** 创建 `Native/AngelscriptASSDKOperatorTests.cpp`
+- [x] **P2.2** 创建 `AngelScriptSDK/AngelscriptASSDKOperatorTests.cpp`
   - 包装 `test_operator.cpp`、`test_pow.cpp`、`test_assign.cpp`、`test_multiassign.cpp`、`testnegateoperator.cpp`、`test_condition.cpp`、`test_for.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Operator.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Operator.*`
 - [x] **P2.2** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK operator and control-flow tests`
 
-- [x] **P2.3** 创建 `Native/AngelscriptASSDKConversionTests.cpp`
+- [x] **P2.3** 创建 `AngelScriptSDK/AngelscriptASSDKConversionTests.cpp`
   - 包装 `test_castop.cpp`、`test_conversion.cpp`、`test_implicitcast.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Conversion.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Conversion.*`
 - [x] **P2.3** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK type conversion tests`
 
 ### Phase 3：集成对象模型与 OOP 测试
 
 > 目标：覆盖构造/析构、对象、句柄、继承、接口。
 
-- [x] **P3.1** 创建 `Native/AngelscriptASSDKObjectTests.cpp`
+- [x] **P3.1** 创建 `AngelScriptSDK/AngelscriptASSDKObjectTests.cpp`
   - 包装 `test_object.cpp`、`test_object2.cpp`、`test_object3.cpp`、`test_constructor.cpp`、`test_constructor2.cpp`、`test_destructor.cpp`、`test_factory.cpp`
   - 覆盖值类型/引用类型构造、析构、工厂函数的对象生命周期
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Object.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Object.*`
 - [x] **P3.1** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK object model tests`
 
-- [x] **P3.2** 关闭 `Native/AngelscriptASSDKHandleTests.cpp` 迁移项
+- [x] **P3.2** 关闭 `AngelScriptSDK/AngelscriptASSDKHandleTests.cpp` 迁移项
   - 上游 `test_objhandle.cpp`、`test_objhandle2.cpp`、`test_autohandle.cpp`、`test_implicithandle.cpp`、`test_objzerosize.cpp` 依赖 vanilla AngelScript `@` handle / auto-handle 语义。
   - 当前 fork 的对象/handle 语义不兼容，见 `Documents/Guides/ASSDK_Fork_Differences.md` 中的“Handle/指针语法差异”章节。
   - 当前计划按“显式关闭”处理；若未来 fork 恢复该语义兼容，再单独重开子计划或新增 Phase。
 - [x] **P3.2** 📦 Git 提交：不适用（关闭项，无单独实现提交）
 
-- [x] **P3.3** 创建 `Native/AngelscriptASSDKOOPTests.cpp`
+- [x] **P3.3** 创建 `AngelScriptSDK/AngelscriptASSDKOOPTests.cpp`
   - 包装 `test_inheritance.cpp`、`test_interface.cpp`、`test_mixin.cpp`、`testmultipleinheritance.cpp`、`testvirtualinheritance.cpp`、`testvirtualmethod.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.OOP.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.OOP.*`
 - [x] **P3.3** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK inheritance and interface tests`
 
 ### Phase 4：集成函数与调用约定测试
 
 > 目标：覆盖函数重载、默认参数、引用参数、cdecl/thiscall/stdcall/generic 调用约定。
 
-- [x] **P4.1** 创建 `Native/AngelscriptASSDKFunctionTests.cpp`
+- [x] **P4.1** 创建 `AngelScriptSDK/AngelscriptASSDKFunctionTests.cpp`
   - 包装 `test_funcoverload.cpp`、`test_2func.cpp`、`test_defaultarg.cpp`、`test_namedargs.cpp`、`test_refargument.cpp`、`test_argref.cpp`、`test_refcast.cpp`、`test_unsaferef.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Function.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Function.*`
 - [x] **P4.1** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK function tests`
 
-- [x] **P4.2** 创建 `Native/AngelscriptASSDKCallingConvTests.cpp`
+- [x] **P4.2** 创建 `AngelScriptSDK/AngelscriptASSDKCallingConvTests.cpp`
   - 包装 `testcdecl_class.cpp` 系列（5 个）、`test_cdecl_objlast.cpp`、`test_cdecl_return.cpp`、`test_thiscall_*.cpp`（4 个）、`testnotcomplexstdcall.cpp`、`testnotcomplexthiscall.cpp`、`teststdcall4args.cpp`、`test_generic.cpp`、`test_getargptr.cpp`
   - 覆盖 cdecl / thiscall / stdcall / generic 调用约定的 ABI 正确性
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.CallingConv.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.CallingConv.*`
 - [x] **P4.2** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK calling convention tests`
 
 ### Phase 5：集成编译器、模块与运行时测试
 
 > 目标：覆盖编译器行为、模块管理、上下文、异常、GC、序列化。
 
-- [x] **P5.1** 创建 `Native/AngelscriptASSDKCompilerTests.cpp`
+- [x] **P5.1** 创建 `AngelScriptSDK/AngelscriptASSDKCompilerTests.cpp`
   - 包装 `test_compiler.cpp`、`test_parser.cpp`、`test_optimize.cpp`、`test_nevervisited.cpp`、`test_notinitialized.cpp`、`test_config.cpp`、`test_configaccess.cpp`、`test_dynamicconfig.cpp`、`test_registertype.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Compiler.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Compiler.*`
 - [x] **P5.1** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK compiler and config tests`
 
-- [x] **P5.2** 创建 `Native/AngelscriptASSDKModuleTests.cpp`
+- [x] **P5.2** 创建 `AngelScriptSDK/AngelscriptASSDKModuleTests.cpp`
   - 包装 `test_module.cpp`、`test_discard.cpp`、`test2modules.cpp`、`test_import.cpp`、`test_import2.cpp`、`test_circularimport.cpp`、`testmoduleref.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Module.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Module.*`
 - [x] **P5.2** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK module management tests`
 
-- [x] **P5.3** 创建 `Native/AngelscriptASSDKRuntimeTests.cpp`
+- [x] **P5.3** 创建 `AngelScriptSDK/AngelscriptASSDKRuntimeTests.cpp`
   - 包装 `test_context.cpp`、`test_suspend.cpp`、`test_exception.cpp`、`test_exceptionmemory.cpp`、`test_garbagecollect.cpp`、`test_saveload.cpp`、`test_stream.cpp`、`test_debug.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Runtime.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Runtime.*`
 - [x] **P5.3** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK runtime and GC tests`
 
 ### Phase 6：集成杂项语言特性与 2.38 版本标记测试
 
 > 目标：覆盖属性、const、命名空间、共享实体等杂项语言特性，以及 2.38 新特性（版本标记）。
 
-- [ ] **P6.1** 创建 `Native/AngelscriptASSDKLangMiscTests.cpp`
+- [ ] **P6.1** 创建 `AngelScriptSDK/AngelscriptASSDKLangMiscTests.cpp`
   - 包装 `test_getset.cpp`、`test_constobject.cpp`、`test_constproperty.cpp`、`test_nested.cpp`、`test_composition.cpp`、`test_shared.cpp`、`test_namespace.cpp`、`test_singleton.cpp`、`test_vartype.cpp`、`test_any.cpp`、`test_native_defaultfunc.cpp`、`test_custommem.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.LangMisc.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.LangMisc.*`
 - [ ] **P6.1** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK language miscellaneous tests`
 
-- [ ] **P6.2** 创建 `Native/AngelscriptASSDKRegressionTests.cpp`
+- [ ] **P6.2** 创建 `AngelScriptSDK/AngelscriptASSDKRegressionTests.cpp`
   - 包装 `test_rz.cpp`、`test_shark.cpp`、`test_propintegerdivision.cpp`、`test_pointer.cpp`、`test_dump.cpp`、`test_postprocess.cpp`、`testswitch.cpp`、`testtempvar.cpp`、`testlongtoken.cpp`、`testoutput.cpp`
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.Regression.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.Regression.*`
 - [ ] **P6.2** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK regression fix tests`
 
-- [ ] **P6.3** 创建 `Native/AngelscriptASSDKAS238FeatureTests.cpp`
+- [ ] **P6.3** 创建 `AngelScriptSDK/AngelscriptASSDKAS238FeatureTests.cpp`
   - 包装 `test_foreach.cpp`、`test_template.cpp`、`test_functionptr.cpp`、`test_scriptstruct.cpp`
   - 当前 AS 2.33 WIP 下部分用例预期失败；对不支持的子用例使用条件跳过，随 `Plan_AS238NonLambdaPort.md` / `Plan_AS238LambdaPort.md` 推进逐步翻为正例
-  - 测试路径：`Angelscript.TestModule.Native.ASSDK.AS238.*`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.ASSDK.AS238.*`
 - [ ] **P6.3** 📦 Git 提交：`[Test/Native] Feat: integrate AS SDK 2.38 feature tests with version gates`
 
 ### Phase 7：文档收口
@@ -284,8 +284,8 @@ inline int ExecuteString(asIScriptEngine* engine, const char* code)
 
 ## 验收标准
 
-1. `Native/AngelscriptTestAdapter.h` 提供完整的上游 → UE Automation 桥接，包含 `FASSDKBufferedOutStream`、`ASSDK_TEST_FAILED`、`RegisterASSDKAssert`、`ASSDKExecuteString`，不依赖 `FAngelscriptEngine` 和任何 add-on
-2. `Angelscript.TestModule.Native.ASSDK.Smoke` 冒烟测试通过
+1. `AngelScriptSDK/AngelscriptTestAdapter.h` 提供完整的上游 → UE Automation 桥接，包含 `FASSDKBufferedOutStream`、`ASSDK_TEST_FAILED`、`RegisterASSDKAssert`、`ASSDKExecuteString`，不依赖 `FAngelscriptEngine` 和任何 add-on
+2. `Angelscript.TestModule.AngelScriptSDK.ASSDK.Smoke` 冒烟测试通过
 3. Phase 1-5 的核心语言测试全部通过（预计 ≥80 个上游测试函数）
 4. Phase 6 的杂项与 2.38 标记测试中，已支持部分通过，未支持部分有显式跳过
 5. 现有 `Native/` 自研测试（17 个）回归不受影响

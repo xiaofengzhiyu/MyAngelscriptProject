@@ -248,7 +248,7 @@ J:\UnrealEngine\UERelease\Engine\Binaries\Win64\UnrealEditor-Cmd.exe <ProjectFil
 - `RuntimeCpp`
 - `Debugger`
 - `Bindings`
-- `Internals`
+- `AngelScriptSDK`
 - `HotReload`
 - `ScenarioSamples`
 - `All`

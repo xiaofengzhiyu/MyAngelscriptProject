@@ -106,7 +106,7 @@ AngelScript 2.37 为脚本类引入了**默认拷贝语义**：自动生成 `opA
 > 目标：编写测试覆盖默认拷贝生成、`= delete`、后置校验、引擎属性控制等场景。
 
 - [ ] **P4.1** 编写默认拷贝语义测试
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptDefaultCopyTests.cpp`，遵循 Native Core 层规则
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptDefaultCopyTests.cpp`，遵循 Native Core 层规则
   - 测试用例清单：
     - **DefaultOpAssignGenerated**：脚本类无自定义 `opAssign`，创建两个实例后赋值 `a = b`，断言成员值正确拷贝
     - **DefaultCopyConstructGenerated**：脚本类无自定义拷贝构造，通过 `T copy(original)` 创建拷贝，断言成员值正确
@@ -142,7 +142,7 @@ AngelScript 2.37 为脚本类引入了**默认拷贝语义**：自动生成 `opA
 | `ThirdParty/.../as_compiler.cpp` | 修改 | `CompileDefaultCopyConstructor`、`CompileMemberInitializationCopy` |
 | `ThirdParty/.../as_compiler.h` | 修改 | 新方法声明 |
 | `ThirdParty/.../as_scriptengine.cpp` | 修改 | 引擎属性与 builder 联动（若需要） |
-| `AngelscriptTest/Native/AngelscriptDefaultCopyTests.cpp` | 新增 | 默认拷贝语义测试 |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptDefaultCopyTests.cpp` | 新增 | 默认拷贝语义测试 |
 | `AngelscriptChange.md` | 修改 | 登记变更 |
 
 ## 验收标准

@@ -134,8 +134,8 @@
 - 显式弃用扫描结果：对 `Plugins/Angelscript/Source/AngelscriptRuntime/` 的 `_DEPRECATED` 与 `PRAGMA_DISABLE_DEPRECATION_WARNINGS` 定向扫描结果均为 **0 命中**。
 - `P2` 目标测试验证：
   - `Angelscript.TestModule.Angelscript.Upgrade.CStringHash`：PASS
-  - `Angelscript.TestModule.Internals.Restore.EmptyStreamFails`：PASS
-  - `Angelscript.TestModule.Internals.Restore.TruncatedStreamFails`：PASS
+  - `Angelscript.TestModule.AngelScriptSDK.Restore.EmptyStreamFails`：PASS
+  - `Angelscript.TestModule.AngelScriptSDK.Restore.TruncatedStreamFails`：PASS
 - `Automation RunTests Angelscript.TestModule` 全量回归结果：**仍未全绿**，但当前保留失败项与 `P2.1`~`P2.4` 的弃用 API / Restore 测试改动不直接相关。
 
 ### Phase 2 完成后的 full-suite 保留失败项（2026-04-03）
@@ -158,7 +158,7 @@
 - helper 命名迁移结果：`Plugins/Angelscript/Source/AngelscriptTest/` 下旧 helper 名称定向 grep 结果为 **0 命中**。
 - `P3.1` / `P3.2` focused regression：
   - `Angelscript.TestModule.Shared.EngineHelper`：PASS
-  - `Angelscript.TestModule.Internals.Restore.*`：PASS
+  - `Angelscript.TestModule.AngelScriptSDK.Restore.*`：PASS
 - `P3.3` 主题化集成 focused regression：`Actor`、`BlueprintChild`、`Component`、`Delegate`、`GC`、`HotReload`、`Inheritance`、`Interface`、`WorldSubsystem`、`ClassGenerator`：PASS（已知旧失败项未增加）。
 - `P3.4` 行为 / Bindings / FileSystem / Editor / ScriptExamples focused regression：helper 改名未新增失败；仍保留与此前一致的 4 个已知失败项。
 - `Automation RunTests Angelscript.TestModule` 全量回归结果：**仍未全绿**，失败项与 Phase 2 结束时一致，没有新增 helper 命名迁移相关失败。
@@ -270,7 +270,7 @@
 
 | 测试 | 失败摘要 | 根因 |
 |------|----------|------|
-| `Internals.Restore.EmptyStreamFails` | 期望 `"Unexpected end of file"`，实际 `"Angelscript: :"` | AS 引擎对空流的错误消息格式与测试 expectation 不一致 |
+| `AngelScriptSDK.Restore.EmptyStreamFails` | 期望 `"Unexpected end of file"`，实际 `"Angelscript: :"` | AS 引擎对空流的错误消息格式与测试 expectation 不一致 |
 
 - **修复方向**：调整测试 expectation 以匹配实际错误消息格式，或在 Restore 路径补充更明确的错误输出。
 - **复杂度**：低

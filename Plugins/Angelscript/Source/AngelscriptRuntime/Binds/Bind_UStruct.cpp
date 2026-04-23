@@ -1064,6 +1064,8 @@ bool ShouldBindEngineType(UScriptStruct* Struct)
 		return false;
 	if (Struct == TVariantStructure<FVector4f>::Get())
 		return false;
+	if (Struct == TBaseStructure<FIntPoint>::Get())
+		return false;
 	if (Struct == TBaseStructure<FIntVector>::Get())
 		return false;
 	if (Struct == TBaseStructure<FIntVector4>::Get())

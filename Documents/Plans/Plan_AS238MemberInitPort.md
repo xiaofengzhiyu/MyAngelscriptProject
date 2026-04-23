@@ -56,7 +56,7 @@ AngelScript 2.38 新增了 `asEP_MEMBER_INIT_MODE` 引擎属性的**实际生效
 > 目标：编写测试验证 Mode 0 不退化、Mode 1 跳过已初始化成员行为正确，更新变更追踪文档。
 
 - [ ] **P2.1** 编写 member init mode 测试
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptMemberInitModeTests.cpp`，遵循 Native Core 层规则
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptMemberInitModeTests.cpp`，遵循 Native Core 层规则
   - 使用 `CreateNativeEngine()` 创建独立引擎，分别在 Mode 0 和 Mode 1 下执行相同脚本
   - 测试用例清单：
     - **Mode1_ConstructorOverridesDefault**：声明 `int x = 10`，构造函数体 `x = 20`，Mode 1 下断言 x == 20 且声明处初始化未被执行（通过副作用或调用计数验证）
@@ -82,7 +82,7 @@ AngelScript 2.38 新增了 `asEP_MEMBER_INIT_MODE` 引擎属性的**实际生效
 |------|---------|------|
 | `ThirdParty/angelscript/source/as_compiler.h` | 修改 | 添加 `m_initializedProperties` 成员 |
 | `ThirdParty/angelscript/source/as_compiler.cpp` | 修改 | 构造函数体赋值检测 + `CompileMemberInitialization` mode 分支 |
-| `AngelscriptTest/Native/AngelscriptMemberInitModeTests.cpp` | 新增 | Mode 0/1 验证测试 |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptMemberInitModeTests.cpp` | 新增 | Mode 0/1 验证测试 |
 | `AngelscriptChange.md` | 修改 | 登记变更 |
 
 ## 验收标准

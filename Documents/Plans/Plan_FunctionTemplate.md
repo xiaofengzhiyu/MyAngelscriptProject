@@ -124,7 +124,7 @@ AngelScript 2.38.0 新增了**函数模板**（Template Functions）特性，允
 - [ ] **P2.4** 📦 Git 提交：`[ThirdParty/AS238] Feat: recognize template functions in RegisterGlobalFunction and RegisterObjectMethod`
 - [ ] **P2.5** 编写注册路径验证测试
   - Phase 2 完成后，C++ 宿主已经可以通过 `RegisterGlobalFunction` / `RegisterObjectMethod` + `asCALL_GENERIC` 注册模板函数，引擎能正确识别并设置 `asFUNC_TEMPLATE`；此时脚本侧编译调用尚未接通，但注册侧行为已可独立验证
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptFunctionTemplateRegistrationTests.cpp`，遵循 Native Core 层规则（只用 `AngelscriptInclude.h` / `angelscript.h` 公共 API）
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptFunctionTemplateRegistrationTests.cpp`，遵循 Native Core 层规则（只用 `AngelscriptInclude.h` / `angelscript.h` 公共 API）
   - 使用 `CreateNativeEngine()` 创建独立原生引擎，不依赖 `FAngelscriptEngine`
   - 测试用例清单：
     - **RegisterSingleParam**：注册 `void TestFunc<T>(int)` 形式的单形参全局模板函数，调用约定为 `asCALL_GENERIC`，断言 `RegisterGlobalFunction` 返回值 >= 0
@@ -163,7 +163,7 @@ AngelScript 2.38.0 新增了**函数模板**（Template Functions）特性，允
 - [ ] **P3.4** 📦 Git 提交：`[ThirdParty/AS238] Feat: clean up generated template function instances on engine shutdown`
 - [ ] **P3.5** 编写编译与执行验证测试
   - Phase 3 完成后，脚本侧 `name<Type>(args)` 语法已经可以正确编译和调用；这是函数模板的核心能力，需要在序列化之前用独立测试锁定正确性基线
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptFunctionTemplateExecutionTests.cpp`，遵循 Native Core 层规则
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptFunctionTemplateExecutionTests.cpp`，遵循 Native Core 层规则
   - 每个测试先用 `RegisterGlobalFunction` 注册一个 generic 回调模板函数，再编译包含模板调用的脚本，执行并验证返回值
   - generic 回调内通过 `asIScriptGeneric` 读取实参、写入返回值，模拟类型感知的 C++ 宿主逻辑
   - 测试用例清单：
@@ -209,7 +209,7 @@ AngelScript 2.38.0 新增了**函数模板**（Template Functions）特性，允
   - 目标文件行数控制在 400 行以内
 - [ ] **P4.3** 📦 Git 提交：`[ThirdParty/AS238] Test: add function template compilation edge case tests`
 - [ ] **P4.4** 编写序列化测试
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptFunctionTemplateSerializationTests.cpp`，验证 bytecode Save/Load 后模板函数调用行为不变
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptFunctionTemplateSerializationTests.cpp`，验证 bytecode Save/Load 后模板函数调用行为不变
   - 使用 `AngelscriptTestAdapter.h` 中的 `FASSDKBytecodeStream` 做内存级 Save/Load，不依赖文件系统
   - 测试流程：注册模板函数 → 编译脚本 → 执行一次确认基线 → SaveByteCode → DiscardModule → LoadByteCode → 再次执行 → 断言结果与基线一致
   - 测试用例清单：
@@ -241,9 +241,9 @@ AngelScript 2.38.0 新增了**函数模板**（Template Functions）特性，允
 | `ThirdParty/.../as_scriptfunction.h` | 修改 | 添加 `GetSubTypeCount`/`GetSubTypeId`/`GetSubType` 声明 |
 | `ThirdParty/.../as_scriptfunction.cpp` | 修改 | 实现上述方法 |
 | `ThirdParty/.../as_restore.cpp` | 修改 | 模板函数的序列化/反序列化 |
-| `AngelscriptTest/Native/AngelscriptFunctionTemplateRegistrationTests.cpp` | 新增 | 注册路径验证（P2.5）+ 边界补充（P4.2） |
-| `AngelscriptTest/Native/AngelscriptFunctionTemplateExecutionTests.cpp` | 新增 | 编译执行验证（P3.5）+ 边界补充（P4.3） |
-| `AngelscriptTest/Native/AngelscriptFunctionTemplateSerializationTests.cpp` | 新增 | Bytecode Save/Load 序列化测试（P4.4） |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptFunctionTemplateRegistrationTests.cpp` | 新增 | 注册路径验证（P2.5）+ 边界补充（P4.2） |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptFunctionTemplateExecutionTests.cpp` | 新增 | 编译执行验证（P3.5）+ 边界补充（P4.3） |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptFunctionTemplateSerializationTests.cpp` | 新增 | Bytecode Save/Load 序列化测试（P4.4） |
 
 ## 验收标准
 

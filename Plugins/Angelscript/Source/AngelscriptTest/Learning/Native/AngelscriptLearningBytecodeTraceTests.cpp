@@ -1,5 +1,5 @@
 #include "Shared/AngelscriptLearningTrace.h"
-#include "Native/AngelscriptNativeTestSupport.h"
+#include "AngelScriptSDK/AngelscriptNativeTestSupport.h"
 
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"

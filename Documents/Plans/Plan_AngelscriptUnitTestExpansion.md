@@ -79,7 +79,7 @@ Plugins/Angelscript/Source/
     Compiler/
     Preprocessor/
     HotReload/
-    Internals/
+    AngelScriptSDK/
     Actor/
     Blueprint/
     Component/
@@ -134,7 +134,7 @@ Plugins/Angelscript/Source/
    - 目录：`Plugins/Angelscript/Source/AngelscriptEditor/Tests/`
    - 适用：Class reload、Content Browser、Editor-only helper、菜单/索引/数据源逻辑
 3. **Plugin Fast Tests（带轻量引擎 helper 的快速回归）**
-   - 目录：`Plugins/Angelscript/Source/AngelscriptTest/{Shared,Core,Internals,Bindings,Compiler,Preprocessor,ClassGenerator}`
+   - 目录：`Plugins/Angelscript/Source/AngelscriptTest/{Shared,Core,AngelScriptSDK,Bindings,Compiler,Preprocessor,ClassGenerator}`
    - 适用：脚本编译、绑定、预处理器、类生成、内部机制的快速验证
 4. **Scenario / Integration（需要 World / Actor / Blueprint / PIE 风格上下文）**
    - 目录：`Plugins/Angelscript/Source/AngelscriptTest/{Actor,Blueprint,Component,Delegate,GC,HotReload,Interface,Inheritance,Subsystem,Template}`
@@ -152,7 +152,7 @@ Plugins/Angelscript/Source/
 | `Plugins/Angelscript/Source/AngelscriptTest/Core/` | Plugin Fast Tests | 承接引擎封装、配置、兼容性、快速核心回归 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/` | Plugin Fast Tests | 承接脚本语言行为、执行、类型、函数、对象模型等快速回归 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Bindings/` | Plugin Fast Tests | 承接绑定成功/失败路径、GAS wrapper、容器/工具/引擎 API 可见性验证 |
-| `Plugins/Angelscript/Source/AngelscriptTest/Internals/` | Plugin Fast Tests | 承接 tokenizer / parser / compiler / bytecode / GC / restore 等内部机制测试 |
+| `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/` | Plugin Fast Tests | 承接 tokenizer / parser / compiler / bytecode / GC / restore 等内部机制测试 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Compiler/` | Plugin Fast Tests | 承接编译管线端到端但仍无需 World 的快速测试 |
 | `Plugins/Angelscript/Source/AngelscriptTest/Preprocessor/` | Plugin Fast Tests | 承接预处理、include/import、宏、错误恢复等快速测试 |
 | `Plugins/Angelscript/Source/AngelscriptTest/ClassGenerator/` | Plugin Fast Tests | 承接类生成与最小 class compile/spawn 前验证 |
@@ -176,7 +176,7 @@ Plugins/Angelscript/Source/
    - 只为当前已经稳定的前缀或目录建立分组，避免在目录迁移前就把过滤规则写死。
    - 例如：
      - `AngelscriptRuntimeUnit` → `Angelscript.CppTests.*`
-     - `AngelscriptFast` → `Angelscript.TestModule.Core.*`、`Angelscript.TestModule.Bindings.*`、`Angelscript.TestModule.Internals.*`、`Angelscript.TestModule.Compiler.*`、`Angelscript.TestModule.Preprocessor.*`、`Angelscript.TestModule.Angelscript.*`
+     - `AngelscriptFast` → `Angelscript.TestModule.Core.*`、`Angelscript.TestModule.Bindings.*`、`Angelscript.TestModule.AngelScriptSDK.*`、`Angelscript.TestModule.Compiler.*`、`Angelscript.TestModule.Preprocessor.*`、`Angelscript.TestModule.Angelscript.*`
      - `AngelscriptScenario` → 当前 `Angelscript.TestModule.Scenario.*` 与已确认的主题化场景前缀
 2. **最终分组（Phase 1 之后）**
    - 待 `Examples/` 迁移、`Scenario.*` 前缀收敛、Editor bootstrap 跑通后，再统一调整为稳定前缀规则。
@@ -260,7 +260,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
     - `AngelscriptScenario`
   - 过滤条件以测试路径前缀为主，不依赖文件名；其中：
     - `AngelscriptRuntimeUnit` 初版仅收 `Angelscript.CppTests.*`
-    - `AngelscriptFast` 初版仅收 `Angelscript.TestModule.Core.*`、`Angelscript.TestModule.Angelscript.*`、`Angelscript.TestModule.Bindings.*`、`Angelscript.TestModule.Internals.*`、`Angelscript.TestModule.Compiler.*`、`Angelscript.TestModule.Preprocessor.*`
+    - `AngelscriptFast` 初版仅收 `Angelscript.TestModule.Core.*`、`Angelscript.TestModule.Angelscript.*`、`Angelscript.TestModule.Bindings.*`、`Angelscript.TestModule.AngelScriptSDK.*`、`Angelscript.TestModule.Compiler.*`、`Angelscript.TestModule.Preprocessor.*`
     - `AngelscriptScenario` 初版允许同时覆盖 `Angelscript.TestModule.Scenario.*` 与已明确主题前缀
     - `AngelscriptEditorUnit` 在 Editor bootstrap 跑通前可以为空组，但条目必须预留
   - `AngelscriptSmoke` 第一版只允许包含 4~6 个最小入口测试，不得混入 World tick / 多帧 / 热重载链路长用例
@@ -449,7 +449,7 @@ Use `Tools\RunBuild.ps1`（例如 `Tools\RunBuild.ps1 -Label bootstrap -TimeoutM
   - 评估新增：
     - `Plugins/Angelscript/Source/AngelscriptRuntime/Tests/AngelscriptTypeSystemTests.cpp`
 - 或扩展 `Plugins/Angelscript/Source/AngelscriptTest/Preprocessor/AngelscriptPreprocessorTests.cpp`
-    - 或扩展 `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptDataTypeTests.cpp`
+    - 或扩展 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptDataTypeTests.cpp`
   - 优先覆盖：嵌套宏、循环 import、错误恢复、类型匹配边界
   - 若同一能力更适合 `AngelscriptTest/` helper 层，则写在对应目录，但必须在提交说明中解释“不留在 Runtime/Tests 的原因”
   - 最少拆成以下具体测试：

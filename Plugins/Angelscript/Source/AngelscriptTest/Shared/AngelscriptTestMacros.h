@@ -62,6 +62,12 @@
 		return _CloneEngine; \
 	}())
 
+// BARE - Internal SDK asCScriptEngine without FAngelscriptEngine wrapper.
+// Use for: AngelScriptSDK tests that directly operate on asCBuilder/asCByteCode/asCParser.
+// Provides: asCScriptEngine* BareEngine
+#define ASTEST_CREATE_ENGINE_BARE() \
+	AngelscriptTestSupport::CreateBareScriptEngine()
+
 // NATIVE - Raw asIScriptEngine without FAngelscriptEngine wrapper.
 // Use for: testing AngelScript SDK APIs directly.
 // Provides: asIScriptEngine* NativeEngine
@@ -151,6 +157,21 @@
 		ON_SCOPE_EXIT { NativeEngine->ShutDownAndRelease(); };
 
 #define ASTEST_END_NATIVE \
+	}
+
+// ---------- BARE lifecycle ----------
+// Validates bare engine pointer + auto ShutDownAndRelease on exit.
+// Expects variable name: BareEngine (asCScriptEngine*)
+#define ASTEST_BEGIN_BARE \
+	if (BareEngine == nullptr) \
+	{ \
+		AddError(TEXT("Failed to create bare AngelScript SDK engine")); \
+		return false; \
+	} \
+	{ \
+		ON_SCOPE_EXIT { BareEngine->ShutDownAndRelease(); };
+
+#define ASTEST_END_BARE \
 	}
 
 // ============================================================================

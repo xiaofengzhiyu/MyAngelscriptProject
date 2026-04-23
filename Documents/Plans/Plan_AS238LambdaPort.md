@@ -15,7 +15,7 @@
 - `Plugins/Angelscript/Source/AngelscriptRuntime/ThirdParty/angelscript/source/as_compiler.h` 暴露了 `asCExprContext::SetLambda()` / `IsLambda()`，但需要对照 `2.38` 的 parser/compiler 语义把真正的编译与签名推导链路补齐。
 - `Plugins/Angelscript/Source/AngelscriptRuntime/ThirdParty/angelscript/source/as_builder.h` 已暴露 `RegisterLambda(...)` 声明，说明当前分支已经有过“半移植”痕迹，但仍未形成完整闭环。
 - `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptFunctionTests.cpp` 当前仍把 `funcdef` / function pointer 语法视为**应当失败**的能力边界，这与 AngelScript 官方 anonymous function 依赖 `funcdef` / function handle 的前提直接冲突。
-- 当前 `AngelscriptTest` 已具备比较完善的 `Internals/`、`Compiler/`、`Angelscript/` 三层测试入口，但尚无任何 lambda 专项覆盖。
+- 当前 `AngelscriptTest` 已具备比较完善的 `AngelScriptSDK/`、`Compiler/`、`Angelscript/` 三层测试入口，但尚无任何 lambda 专项覆盖。
 
 同时，上游 AngelScript 官方文档与 `Reference/angelscript-v2.38.0/sdk/tests/test_feature/source/test_functionptr.cpp` 已给出足够明确的目标语义：
 
@@ -170,9 +170,9 @@ int TestCapture()
 
 ### 测试与能力边界事实
 
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptParserTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptParserTests.cpp`
   - 已有 parser AST / syntax error 入口，适合补 parser 级 lambda 测试
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptCompilerTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptCompilerTests.cpp`
   - 已有 bytecode / variable scope / function call / type conversion 入口，适合补 compiler 级 lambda 测试
 - `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptFunctionTests.cpp`
   - 当前 `Functions.Pointer` 仍显式断言 function pointer 语法应失败，是 lambda 迁移的直接阻塞项
@@ -339,8 +339,8 @@ int TestCapture()
 
 > 目标：把官方 `test_functionptr.cpp` 里的核心 anonymous-function 场景映射到当前仓库的现有测试分层中。
 
-- [ ] **P4.1** 在 `Internals/AngelscriptParserTests.cpp` 添加 parser 级 lambda 用例
-  - 修改 `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptParserTests.cpp`
+- [ ] **P4.1** 在 `AngelScriptSDK/AngelscriptParserTests.cpp` 添加 parser 级 lambda 用例
+  - 修改 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptParserTests.cpp`
   - 至少覆盖：
     - `Parser.Lambda.Basic` — `function(a, b) { return a < b; }` 能建树
     - `Parser.Lambda.TypedParameters` — 显式类型参数能建树
@@ -348,8 +348,8 @@ int TestCapture()
     - `Parser.Lambda.NamespacedTypeParameter` — 命名空间类型参数解析稳定
 - [ ] **P4.1** 📦 Git 提交：`[Test/Lambda] Feat: add parser-level anonymous-function tests`
 
-- [ ] **P4.2** 在 `Internals/AngelscriptCompilerTests.cpp` 添加 compiler 级 lambda 用例
-  - 修改 `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptCompilerTests.cpp`
+- [ ] **P4.2** 在 `AngelScriptSDK/AngelscriptCompilerTests.cpp` 添加 compiler 级 lambda 用例
+  - 修改 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptCompilerTests.cpp`
   - 至少覆盖：
     - `Compiler.Lambda.FuncdefAssign` — lambda 可绑定到 funcdef/function handle
     - `Compiler.Lambda.Bytecode` — 编译后函数体可执行
@@ -371,7 +371,7 @@ int TestCapture()
 - [ ] **P4.3** 📦 Git 提交：`[Test/Lambda] Feat: add runtime anonymous-function behavior tests`
 
 - [ ] **P4.4** 补齐模块生命周期与共享路径回归
-  - 修改 `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptCompilerTests.cpp` 与/或 `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptFunctionTests.cpp`
+  - 修改 `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptCompilerTests.cpp` 与/或 `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptFunctionTests.cpp`
   - 至少覆盖：
     - shared function 内部匿名函数可编译/执行
     - save/load 或当前分支等价 restore 路径不会破坏匿名函数句柄
@@ -382,8 +382,8 @@ int TestCapture()
 - [ ] **P4.5** 运行分层测试与全量回归
   - 使用 `Documents/Guides/Test.md` 中约定的 `Tools\RunTests.ps1` 自动化测试入口
   - 至少执行：
-    - `Automation RunTests Angelscript.TestModule.Internals.Parser`
-    - `Automation RunTests Angelscript.TestModule.Internals.Compiler`
+    - `Automation RunTests Angelscript.TestModule.AngelScriptSDK.Parser`
+    - `Automation RunTests Angelscript.TestModule.AngelScriptSDK.Compiler`
     - `Automation RunTests Angelscript.TestModule.Angelscript.Functions`
     - `Automation RunTests Angelscript.TestModule.Compiler.EndToEnd`
     - `Automation RunTests Angelscript.TestModule`
@@ -484,8 +484,8 @@ int TestCapture()
 | 上游 parser | `Reference/angelscript-v2.38.0/sdk/angelscript/source/as_parser.cpp` | `IsLambda()` / `ParseLambda()` 行为基线 |
 | 上游 compiler header | `Reference/angelscript-v2.38.0/sdk/angelscript/source/as_compiler.h` | `asCExprContext` lambda 语义基线 |
 | 上游 feature 测试 | `Reference/angelscript-v2.38.0/sdk/tests/test_feature/source/test_functionptr.cpp` | 官方 anonymous function 回归用例来源 |
-| 当前 parser 测试 | `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptParserTests.cpp` | 新增 parser 级 lambda 测试位置 |
-| 当前 compiler 测试 | `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptCompilerTests.cpp` | 新增 compiler 级 lambda 测试位置 |
+| 当前 parser 测试 | `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptParserTests.cpp` | 新增 parser 级 lambda 测试位置 |
+| 当前 compiler 测试 | `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptCompilerTests.cpp` | 新增 compiler 级 lambda 测试位置 |
 | 当前 functions 测试 | `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptFunctionTests.cpp` | function handle / lambda 行为测试位置 |
 | 当前 pipeline 测试 | `Plugins/Angelscript/Source/AngelscriptTest/Compiler/AngelscriptCompilerPipelineTests.cpp` | 混合语法共存回归位置 |
 | 测试指南 | `Documents/Guides/Test.md` | 自动化测试执行命令模板 |

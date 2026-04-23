@@ -29,7 +29,7 @@
 - 本次只新增 `Native/` 测试层和迁移明确属于语言内核的测试用例。
 - 不修改 `Shared/AngelscriptTestUtilities.h` 的现有 helper 逻辑。
 - 不迁移类生成、热重载、Blueprint / Actor / UClass 相关测试。
-- 不大规模搬迁现有 `Angelscript/`、`Bindings/`、`Internals/` 目录文件。
+- 不大规模搬迁现有 `Angelscript/`、`Bindings/`、`AngelScriptSDK/` 目录文件。
 - `Native/` 默认定位为 **原生公共 API 测试层**，优先只使用 `asIScriptEngine` / `asIScriptModule` / `asIScriptContext` 与 `angelscript.h` 公共表面；不默认扩成 `source/as_*.h` 内部实现测试层。
 - 若未来需要把 `Parser` / `Bytecode` / `GC` 一类 internal tests 抽成新的外部模块层，必须单独审计 `source/as_*.h` 的 include 方式与导出符号，不在本计划中默认隐含完成。
 
@@ -60,7 +60,7 @@ AngelscriptTest/
   Core/
     AngelscriptTestModule.h          ← IModuleInterface
     AngelscriptEngineCoreTests.cpp   ← Engine lifecycle / compile / execute 测试
-  Internals/                         ← Parser / Bytecode / Compiler / GC 等
+  AngelScriptSDK/                         ← Parser / Bytecode / Compiler / GC 等
   Bindings/                          ← UE 类型绑定测试
   Compiler/                          ← 编译管线测试
   Preprocessor/                      ← 预处理器测试
@@ -90,7 +90,7 @@ AngelscriptTest/
 - `Plugins/Angelscript/Source/AngelscriptTest/AngelscriptTest.Build.cs`
   - 只声明依赖 `AngelscriptRuntime`
   - 但当前测试已经可以直接 `#include "source/as_*.h"`，说明 include path 已通过依赖传播生效
-- 当前跨模块 internal-header 使用不只存在于 `Internals/`，`Core/` 下测试也已直接 include `source/as_*.h`
+- 当前跨模块 internal-header 使用不只存在于 `AngelScriptSDK/`，`Core/` 下测试也已直接 include `source/as_*.h`
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptInclude.h`
   - 已封装 `StartAngelscriptHeaders.h` + `angelscript.h` + `EndAngelscriptHeaders.h`
   - 适合作为新的 `Native/` 公共 API 测试层统一 include 入口
@@ -152,7 +152,7 @@ AngelscriptTest/
 
 - [ ] **P0.1** 在计划与实现约束中固定两条访问路径
   - `Native/` 公共 API 测试层：默认只使用 `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptInclude.h` 或 `angelscript.h` 暴露的公开 API
-  - `Internals/` 级内部测试：继续允许通过 `StartAngelscriptHeaders.h` / `EndAngelscriptHeaders.h` + `source/as_*.h` 访问已导出的 internal class
+  - `AngelScriptSDK/` 级内部测试：继续允许通过 `StartAngelscriptHeaders.h` / `EndAngelscriptHeaders.h` + `source/as_*.h` 访问已导出的 internal class
   - 明确禁止在 `Native/` 公共 API helper 中默认混入 `source/as_parser.h`、`source/as_builder.h` 这一类内部实现头
 - [ ] **P0.1** 📦 Git 提交：`[Test/Native] Docs: fix native-vs-internal header boundary`
 
@@ -166,13 +166,13 @@ AngelscriptTest/
 - [ ] **P0.3** 固定当前导出矩阵与按需扩展规则
   - 在计划中明确记录：现阶段 `Native/` 公共 API 层**不需要新增 internal class 导出符号**；它依赖的是 stock public C API 的模块间导入/导出配置
   - 同时列出按需扩展规则：若未来 external tests 直接使用 `asCVariableScope`、`asCExprValue`、`asCExprContext`、`asCLockableSharedBool`、`asCEnumType`、`asCFuncdefType`、`asCTypedefType` 或需要跨模块调用 `asCObjectProperty` 的非 inline 能力，则按现有 `[UE++]` + `ANGELSCRIPTRUNTIME_API` 模式逐项补导出
-- [ ] **P0.3** 📦 Git 提交：`[Test/Native] Docs: capture current export matrix for as internals`
+- [ ] **P0.3** 📦 Git 提交：`[Test/Native] Docs: capture current export matrix for as AngelScriptSDK`
 
 ### Phase 1：建立 Native 测试基础设施
 
 > 目标：新增 `Native/` 目录，提供纯原生 AngelScript helper，代码中不出现 `FAngelscriptEngine`。
 
-- [ ] **P1.1** 创建 `Native/AngelscriptNativeTestSupport.h`
+- [ ] **P1.1** 创建 `AngelScriptSDK/AngelscriptNativeTestSupport.h`
   - 提供以下 helper 函数（全部 `inline`，位于 `AngelscriptNativeTestSupport` 命名空间）：
     - `asIScriptEngine* CreateNativeEngine()` — 调用 `asCreateScriptEngine()` + 注册默认 message callback
     - `void DestroyNativeEngine(asIScriptEngine*)` — `ShutDownAndRelease()`
@@ -185,7 +185,7 @@ AngelscriptTest/
   - 不得在此 helper 中直接 `#include "source/as_*.h"`；若后续确有 internal test helper 需求，必须单独新建并保持与 `Native` 公共 API helper 分离
 - [ ] **P1.1** 📦 Git 提交：`[Test/Native] Feat: add AngelscriptNativeTestSupport header`
 
-- [ ] **P1.2** 创建 `Native/AngelscriptNativeTestSupport.cpp`（如有非 inline 实现）
+- [ ] **P1.2** 创建 `AngelScriptSDK/AngelscriptNativeTestSupport.cpp`（如有非 inline 实现）
   - 若 message callback 需要持有状态（收集诊断），则在此实现
   - 若全部 inline 可省略此文件
 - [ ] **P1.2** 📦 Git 提交：`[Test/Native] Feat: add NativeTestSupport implementation`
@@ -196,20 +196,20 @@ AngelscriptTest/
   - **不要**为了 third-party 头再次在 `AngelscriptTest.Build.cs` 中手工重复添加 `ThirdParty/angelscript/source`，除非实际编译证明当前公共路径没有向该模块传播
 - [ ] **P1.3** 📦 Git 提交：`[Test/Native] Chore: update Build.cs for Native local includes only`
 
-- [ ] **P1.4** 创建 `Native/AngelscriptNativeSmokeTest.cpp`
+- [ ] **P1.4** 创建 `AngelScriptSDK/AngelscriptNativeSmokeTest.cpp`
   - 1 个冒烟测试：创建 engine → 编译 `int Test() { return 1; }` → 执行 → 验证返回值 → 销毁 engine
-  - 测试路径：`Angelscript.TestModule.Native.Smoke`
+  - 测试路径：`Angelscript.TestModule.AngelScriptSDK.Smoke`
   - 确认整条 Native helper 链路跑通
 - [ ] **P1.4** 📦 Git 提交：`[Test/Native] Feat: add native smoke test`
 
-- [ ] **P1.5** 在编辑器中运行 `Angelscript.TestModule.Native.Smoke`，确认通过
+- [ ] **P1.5** 在编辑器中运行 `Angelscript.TestModule.AngelScriptSDK.Smoke`，确认通过
 - [ ] **P1.5** 📦 Git 提交：`[Test/Native] Test: verify native smoke test passes`
 
 ### Phase 2：迁移执行类基础测试
 
 > 目标：将 `Angelscript/AngelscriptExecutionTests.cpp` 中的核心执行测试以"纯原生"方式重写到 `Native/`。
 
-- [ ] **P2.1** 创建 `Native/AngelscriptNativeExecutionTests.cpp`，覆盖以下测试点（每个 IMPLEMENT_SIMPLE_AUTOMATION_TEST 一一对应）：
+- [ ] **P2.1** 创建 `AngelScriptSDK/AngelscriptNativeExecutionTests.cpp`，覆盖以下测试点（每个 IMPLEMENT_SIMPLE_AUTOMATION_TEST 一一对应）：
   - `Native.Execute.VoidFunction` — void 函数编译与执行
   - `Native.Execute.ReturnValue` — int 函数返回值读取
   - `Native.Execute.OneArg` — 单参数 `SetArgDWord()` + 执行
@@ -218,21 +218,21 @@ AngelscriptTest/
   - 所有测试只用 `AngelscriptNativeTestSupport` 中的 helper，不引用 `FAngelscriptEngine`
 - [ ] **P2.1** 📦 Git 提交：`[Test/Native] Feat: add native execution tests (void, return, 1-3 args)`
 
-- [ ] **P2.2** 创建 `Native/AngelscriptNativeExecutionAdvancedTests.cpp`，覆盖：
+- [ ] **P2.2** 创建 `AngelScriptSDK/AngelscriptNativeExecutionAdvancedTests.cpp`，覆盖：
   - `Native.Execute.FloatReturn` — float 返回值
   - `Native.Execute.StringReturn` — string 返回值（如适用）
   - `Native.Execute.NegativeValue` — 负数参数传递
   - `Native.Execute.MultipleReturnPaths` — 多分支返回路径
 - [ ] **P2.2** 📦 Git 提交：`[Test/Native] Feat: add advanced native execution tests`
 
-- [ ] **P2.3** 运行全部 `Angelscript.TestModule.Native.Execute.*` 测试，确认通过
+- [ ] **P2.3** 运行全部 `Angelscript.TestModule.AngelScriptSDK.Execute.*` 测试，确认通过
 - [ ] **P2.3** 📦 Git 提交：`[Test/Native] Test: verify all native execution tests pass`
 
 ### Phase 3：补齐 Native 编译与诊断测试
 
 > 目标：覆盖原生编译成功 / 失败路径和 message callback 诊断信息收集。
 
-- [ ] **P3.1** 创建 `Native/AngelscriptNativeCompileTests.cpp`，覆盖：
+- [ ] **P3.1** 创建 `AngelScriptSDK/AngelscriptNativeCompileTests.cpp`，覆盖：
   - `Native.Compile.SimpleFunction` — 单函数编译成功
   - `Native.Compile.MultipleFunctions` — 多函数模块编译
   - `Native.Compile.GlobalVariables` — 全局变量声明编译
@@ -240,13 +240,13 @@ AngelscriptTest/
   - `Native.Compile.ErrorMessage` — message callback 收到错误信息，验证行号和消息文本非空
 - [ ] **P3.1** 📦 Git 提交：`[Test/Native] Feat: add native compile and diagnostics tests`
 
-- [ ] **P3.2** 创建 `Native/AngelscriptNativeRegistrationTests.cpp`，覆盖：
+- [ ] **P3.2** 创建 `AngelScriptSDK/AngelscriptNativeRegistrationTests.cpp`，覆盖：
   - `Native.Register.GlobalFunction` — 注册 C++ 全局函数，脚本中调用
   - `Native.Register.GlobalProperty` — 注册全局属性，脚本中读取
   - `Native.Register.SimpleValueType` — 注册 POD value type，脚本中构造使用
 - [ ] **P3.2** 📦 Git 提交：`[Test/Native] Feat: add native registration tests`
 
-- [ ] **P3.3** 运行全部 `Angelscript.TestModule.Native.*` 测试，确认通过
+- [ ] **P3.3** 运行全部 `Angelscript.TestModule.AngelScriptSDK.*` 测试，确认通过
 - [ ] **P3.3** 📦 Git 提交：`[Test/Native] Test: verify all Phase 3 native tests pass`
 
 ### Phase 4：标记现有测试分层归属
@@ -282,7 +282,7 @@ AngelscriptTest/
 - [ ] **P5.1** 在 `Documents/Guides/` 下新增或更新 `Test.md`，写明：
   - 三层测试定义（Native Core / Runtime Integration / UE Scenario）
   - 每层测试的职责、允许的依赖、文件位置约定
-  - `Native/` 下测试的命名规范：`Angelscript.TestModule.Native.<Category>.<TestName>`
+  - `Native/` 下测试的命名规范：`Angelscript.TestModule.AngelScriptSDK.<Category>.<TestName>`
   - 新增测试时的选层决策流程
 - [ ] **P5.1** 📦 Git 提交：`[Docs] Feat: add test layer guide to Documents/Guides/Test.md`
 
@@ -291,14 +291,14 @@ AngelscriptTest/
 
 ## 验收标准
 
-1. `Native/AngelscriptNativeTestSupport.h` 中不出现任何 `FAngelscriptEngine` / `FAngelscriptPreprocessor` / `UObject` 相关引用。
+1. `AngelScriptSDK/AngelscriptNativeTestSupport.h` 中不出现任何 `FAngelscriptEngine` / `FAngelscriptPreprocessor` / `UObject` 相关引用。
 2. `Native/*.cpp` 中所有测试只通过 `asIScriptEngine` / `asIScriptModule` / `asIScriptContext` 原生 API 运行，不直接依赖 `source/as_*.h` 内部实现头。
-3. `Angelscript.TestModule.Native.Smoke` 冒烟测试通过。
-4. `Angelscript.TestModule.Native.Execute.*`（≥5 个）全部通过。
-5. `Angelscript.TestModule.Native.Compile.*`（≥5 个）全部通过。
-6. `Angelscript.TestModule.Native.Register.*`（≥3 个）全部通过。
+3. `Angelscript.TestModule.AngelScriptSDK.Smoke` 冒烟测试通过。
+4. `Angelscript.TestModule.AngelScriptSDK.Execute.*`（≥5 个）全部通过。
+5. `Angelscript.TestModule.AngelScriptSDK.Compile.*`（≥5 个）全部通过。
+6. `Angelscript.TestModule.AngelScriptSDK.Register.*`（≥3 个）全部通过。
 7. 现有 Runtime / Scenario 测试回归通过（不因本次重构引入失败）。
-8. `Documents/Guides/Test.md` 明确定义三层测试边界，并说明 `Native` 公共 API 层与 `Internals` 内部头测试层的 include 规则。
+8. `Documents/Guides/Test.md` 明确定义三层测试边界，并说明 `Native` 公共 API 层与 `AngelScriptSDK` 内部头测试层的 include 规则。
 9. 计划或文档中明确记录：当前 third-party `source/as_*.h` 对外 include 能力已存在；Native 层本次不需要新增 internal class 导出，但需要 stock public C API 在模块间可链接。
 
 ## 风险与注意事项
@@ -323,9 +323,9 @@ AngelscriptTest/
 
 ### 风险 4：把 internal test 需求偷渡进 Native 公共 API 层
 
-当前 `Internals/` 与 `Core/` 测试已经能够跨模块使用 `source/as_builder.h`、`as_parser.h`、`as_module.h` 等头。如果不提前划清边界，后续可能为了省事把 parser / bytecode / GC 一类 internal 断言直接塞进 `Native/`，导致“原生公共 API 测试层”名不副实。
+当前 `AngelScriptSDK/` 与 `Core/` 测试已经能够跨模块使用 `source/as_builder.h`、`as_parser.h`、`as_module.h` 等头。如果不提前划清边界，后续可能为了省事把 parser / bytecode / GC 一类 internal 断言直接塞进 `Native/`，导致“原生公共 API 测试层”名不副实。
 
-**缓解**：P0.1 明确把 `Native` 与 `Internals` 分成两条访问路径；需要内部实现头时新建独立 helper 或继续留在 `Internals/`，不污染 `Native` helper。
+**缓解**：P0.1 明确把 `Native` 与 `AngelScriptSDK` 分成两条访问路径；需要内部实现头时新建独立 helper 或继续留在 `AngelScriptSDK/`，不污染 `Native` helper。
 
 ### 风险 5：测试迁移窗口期覆盖面下降
 

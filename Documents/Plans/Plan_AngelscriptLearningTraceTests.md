@@ -20,10 +20,10 @@
 
 ## 背景与目标
 
-当前仓库的自动化测试已经覆盖 Native、Internals、Compiler、ClassGenerator、Actor/Blueprint/Interface 等多个层级，但整体目标仍以“验证功能边界是否正确”为主：
+当前仓库的自动化测试已经覆盖 Native、AngelScriptSDK、Compiler、ClassGenerator、Actor/Blueprint/Interface 等多个层级，但整体目标仍以“验证功能边界是否正确”为主：
 
 - `Native/` 层更强调 AngelScript 公共 API 能否创建引擎、编译脚本、执行函数、注册类型。
-  - `Internals/` 层更强调 parser / builder / compiler / bytecode / GC 等内部机制的正确性。
+  - `AngelScriptSDK/` 层更强调 parser / builder / compiler / bytecode / GC 等内部机制的正确性。
 
 - `Compiler/`、`ClassGenerator/`、`Actor/Blueprint/Interface/Subsystem` 等目录更强调 AS 与 UE 的集成行为是否成立。
 
@@ -59,7 +59,7 @@
 - `Documents/Guides/Test.md` 已明确三层结构：Native Core、Runtime Integration、UE Scenario。
 - `Plugins/Angelscript/AGENTS.md` 已明确 `Native/` 只能使用 `AngelscriptInclude.h` / `angelscript.h` 公共 API，不能把 `FAngelscriptEngine` 或 `source/as_*.h` 带进去。
 - `Plugins/Angelscript/Source/AngelscriptTest/Examples/` 已经接近“教学型案例”模板：每个文件围绕一个主题嵌入小脚本、验证编译或执行结果，但仍缺少统一的阶段化输出模型。
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptBytecodeTests.cpp`、`...CompilerTests.cpp` 已证明内部层测试可以直接读取 bytecode/function metadata。
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptBytecodeTests.cpp`、`...CompilerTests.cpp` 已证明内部层测试可以直接读取 bytecode/function metadata。
 - `Plugins/Angelscript/Source/AngelscriptTest/ClassGenerator/AngelscriptScriptClassCreationTests.cpp` 已证明可以稳定构造“脚本类 -> 生成 UClass -> Spawn -> BeginPlay -> Blueprint child”这条 UE 侧故事线。
 
 ### 已存在的关键可观测 hook
@@ -79,7 +79,7 @@
   - 已有“可执行行映射 + HitLine(line)”逻辑，说明 line-level 教学输出不需要从零开始建。
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Debugging/AngelscriptDebugServer.cpp`
   - 已支持 breakpoint、variables、evaluate、callstack、break filters，可作为“深层执行可观察性”的后续阶段。
-- `Plugins/Angelscript/Source/AngelscriptTest/Native/AngelscriptNativeTestSupport.h`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptNativeTestSupport.h`
   - 已有 message collector、module/function declaration 收集、原生 `PrepareAndExecute()` helper，适合做最小可解释原生样例。
 
 ### 上游 AngelScript 官方能力边界
@@ -101,7 +101,7 @@
 
 ### 为什么需要单独的 Learning 主题目录
 
-虽然 `Examples/` 和 `Internals/` 已经有一部分“可读性强”的测试，但教学型测试和普通回归测试的价值密度不同：
+虽然 `Examples/` 和 `AngelScriptSDK/` 已经有一部分“可读性强”的测试，但教学型测试和普通回归测试的价值密度不同：
 
 - 普通回归测试追求信息最少、定位最稳；教学型测试追求“阶段、上下文、观测值都显式可见”。
 - 如果直接把大量 `AddInfo()` / `UE_LOG()` 散落进现有回归测试，会增加噪声，降低老用例的维护体验。
@@ -115,13 +115,13 @@
   - 定义教学 trace event、阶段枚举、step builder、输出 sink 接口。
 - `Plugins/Angelscript/Source/AngelscriptTest/Shared/AngelscriptLearningTrace.cpp`
   - 实现 `AddInfo` / `UE_LOG` / 文件导出三路输出与统一排版。
-- `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/AngelscriptLearningNativeBootstrapTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/Learning/AngelScriptSDK/AngelscriptLearningNativeBootstrapTests.cpp`
   - 讲“原生 AS 引擎创建、属性设置、message callback、模块 build、函数元数据”的最小故事线。
-- `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/AngelscriptLearningNativeBindingTraceTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/Learning/AngelScriptSDK/AngelscriptLearningNativeBindingTraceTests.cpp`
   - 讲“原生 `asIScriptEngine` 注册 API”这一步具体注册了什么；**这里只演示 AngelScript 原生注册，不引入 `FAngelscriptBinds` 或 UE 类型绑定**。
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningCompilerTraceTests.cpp`
   - 讲“预处理、CompileModules、diagnostics、reload requirement”。
-- `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/AngelscriptLearningBytecodeTraceTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/Learning/AngelScriptSDK/AngelscriptLearningBytecodeTraceTests.cpp`
   - 讲“函数声明、局部变量、bytecode buffer、可执行行”。
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningClassGenerationTraceTests.cpp`
   - 讲“脚本类如何生成 UClass/UFunction/FProperty，如何映射到 UE 反射”。
@@ -129,9 +129,9 @@
   - 讲“Prepare/Execute、line callback、callstack、异常/ensure/check”。
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Scenario/AngelscriptLearningUEBridgeTraceTests.cpp`
   - 讲“脚本类实例化、ProcessEvent、BlueprintOverride、BeginPlay、属性回读”。
-- `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/AngelscriptLearningHandleAndScriptObjectTraceTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/Learning/AngelScriptSDK/AngelscriptLearningHandleAndScriptObjectTraceTests.cpp`
   - 讲“handle/reference 语义、script object 属性枚举、对象复制与对象内省”。
-- `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/AngelscriptLearningDebuggerContextTraceTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/Learning/AngelScriptSDK/AngelscriptLearningDebuggerContextTraceTests.cpp`
   - 讲“callstack、locals、`this` 指针、line callback、debugger evaluate 的基础观察面”。
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningPreprocessorTraceTests.cpp`
   - 讲“宏检测、chunk 拆分、import 解析、module name 规范化、生成代码拼装”。
@@ -190,11 +190,11 @@
   - 依据：`Plugins/Angelscript/Source/AngelscriptTest/HotReload/AngelscriptHotReloadAnalysisTests.cpp`
   - 教学价值：解释“为什么某次改动只需 soft reload，而另一次必须 full reload”。
 - **GC / Object Graph**
-  - 依据：`Plugins/Angelscript/Source/AngelscriptTest/GC/AngelscriptGCScenarioTests.cpp`、`Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptGCInternalTests.cpp`
+  - 依据：`Plugins/Angelscript/Source/AngelscriptTest/GC/AngelscriptGCScenarioTests.cpp`、`Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptGCInternalTests.cpp`
   - 教学价值：解释 AS 对象、script actor/component、UE world teardown 与引用环检测的关系。
 - **Delegate / Event Bridge**
   - 依据：`Plugins/Angelscript/Source/AngelscriptTest/Delegate/AngelscriptDelegateScenarioTests.cpp`、`Plugins/Angelscript/Source/AngelscriptRuntime/Binds/Bind_Delegates.h`
-  - 教学价值：解释脚本事件如何变成 UE delegate，以及 native/script 双向触发路径。
+  - 教学价值：解释脚本事件如何变成 UE delegate，以及 AngelScriptSDK/script 双向触发路径。
 - **Interface Dispatch**
   - 依据：`Plugins/Angelscript/Source/AngelscriptTest/Interface/AngelscriptInterfaceAdvancedTests.cpp`
   - 教学价值：解释 interface 继承链、实现类、Execute_ bridge 与 GC-safe dispatch。
@@ -298,8 +298,8 @@
 
 - [x] **P0.1** 确认新增主题目录与命名约定
   - 建议新增 `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/`、`Learning/Runtime/`、`Learning/Scenario/`、`Learning/Editor/`，测试名前缀统一用 `Angelscript.TestModule.Learning.*`。
-  - 不把这批教学用例塞进 `Examples/`、`Internals/`、`Compiler/` 原有文件，避免原目录语义膨胀。
-  - 若某个教学主题跨越多个层级（如 GC、class generation + world spawn），优先拆成成对文件，而不是把 Native/Runtime/Scenario 能力混进一个测试文件。
+  - 不把这批教学用例塞进 `Examples/`、`AngelScriptSDK/`、`Compiler/` 原有文件，避免原目录语义膨胀。
+  - 若某个教学主题跨越多个层级（如 GC、class generation + world spawn），优先拆成成对文件，而不是把 AngelScriptSDK/Runtime/Scenario 能力混进一个测试文件。
 - [x] **P0.1** 📦 Git 提交：`[Test/Learning] Docs: freeze learning trace test taxonomy`
 
 - [x] **P0.2** 固定 trace 事件模型与输出层级
@@ -501,7 +501,7 @@
 - [ ] **P5.2** 创建 `Learning/AngelscriptLearningLineTraceTests.cpp`
   - 以一段多行函数脚本为例，讲清楚 line callback 何时触发、coverage 如何记录 executable line、`FindNextLineWithCode()` 如何帮助理解“哪一行是可执行代码”。
   - 如果首批不想改 runtime，可以先通过现有 `FAngelscriptCodeCoverage::MapFunction/HitLine` 和 line callback 命中后的可见副作用来组织输出；如果信息还不够，再补最小 seam。
-  - `main` 当前属于**部分实现**：`Learning/Native/AngelscriptLearningBytecodeTraceTests.cpp` 与 `Learning/Native/AngelscriptLearningDebuggerContextTraceTests.cpp` 已覆盖字节码、执行上下文和部分可执行行观察面，但还没有独立的 Learning line-trace / coverage 课程文件来把这些信息收束成单条课程线。
+  - `main` 当前属于**部分实现**：`Learning/AngelScriptSDK/AngelscriptLearningBytecodeTraceTests.cpp` 与 `Learning/AngelScriptSDK/AngelscriptLearningDebuggerContextTraceTests.cpp` 已覆盖字节码、执行上下文和部分可执行行观察面，但还没有独立的 Learning line-trace / coverage 课程文件来把这些信息收束成单条课程线。
 - [ ] **P5.2** 📦 Git 提交：`[Test/Learning] Feat: add line callback and coverage learning trace test`
 
 - [x] **P5.3** 创建 `Learning/AngelscriptLearningUEBridgeTraceTests.cpp`
@@ -517,7 +517,7 @@
 - [ ] **P5.4** 📦 Git 提交：`[Test/Learning] Feat: add debugger-backed learning trace smoke test`
 
 - [x] **P5.5** 创建 `Learning/AngelscriptLearningGCTraceTests.cpp`
-  - 基于 `GC/AngelscriptGCScenarioTests.cpp`、`Internals/AngelscriptGCInternalTests.cpp` 与 runtime GC seam，讲清楚 actor destroy、component destroy、world teardown、cycle detection、manual collect、GC statistics 的差异。
+  - 基于 `GC/AngelscriptGCScenarioTests.cpp`、`AngelScriptSDK/AngelscriptGCInternalTests.cpp` 与 runtime GC seam，讲清楚 actor destroy、component destroy、world teardown、cycle detection、manual collect、GC statistics 的差异。
   - 输出至少包括：对象图变化、GC 前后弱引用状态、统计计数、是否存在 cycle detect 或 undestroyed report。
 - [x] **P5.5** 📦 Git 提交：`[Test/Learning] Feat: add GC learning trace test`
 
@@ -607,9 +607,9 @@
 
 像内存地址、完整 opcode 序列、某些热重载时序、delegate 触发顺序，未来可能因为上游同步或平台差异变化。教学型测试应优先锁住“结构与边界”，不要把偶然细节全部做成硬失败条件。
 
-### 风险 4：目录定位不清，和现有 `Examples/` / `Internals/` 重叠
+### 风险 4：目录定位不清，和现有 `Examples/` / `AngelScriptSDK/` 重叠
 
-实现时要持续记住：`Learning/` 目录的职责是“解释”，`Examples/` 更偏“功能示例”，`Internals/` 更偏“内部正确性验证”。同一机制可以跨目录存在，但每个目录承担的叙事职责要清晰。
+实现时要持续记住：`Learning/` 目录的职责是“解释”，`Examples/` 更偏“功能示例”，`AngelScriptSDK/` 更偏“内部正确性验证”。同一机制可以跨目录存在，但每个目录承担的叙事职责要清晰。
 
 ### 风险 5：为了教学方便过度暴露内部 seam
 

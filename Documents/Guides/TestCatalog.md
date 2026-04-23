@@ -36,7 +36,7 @@
   - [3.12 Upgrade — 版本升级兼容](#312-upgrade--版本升级兼容)
 - [4. Bindings — UE API 绑定](#4-bindings--ue-api-绑定)
 - [5. HotReload — 热重载](#5-hotreload--热重载)
-- [6. Internals — 内部机制](#6-internals--内部机制)
+- [6. AngelScriptSDK — 内部机制](#6-AngelScriptSDK--内部机制)
 - [7. Compiler — 编译管线](#7-compiler--编译管线)
 - [8. Preprocessor — 预处理器](#8-preprocessor--预处理器)
 - [9. ClassGenerator — 类生成器](#9-classgenerator--类生成器)
@@ -91,19 +91,19 @@
 
 ## Native — 原生 AngelScript / ASSDK
 
-> 源文件：`Native/AngelscriptNativeSmokeTest.cpp`、`Native/AngelscriptNativeCompileTests.cpp`、`Native/AngelscriptNativeExecutionTests.cpp`、`Native/AngelscriptNativeExecutionAdvancedTests.cpp`、`Native/AngelscriptNativeRegistrationTests.cpp`、`Native/AngelscriptASSDKSmokeTest.cpp`、`Native/AngelscriptASSDKEngineTests.cpp`、`Native/AngelscriptASSDKExecuteTests.cpp`、`Native/AngelscriptASSDKGlobalVarTests.cpp` 以及其余 `Native/AngelscriptASSDK*Tests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptNativeSmokeTest.cpp`、`AngelScriptSDK/AngelscriptNativeCompileTests.cpp`、`AngelScriptSDK/AngelscriptNativeExecutionTests.cpp`、`AngelScriptSDK/AngelscriptNativeExecutionAdvancedTests.cpp`、`AngelScriptSDK/AngelscriptNativeRegistrationTests.cpp`、`AngelScriptSDK/AngelscriptASSDKSmokeTest.cpp`、`AngelScriptSDK/AngelscriptASSDKEngineTests.cpp`、`AngelScriptSDK/AngelscriptASSDKExecuteTests.cpp`、`AngelScriptSDK/AngelscriptASSDKGlobalVarTests.cpp` 以及其余 `AngelScriptSDK/AngelscriptASSDK*Tests.cpp`
 
 | 测试前缀 | 代表源文件 | 验证内容 |
 |--------|----------|----------|
-| `Angelscript.TestModule.Native.Smoke` | `Native/AngelscriptNativeSmokeTest.cpp` | 最小原生 AngelScript 引擎创建、编译与执行烟雾 |
-| `Angelscript.TestModule.Native.Compile.*` | `Native/AngelscriptNativeCompileTests.cpp` | 纯公共 API 路径下的编译、错误消息与模块构建 |
-| `Angelscript.TestModule.Native.Execute.*` | `Native/AngelscriptNativeExecutionTests.cpp`、`Native/AngelscriptNativeExecutionAdvancedTests.cpp` | 原生上下文 Prepare / Execute、参数传递、返回值、执行状态 |
-| `Angelscript.TestModule.Native.Register.*` | `Native/AngelscriptNativeRegistrationTests.cpp` | 原生全局函数/属性/值类型注册 |
-| `Angelscript.TestModule.Native.ASSDK.Smoke` | `Native/AngelscriptASSDKSmokeTest.cpp` | ASSDK 适配层最小引擎创建、消息回调与脚本执行 |
-| `Angelscript.TestModule.Native.ASSDK.Engine.*` | `Native/AngelscriptASSDKEngineTests.cpp` | ASSDK 引擎生命周期、回调复用与基础引擎语义 |
-| `Angelscript.TestModule.Native.ASSDK.Execute.*` | `Native/AngelscriptASSDKExecuteTests.cpp` | ASSDK 回调注册、参数调用约定、cleanup 与 portability 分支 |
-| `Angelscript.TestModule.Native.ASSDK.GlobalVar.*` / `Stack.*` | `Native/AngelscriptASSDKGlobalVarTests.cpp` | 全局变量枚举/重置/删除、栈深限制与异常位置信息 |
-| `Angelscript.TestModule.Native.ASSDK.*` | 其余 `Native/AngelscriptASSDK*Tests.cpp` | 类型、对象、OOP、模块、函数、调用约定、运行时与编译器邻近回归 |
+| `Angelscript.TestModule.AngelScriptSDK.Smoke` | `AngelScriptSDK/AngelscriptNativeSmokeTest.cpp` | 最小原生 AngelScript 引擎创建、编译与执行烟雾 |
+| `Angelscript.TestModule.AngelScriptSDK.Compile.*` | `AngelScriptSDK/AngelscriptNativeCompileTests.cpp` | 纯公共 API 路径下的编译、错误消息与模块构建 |
+| `Angelscript.TestModule.AngelScriptSDK.Execute.*` | `AngelScriptSDK/AngelscriptNativeExecutionTests.cpp`、`AngelScriptSDK/AngelscriptNativeExecutionAdvancedTests.cpp` | 原生上下文 Prepare / Execute、参数传递、返回值、执行状态 |
+| `Angelscript.TestModule.AngelScriptSDK.Register.*` | `AngelScriptSDK/AngelscriptNativeRegistrationTests.cpp` | 原生全局函数/属性/值类型注册 |
+| `Angelscript.TestModule.AngelScriptSDK.ASSDK.Smoke` | `AngelScriptSDK/AngelscriptASSDKSmokeTest.cpp` | ASSDK 适配层最小引擎创建、消息回调与脚本执行 |
+| `Angelscript.TestModule.AngelScriptSDK.ASSDK.Engine.*` | `AngelScriptSDK/AngelscriptASSDKEngineTests.cpp` | ASSDK 引擎生命周期、回调复用与基础引擎语义 |
+| `Angelscript.TestModule.AngelScriptSDK.ASSDK.Execute.*` | `AngelScriptSDK/AngelscriptASSDKExecuteTests.cpp` | ASSDK 回调注册、参数调用约定、cleanup 与 portability 分支 |
+| `Angelscript.TestModule.AngelScriptSDK.ASSDK.GlobalVar.*` / `Stack.*` | `AngelScriptSDK/AngelscriptASSDKGlobalVarTests.cpp` | 全局变量枚举/重置/删除、栈深限制与异常位置信息 |
+| `Angelscript.TestModule.AngelScriptSDK.ASSDK.*` | 其余 `AngelScriptSDK/AngelscriptASSDK*Tests.cpp` | 类型、对象、OOP、模块、函数、调用约定、运行时与编译器邻近回归 |
 
 > 放置规则：`Native/` 只验证 `AngelscriptInclude.h` / `angelscript.h` 暴露的公共 API，不把 `FAngelscriptEngine` 或运行时私有实现带进这一层。
 
@@ -484,127 +484,127 @@
 
 ---
 
-## 6. Internals — 内部机制
+## 6. AngelScriptSDK — 内部机制
 
 ### Builder 构建器
 
-> 源文件：`Internals/AngelscriptBuilderTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptBuilderTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Builder.SingleModulePipeline | 单模块构建管线端到端 |
-| Internals.Builder.CompileErrors | 编译错误收集与报告 |
-| Internals.Builder.RebuildModule | 模块重建行为 |
-| Internals.Builder.ImportBinding | import/绑定导入路径 |
+| AngelScriptSDK.Builder.SingleModulePipeline | 单模块构建管线端到端 |
+| AngelScriptSDK.Builder.CompileErrors | 编译错误收集与报告 |
+| AngelScriptSDK.Builder.RebuildModule | 模块重建行为 |
+| AngelScriptSDK.Builder.ImportBinding | import/绑定导入路径 |
 
 ### Restore 序列化
 
-> 源文件：`Internals/AngelscriptRestoreTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptRestoreTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Restore.RoundTrip | 脚本节点/字节码等序列化往返一致 |
-| Internals.Restore.StripDebugInfoRoundTrip | 去掉调试信息后仍可往返 |
-| Internals.Restore.EmptyStreamFails | 空字节流加载失败并报告 `Unexpected end of file`，且不崩溃 |
-| Internals.Restore.TruncatedStreamFails | 截断字节流加载失败并报告 `Unexpected end of file`，且不崩溃 |
+| AngelScriptSDK.Restore.RoundTrip | 脚本节点/字节码等序列化往返一致 |
+| AngelScriptSDK.Restore.StripDebugInfoRoundTrip | 去掉调试信息后仍可往返 |
+| AngelScriptSDK.Restore.EmptyStreamFails | 空字节流加载失败并报告 `Unexpected end of file`，且不崩溃 |
+| AngelScriptSDK.Restore.TruncatedStreamFails | 截断字节流加载失败并报告 `Unexpected end of file`，且不崩溃 |
 
 ### Compiler 编译器
 
-> 源文件：`Internals/AngelscriptCompilerTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptCompilerTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Compiler.BytecodeGeneration | 编译器生成字节码 |
-| Internals.Compiler.VariableScopes | 变量作用域 |
-| Internals.Compiler.FunctionCalls | 函数调用编译 |
-| Internals.Compiler.TypeConversions | 类型转换编译 |
+| AngelScriptSDK.Compiler.BytecodeGeneration | 编译器生成字节码 |
+| AngelScriptSDK.Compiler.VariableScopes | 变量作用域 |
+| AngelScriptSDK.Compiler.FunctionCalls | 函数调用编译 |
+| AngelScriptSDK.Compiler.TypeConversions | 类型转换编译 |
 
 ### DataType 数据类型
 
-> 源文件：`Internals/AngelscriptDataTypeTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptDataTypeTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.DataType.Primitives | 内部原始类型表示 |
-| Internals.DataType.Comparisons | 类型比较/相等语义 |
-| Internals.DataType.ObjectHandles | 对象句柄类型 |
-| Internals.DataType.SizeAndAlignment | 大小与对齐 |
+| AngelScriptSDK.DataType.Primitives | 内部原始类型表示 |
+| AngelScriptSDK.DataType.Comparisons | 类型比较/相等语义 |
+| AngelScriptSDK.DataType.ObjectHandles | 对象句柄类型 |
+| AngelScriptSDK.DataType.SizeAndAlignment | 大小与对齐 |
 
 ### GC 垃圾回收内部
 
-> 源文件：`Internals/AngelscriptGCInternalTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptGCInternalTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.GC.Statistics | GC 统计接口 |
-| Internals.GC.EmptyCollect | 空集合回收行为 |
-| Internals.GC.InvalidLookup | 无效对象查找处理 |
-| Internals.GC.ReportUndestroyedEmpty | 未销毁报告为空场景 |
-| Internals.GC.ManualCycleCollection | 手动环收集 |
-| Internals.GC.CycleDetection | 环检测 |
+| AngelScriptSDK.GC.Statistics | GC 统计接口 |
+| AngelScriptSDK.GC.EmptyCollect | 空集合回收行为 |
+| AngelScriptSDK.GC.InvalidLookup | 无效对象查找处理 |
+| AngelScriptSDK.GC.ReportUndestroyedEmpty | 未销毁报告为空场景 |
+| AngelScriptSDK.GC.ManualCycleCollection | 手动环收集 |
+| AngelScriptSDK.GC.CycleDetection | 环检测 |
 
 ### Parser 解析器
 
-> 源文件：`Internals/AngelscriptParserTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptParserTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Parser.Declarations | 解析器：声明解析 |
-| Internals.Parser.ExpressionAst | 表达式 AST |
-| Internals.Parser.ControlFlow | 控制流解析 |
-| Internals.Parser.SyntaxErrors | 语法错误处理 |
+| AngelScriptSDK.Parser.Declarations | 解析器：声明解析 |
+| AngelScriptSDK.Parser.ExpressionAst | 表达式 AST |
+| AngelScriptSDK.Parser.ControlFlow | 控制流解析 |
+| AngelScriptSDK.Parser.SyntaxErrors | 语法错误处理 |
 
 ### ScriptNode 脚本节点
 
-> 源文件：`Internals/AngelscriptScriptNodeTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptScriptNodeTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.ScriptNode.Types | 脚本节点类型 |
-| Internals.ScriptNode.Traversal | 节点遍历 |
-| Internals.ScriptNode.Copy | 节点拷贝 |
+| AngelScriptSDK.ScriptNode.Types | 脚本节点类型 |
+| AngelScriptSDK.ScriptNode.Traversal | 节点遍历 |
+| AngelScriptSDK.ScriptNode.Copy | 节点拷贝 |
 
 ### Bytecode 字节码
 
-> 源文件：`Internals/AngelscriptBytecodeTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptBytecodeTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Bytecode.InstructionSequence | 字节码指令序列 |
-| Internals.Bytecode.Append | 字节码追加 |
-| Internals.Bytecode.JumpResolution | 跳转解析/回填 |
-| Internals.Bytecode.Output | 字节码输出 |
+| AngelScriptSDK.Bytecode.InstructionSequence | 字节码指令序列 |
+| AngelScriptSDK.Bytecode.Append | 字节码追加 |
+| AngelScriptSDK.Bytecode.JumpResolution | 跳转解析/回填 |
+| AngelScriptSDK.Bytecode.Output | 字节码输出 |
 
 ### Memory 内存管理
 
-> 源文件：`Internals/AngelscriptMemoryTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptMemoryTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Memory.Construction | 内存管理器构造 |
-| Internals.Memory.FreeUnused | 释放未使用内存 |
-| Internals.Memory.ScriptNodeReuse | ScriptNode 池复用 |
-| Internals.Memory.ByteInstructionReuse | 字节指令复用 |
-| Internals.Memory.PoolLeakTracking | 池泄漏追踪 |
+| AngelScriptSDK.Memory.Construction | 内存管理器构造 |
+| AngelScriptSDK.Memory.FreeUnused | 释放未使用内存 |
+| AngelScriptSDK.Memory.ScriptNodeReuse | ScriptNode 池复用 |
+| AngelScriptSDK.Memory.ByteInstructionReuse | 字节指令复用 |
+| AngelScriptSDK.Memory.PoolLeakTracking | 池泄漏追踪 |
 
 ### Tokenizer 词法分析
 
-> 源文件：`Internals/AngelscriptTokenizerTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptTokenizerTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.Tokenizer.BasicTokens | 基本 token |
-| Internals.Tokenizer.Keywords | 关键字 |
-| Internals.Tokenizer.CommentsAndStrings | 注释与字符串 |
-| Internals.Tokenizer.ErrorRecovery | 错误恢复 |
+| AngelScriptSDK.Tokenizer.BasicTokens | 基本 token |
+| AngelScriptSDK.Tokenizer.Keywords | 关键字 |
+| AngelScriptSDK.Tokenizer.CommentsAndStrings | 注释与字符串 |
+| AngelScriptSDK.Tokenizer.ErrorRecovery | 错误恢复 |
 
 ### StructCppOps
 
-> 源文件：`Internals/AngelscriptStructCppOpsTests.cpp`
+> 源文件：`AngelScriptSDK/AngelscriptStructCppOpsTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| Internals.StructCppOps.NotBlueprintTypeByDefault | 结构体 C++ 操作默认非 BlueprintType 行为 |
+| AngelScriptSDK.StructCppOps.NotBlueprintTypeByDefault | 结构体 C++ 操作默认非 BlueprintType 行为 |
 
 ---
 
@@ -916,7 +916,7 @@
 
 ### 13.1 Native 层学习测试
 
-> 源文件：`Learning/Native/AngelscriptLearningNative*.cpp`
+> 源文件：`Learning/AngelScriptSDK/AngelscriptLearningNative*.cpp`
 >
 > 解释原生 AngelScript 引擎的启动、绑定、字节码、handles、调试器上下文。
 

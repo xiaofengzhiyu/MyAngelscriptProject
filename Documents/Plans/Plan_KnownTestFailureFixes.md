@@ -47,11 +47,11 @@
 
 ### 问题描述
 
-`Internals.Restore.EmptyStreamFails` 使用 `AddExpectedErrorPlain(TEXT("Unexpected end of file"), Contains)` 匹配空流加载时的错误消息。实际 AS 引擎对空流报出的消息是 `"Angelscript: :"`（经过 `LogAngelscriptError` 格式化后的空消息），不包含 `"Unexpected end of file"`。
+`AngelScriptSDK.Restore.EmptyStreamFails` 使用 `AddExpectedErrorPlain(TEXT("Unexpected end of file"), Contains)` 匹配空流加载时的错误消息。实际 AS 引擎对空流报出的消息是 `"Angelscript: :"`（经过 `LogAngelscriptError` 格式化后的空消息），不包含 `"Unexpected end of file"`。
 
 ### 影响文件
 
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptRestoreTests.cpp`（1 个 `RunTest` 函数，约 line 246）
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptRestoreTests.cpp`（1 个 `RunTest` 函数，约 line 246）
 
 - [ ] **P2.1** 诊断 `LoadByteCode` 对空流的实际错误输出
   - 在 `as_restore.cpp` 中找到 `LoadByteCode` 对空流的处理路径，确认实际输出的 AS 消息内容

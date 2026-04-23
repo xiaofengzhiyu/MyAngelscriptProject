@@ -98,13 +98,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Test
 
 以下路径在宏优化计划归档时被明确列为保留项，不属于那一轮 `BEGIN/END` 标准化 closeout 范围：
 
-- `Plugins/Angelscript/Source/AngelscriptTest/Native/*`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/*`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/*`
 - `Plugins/Angelscript/Source/AngelscriptTest/Angelscript/AngelscriptNativeScriptHotReloadTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptEngineParityTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptBindConfigTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Core/AngelscriptEnginePerformanceTests.cpp`
-- `Plugins/Angelscript/Source/AngelscriptTest/Internals/AngelscriptRestoreTests.cpp`
+- `Plugins/Angelscript/Source/AngelscriptTest/AngelScriptSDK/AngelscriptRestoreTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningExecutionTraceTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningPreprocessorTraceTests.cpp`
 - `Plugins/Angelscript/Source/AngelscriptTest/Learning/Runtime/AngelscriptLearningRestoreAndBytecodePersistenceTests.cpp`

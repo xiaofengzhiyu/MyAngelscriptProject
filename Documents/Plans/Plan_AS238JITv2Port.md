@@ -218,7 +218,7 @@ V2 迁移的核心收益：消除当前 V1 下的"变通用法"，用正规 API 
 > 目标：验证 V1 不退化、V2 基本路径正确、StaticJIT 正常工作。
 
 - [ ] **P4.1** 编写 JIT 接口测试
-  - 在 `AngelscriptTest/Native/` 下创建 `AngelscriptJITInterfaceTests.cpp`
+  - 在 `AngelscriptTest/AngelScriptSDK/` 下创建 `AngelscriptJITInterfaceTests.cpp`
   - 测试用例清单：
     - **V1_StillWorks**：设置 `asEP_JIT_INTERFACE_VERSION = 1`，注册 V1 JIT，编译脚本，断言 `CompileFunction` 被调用
     - **V2_NewFunctionCalled**：设置 `asEP_JIT_INTERFACE_VERSION = 2`，注册 V2 JIT，编译脚本，断言 `NewFunction` 被调用
@@ -255,7 +255,7 @@ V2 迁移的核心收益：消除当前 V1 下的"变通用法"，用正规 API 
 | `ThirdParty/.../as_scriptfunction.cpp` | 修改 | `JITCompile()` V2 路径、释放路径、`SetJITFunction` 实现 |
 | `StaticJIT/AngelscriptStaticJIT.h` | 修改（方案 B）或审查（方案 A） | 接口继承 |
 | `StaticJIT/AngelscriptStaticJIT.cpp` | 修改（方案 B）或不变（方案 A） | 方法实现 |
-| `AngelscriptTest/Native/AngelscriptJITInterfaceTests.cpp` | 新增 | JIT V1/V2 测试 |
+| `AngelscriptTest/AngelScriptSDK/AngelscriptJITInterfaceTests.cpp` | 新增 | JIT V1/V2 测试 |
 | `AngelscriptChange.md` | 修改 | 登记变更 |
 
 ## 验收标准
