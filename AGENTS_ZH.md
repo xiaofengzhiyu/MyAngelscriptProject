@@ -113,6 +113,7 @@
 - ✅ 引擎状态导出体系（27 张 CSV 表、控制台命令、自动化回归） — 已归档
 - ✅ 测试宏优化（`BEGIN/END`、`SHARE_CLEAN/SHARE_FRESH`、group 收口） — 已归档
 - ✅ 技术债 Phase 0-6 收口 — 已归档
+- ✅ 接口 / C++ UInterface 使用一致性补齐（签名完整校验、`TScriptInterface<>` 本地变量 + C++ UPROPERTY 桥接、原生指针偏移、`BlueprintNativeEvent` 修饰符传递、`Obj.Implements<T>()` 语法糖） — 已归档
 - ✅ UHT 工具插件生成函数表与 legacy shard 移除 — main 已合入
 - ✅ BlueprintImpact Commandlet 与编辑器集成 — main 已合入
 - ✅ UE 5.7 绑定与调试器适配 — main 已合入
