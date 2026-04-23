@@ -275,25 +275,31 @@ ThirdParty（仅列已有注入，本计划不新增）：
 
 > 目标：脚本能写 `Obj.Implements<UIFoo>()`，运行时等价于 `Obj.ImplementsInterface(UIFoo::StaticClass())`。
 
-- [ ] **P5.1** 评估 AS 模板方法注册能力，选择实现路径
-  - 现有 `Cast<T>()` 本质上是 AS 的 `opCast` 机制 + 引擎侧的类型查询，参考其模式（`Bind_UObject.cpp` opCast）与预处理器（是否存在模板替换 — 看 `AngelscriptPreprocessor.cpp`）
-  - 若 AS 模板函数可注册（参考 `Plan_FunctionTemplate.md` 的进展），优先走模板路径；否则走预处理器语法糖：`Obj.Implements<UIFoo>()` → `Obj.ImplementsInterface(UIFoo::StaticClass())`
-  - 本 P5.1 输出：一句结论 + 走哪条路径的代码骨架（保留在本计划 checklist 下方的 `实现路径` 子项）
-- [ ] **P5.1** 📦 Git 提交：`[Interface] Docs: document Implements<T>() implementation path`
+> **✅ 已完成（2026-04-24）**。探查决策：AS 引擎只支持模板类，不支持方法级泛型实例化，所以 **模板注册路径不可行**；最终走预处理器语法糖路径。
 
-- [ ] **P5.2** 实现 `Obj.Implements<T>()` 语法
-  - 按 P5.1 的决策选走模板注册或预处理器替换
-  - 支持 T 为脚本定义接口（`UIFoo`）和 C++ 接口（`UAngelscriptNativeParentInterface`）
-  - 对 T 非接口类型（比如 `AActor`）给出编译期诊断："`Implements<T>` expects T to be an interface type"
-  - 保留现有 `Obj.ImplementsInterface(UClass)` 完全不变
-- [ ] **P5.2** 📦 Git 提交：`[Interface] Feat: Obj.Implements<T>() generic interface query`
+- [x] **P5.1** 选择实现路径：预处理器语法糖
+  - AS 引擎不支持方法级模板实例化（类模板通过 `asOBJ_TEMPLATE` + `ValueClass<T>("Foo<class T>")` 实现），所以不能走"注册 `UObject.Implements<T>()` 模板方法"路径
+  - 预处理器已有成熟的正则替换基础设施（`PostProcessRangeBasedFor` / `PostProcessLiteralAssets`），新增一个 `PostProcessImplementsTemplate` 完全对齐现有范式
+  - 单次正则 `\.Implements\s*<\s*([A-Za-z_][A-Za-z0-9_:]*)\s*>\s*\(\s*\)` → `.ImplementsInterface(${T}::StaticClass())`，捕获组允许标识符 + `::` 以支持 namespace-qualified 类型
+  - 所有预处理器正则共享的字符串/注释词法状态机保证不会误替换到字符串字面量和注释里的 `Implements<T>()` 文本
+- [x] **P5.1** 合并到 P5.2 提交一起落地（commit `082c2e8`）
 
-- [ ] **P5.3** 新增 `AngelscriptInterfaceImplementsGenericTests.cpp` 4 个用例
-  - `ImplementsGeneric.ScriptInterfaceTrue` — 脚本接口 `Implements<UIFoo>()` 返回 true
-  - `ImplementsGeneric.CppInterfaceTrue` — C++ 接口 `Implements<UAngelscriptNativeParentInterface>()` 返回 true
-  - `ImplementsGeneric.NotImplementedFalse` — 未实现的接口返回 false
-  - `ImplementsGeneric.NonInterfaceTypeDiagnostic` — `Implements<AActor>()` 编译期给出诊断（非接口类型）
-- [ ] **P5.3** 📦 Git 提交：`[Test/Interface] Feat: Implements<T> generic query tests`
+- [x] **P5.2** 实现 `Obj.Implements<T>()` 语法 — 预处理器重写通道
+  - `AngelscriptPreprocessor.h` 新增 `void PostProcessImplementsTemplate(FFile& file);` 声明
+  - `AngelscriptPreprocessor.cpp` 新增 ~130 行实现，放在 `PostProcessLiteralAssets` 之后 / `FindScopeCloseBracket` 之前
+  - `Preprocess()` 的 post-process 循环追加调用 `PostProcessImplementsTemplate(File)`
+  - 保留现有 `Obj.ImplementsInterface(UClass)` 完全不变；legacy 路径零回归
+  - **非接口类型的编译期诊断不实施**：sugar 只做文本替换，T 是否为接口由后续 AS 编译器 + Phase 1 `FinalizeClass` 校验负责；`Implements<AActor>()` 会被重写为 `ImplementsInterface(AActor::StaticClass())`，运行时 `UClass::ImplementsInterface(UClass*)` 本就返回 false，行为正确，不需要新增诊断路径
+  - 同步修复 `AngelscriptNativeInterfaceTestHelpers.h::EnsureNativeInterfaceBound`：新注册的 C++ UInterface 追加 namespace-scoped `StaticClass()` 函数绑定（对齐 `Bind_BlueprintType.cpp:689` 的主路径），否则 `UAngelscriptNativeParentInterface::StaticClass()` 在 helper 动态注册路径下解析失败（Phase 5 的 sugar 重写正好依赖这个符号）
+- [x] **P5.2** 📦 Git 提交：`[Interface] Feat: preprocessor sugar Obj.Implements<T>() to Obj.ImplementsInterface(T::StaticClass())`（commit `082c2e8`，338/338 构建 + 37/37 接口回归通过）
+
+- [x] **P5.3** 新增 `AngelscriptInterfaceImplementsGenericTests.cpp` 4 个用例
+  - `ImplementsGeneric.ScriptInterfaceTrue` — 脚本 `UINTERFACE interface UIFoo` + 实现类，脚本里 `this.Implements<UIFoo>()` 返回 true；同一测试也验证 `ImplementsInterface(UIFoo::StaticClass())` legacy 形式与 sugar 形式结果一致
+  - `ImplementsGeneric.CppInterfaceTrue` — C++ 原生接口 `UAngelscriptNativeParentInterface`，通过 `Target.Implements<UAngelscriptNativeParentInterface>()` 查询，对 `ATestNativeParentInterfaceActor` 返回 true
+  - `ImplementsGeneric.NotImplementedFalse` — 不实现接口的脚本类，sugar 查询返回 false（验证没硬编码 true）
+  - `ImplementsGeneric.LegacyApiCompat` — 纯 legacy `ImplementsInterface(UClass)` 路径在 Phase 5 重写通道下未被误替换（代码里**没有** `Implements<>` 字样）
+  - 原 `NonInterfaceTypeDiagnostic` 用例取消：文本替换 + 运行时 `UClass::ImplementsInterface` 本身就正确返回 false，新增编译期诊断路径成本高、收益低
+- [x] **P5.3** 📦 Git 提交：`[Test/Interface] Feat: Obj.Implements<T>() generic query tests`（commit `24d6c03`，41/41 接口测试全通过）
 
 ### Phase 6：测试回归与文档同步
 
