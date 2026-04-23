@@ -121,6 +121,15 @@ public:
 	UPROPERTY()
 	FString SecondaryLabel;
 
+	// TScriptInterface-shaped UPROPERTY field used by Phase 2 bridge tests
+	// to verify that script-side TScriptInterface<UIFoo> maps onto the
+	// canonical FInterfaceProperty layout and cross-boundary writes stick.
+	UPROPERTY()
+	TScriptInterface<IAngelscriptNativeParentInterface> SavedParentRef;
+
+	UPROPERTY()
+	TScriptInterface<IAngelscriptNativeSecondaryInterface> SavedSecondaryRef;
+
 	virtual int32 GetNativeValue_Implementation() const override;
 	virtual void SetNativeMarker_Implementation(FName Marker) override;
 	virtual void AdjustNativeValue_Implementation(int32 Delta, int32& Value) override;
