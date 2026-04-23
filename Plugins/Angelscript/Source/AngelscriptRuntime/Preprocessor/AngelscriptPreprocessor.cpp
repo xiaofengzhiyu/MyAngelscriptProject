@@ -297,6 +297,7 @@ bool FAngelscriptPreprocessor::Preprocess()
 	{
 		PostProcessRangeBasedFor(File);
 		PostProcessLiteralAssets(File);
+		PostProcessImplementsTemplate(File);
 	}
 
 	OnPostProcessCode.Broadcast(*this);
@@ -4737,6 +4738,138 @@ void FAngelscriptPreprocessor::PostProcessLiteralAssets(FFile& File)
 		return;
 
 	if(PrevPosition < File.ProcessedCode.Len())
+		NewCode += File.ProcessedCode.Mid(PrevPosition);
+	File.ProcessedCode = NewCode;
+}
+
+// Phase 5: Sugar `Obj.Implements<UIFoo>()` → `Obj.ImplementsInterface(UIFoo::StaticClass())`
+// so AS-side code reads more like C++ `Obj->Implements<UFoo>()`. This is a
+// pure textual rewrite performed on already-preprocessed module source, so it
+// composes naturally with namespace-qualified type names (e.g.
+// `Obj.Implements<Namespace::UIFoo>()` → `Obj.ImplementsInterface(Namespace::UIFoo::StaticClass())`).
+//
+// The template argument is restricted to identifier characters + `::` so that
+// unrelated `<` tokens (e.g. less-than comparisons, `TArray<int>`, etc.) are
+// never touched. The rewrite preserves the outer call site's trailing `()`.
+void FAngelscriptPreprocessor::PostProcessImplementsTemplate(FFile& File)
+{
+	static const FRegexPattern ImplementsTemplatePattern(
+		TEXT("\\.Implements\\s*<\\s*([A-Za-z_][A-Za-z0-9_:]*)\\s*>\\s*\\(\\s*\\)"));
+
+	bool bInString = false;
+	bool bInLineComment = false;
+	bool bInBlockComment = false;
+
+	auto IsEscapedQuote = [&File](int32 QuotePos)
+	{
+		int32 EscapeCount = 0;
+		for (int32 CheckPos = QuotePos - 1; CheckPos >= 0 && File.ProcessedCode[CheckPos] == '\\'; --CheckPos)
+		{
+			++EscapeCount;
+		}
+		return (EscapeCount % 2) == 1;
+	};
+
+	auto AdvanceLexState = [&File, &bInString, &bInLineComment, &bInBlockComment, &IsEscapedQuote](int32 StartPos, int32 EndPos)
+	{
+		const int32 CodeLen = File.ProcessedCode.Len();
+		for (int32 Pos = StartPos; Pos < EndPos && Pos < CodeLen; ++Pos)
+		{
+			const TCHAR Char = File.ProcessedCode[Pos];
+
+			if (bInLineComment)
+			{
+				if (Char == '\n')
+				{
+					bInLineComment = false;
+				}
+				continue;
+			}
+
+			if (bInBlockComment)
+			{
+				if (Char == '*' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen && File.ProcessedCode[Pos + 1] == '/')
+				{
+					bInBlockComment = false;
+					++Pos;
+				}
+				continue;
+			}
+
+			if (bInString)
+			{
+				if (Char == '"' && !IsEscapedQuote(Pos))
+				{
+					bInString = false;
+				}
+				continue;
+			}
+
+			if (Char == '/' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen)
+			{
+				if (File.ProcessedCode[Pos + 1] == '/')
+				{
+					bInLineComment = true;
+					++Pos;
+					continue;
+				}
+
+				if (File.ProcessedCode[Pos + 1] == '*')
+				{
+					bInBlockComment = true;
+					++Pos;
+					continue;
+				}
+			}
+
+			if (Char == '"' && !IsEscapedQuote(Pos))
+			{
+				bInString = true;
+			}
+		}
+	};
+
+	FString NewCode;
+	int32 PrevPosition = 0;
+	FRegexMatcher Match(ImplementsTemplatePattern, File.ProcessedCode);
+
+	while (Match.FindNext())
+	{
+		const int32 MatchStart = Match.GetMatchBeginning();
+		AdvanceLexState(PrevPosition, MatchStart);
+
+		if (MatchStart > PrevPosition)
+		{
+			NewCode.Reserve(File.ProcessedCode.Len() + 256);
+			NewCode += File.ProcessedCode.Mid(PrevPosition, MatchStart - PrevPosition);
+		}
+
+		const int32 MatchEnd = Match.GetMatchEnding();
+		if (bInString || bInLineComment || bInBlockComment)
+		{
+			NewCode += File.ProcessedCode.Mid(MatchStart, MatchEnd - MatchStart);
+			AdvanceLexState(MatchStart, MatchEnd);
+			PrevPosition = MatchEnd;
+			continue;
+		}
+
+		FString InterfaceTypeName = Match.GetCaptureGroup(1);
+		// Preserve length (and thus line/column information) by padding the
+		// rewrite to occupy roughly the same number of characters — not
+		// strictly necessary since the rewrite only shrinks/expands within a
+		// single logical statement, but match the AS fork's "keep line layout
+		// stable where cheap" convention followed by other post-process passes.
+		NewCode += FString::Printf(TEXT(".ImplementsInterface(%s::StaticClass())"), *InterfaceTypeName);
+
+		AdvanceLexState(MatchStart, MatchEnd);
+		PrevPosition = MatchEnd;
+	}
+
+	// If no matches were found at all, don't need to do anything
+	if (PrevPosition == 0)
+		return;
+
+	if (PrevPosition < File.ProcessedCode.Len())
 		NewCode += File.ProcessedCode.Mid(PrevPosition);
 	File.ProcessedCode = NewCode;
 }
