@@ -117,3 +117,74 @@ void ApplyDamageViaInterface(AActor Target, float Damage)
 	Damageable.TakeDamage(Damage);
 	Print(f"  Alive: {Damageable.IsAlive()}, Health: {Damageable.GetHealthPercent() * 100.0}%");
 }
+
+// ---- Using TScriptInterface<> across the reflection boundary (Phase 2, 2026-04-24) ----
+/**
+ * Actor that tracks damageable targets, demonstrating the TScriptInterface<>
+ * patterns supported by the AngelScript plugin as of Phase 2:
+ *
+ *   1. `TScriptInterface<UIFoo>` as a local variable
+ *   2. Construction/assignment from a UObject (auto-computes InterfacePointer
+ *      and raises an AS exception on non-implementers)
+ *   3. `Obj.Implements<UIFoo>()` (Phase 5 preprocessor sugar) as a pre-flight
+ *      check before constructing a TScriptInterface<>
+ *
+ * The AS form `TScriptInterface<UIExampleDamageable>` is memory-layout
+ * compatible with the C++ form `TScriptInterface<IExampleDamageable>` used on
+ * the reflection side — the plugin handles the `U`→`I` prefix translation
+ * automatically when generating C++ forms.
+ *
+ * Note: The Phase 2 closure landed `TScriptInterface<>` support for local
+ * variables and C++-side UPROPERTY round-trip. Script-owned `UPROPERTY`
+ * fields, UFUNCTION parameters, and UFUNCTION return values of type
+ * `TScriptInterface<UIFoo>` are **not yet** accepted by the class generator
+ * analysis path — that surface is tracked for a later iteration. For now,
+ * store a bare UObject / AActor in UPROPERTY / parameter slots, then build
+ * a local `TScriptInterface<>` inside the method body when you need the
+ * offset-aware dispatch path.
+ */
+UCLASS()
+class AExampleDamageTracker : AActor
+{
+	// Plain UObject/AActor UPROPERTY — the tracker accepts anything and
+	// defers the interface check to the moment of dispatch.
+	UPROPERTY(Category = "Tracker")
+	AActor TargetActor;
+
+	UFUNCTION(BlueprintCallable, Category = "Tracker")
+	void SetTarget(UObject NewTarget)
+	{
+		// Phase 5 sugar: `Obj.Implements<T>()` rewrites to
+		// `Obj.ImplementsInterface(T::StaticClass())` at preprocess time.
+		if (NewTarget == nullptr || !NewTarget.Implements<UIExampleDamageable>())
+		{
+			TargetActor = nullptr;
+			return;
+		}
+
+		TargetActor = Cast<AActor>(NewTarget);
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "Tracker")
+	void DamageCurrentTarget(float Amount)
+	{
+		if (TargetActor == nullptr)
+			return;
+
+		if (!TargetActor.Implements<UIExampleDamageable>())
+			return;
+
+		// Local TScriptInterface<>: construction from a UObject validates
+		// ImplementsInterface and computes the correct InterfacePointer.
+		// If the object doesn't implement the interface, an AS exception
+		// is raised — the Implements<> check above makes that path safe.
+		TScriptInterface<UIExampleDamageable> DamageableRef = TargetActor;
+		Print(f"[Tracker] TScriptInterface valid={DamageableRef.IsValid()} target={TargetActor.GetName()}");
+
+		// Dispatch through the interface type (offset-aware on C++ natives).
+		UIExampleDamageable Damageable = Cast<UIExampleDamageable>(DamageableRef.Get());
+		if (Damageable != nullptr)
+			Damageable.TakeDamage(Amount);
+	}
+};
+
