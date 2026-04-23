@@ -169,53 +169,63 @@ ThirdParty（仅列已有注入，本计划不新增）：
 
 > 目标：脚本能声明 `UPROPERTY() TScriptInterface<UIFoo> Ref`，`UFUNCTION` 参数和返回值可用 `TScriptInterface<UIFoo>`，跨反射边界自动桥接 `FScriptInterface` 双字段。
 
-- [ ] **P2.1** 新增双指针桥接助手
-  - 在 `Binds/Bind_Helpers.h` 新增 `void* GetInterfacePointerForCast(UObject* Object, UClass* InterfaceClass)`：脚本实现类走快路径返回 `Object`，C++ 原生实现类调 `Object->GetInterfaceAddress(InterfaceClass)`，`InterfaceClass` 非 `CLASS_Interface` 或 `Object` 未实现时返回 `nullptr`
-  - 同文件再加 4 个配套 helper：`GetInterfaceObjectFromProperty`、`SetInterfaceObjectFromProperty`、`GetValueFromPropertyGetter_InterfaceHandle`、`SetInterfaceObjectFromPropertySetter`，作为后续 P2.3/P2.4 的实现基石
-  - 命名与现有 `Bind_Helpers.h` 风格保持一致（参考 `GetValueFromPropertyGetter_*` 系列）
-- [ ] **P2.1** 📦 Git 提交：`[Interface] Feat: add interface pointer bridge helpers in Bind_Helpers`
+> **未开始（下一轮会话入口）**。Phase 3 指针偏移修复已先行完成（见下一节），为本 Phase 提供了 `GetInterfacePointerForCast` 基础设施。
 
-- [ ] **P2.2** `FUObjectType::CreateProperty` 为接口类型产出 `FInterfaceProperty`
-  - `Bind_BlueprintType.cpp` 的 `FUObjectType::CreateProperty`：当 `AssociatedClass->HasAnyClassFlags(CLASS_Interface)` 且不是 `UInterface::StaticClass()` 本身时，构造 `FInterfaceProperty`（`SetInterfaceClass(AssociatedClass)`）而不是 `FObjectProperty`
-  - 仅用于当脚本侧写 `UPROPERTY() UIFoo Ref`（当前行为：生成 `FObjectProperty` 指向接口 UClass）时，改为符合 UE 习惯的 `FInterfaceProperty` — 这一步后续 Phase 会接到 TScriptInterface 语法糖
-- [ ] **P2.2** 📦 Git 提交：`[Interface] Feat: emit FInterfaceProperty for interface UPROPERTY`
+#### Phase 2 现状探查（由 `code-explorer` 子代理完成，2026-04-24）
 
-- [ ] **P2.3** `FUObjectType` 的参数/返回值/属性桥接扩展 `FInterfaceProperty` 分支
-  - `MatchesProperty`：识别 `CastField<FInterfaceProperty>(Property)` 并校验 `InterfaceClass == AssociatedClass`
-  - `SetArgument` / `GetReturnValue`：通过 `FScriptInterface` 读写 — 读时 `GetObject()` 返回 `UObject*` 给 AS；写时 `SetObject(Object)` + `SetInterface(Object->GetInterfaceAddress(InterfaceClass))`（即 P2.1 的 `GetInterfacePointerForCast`）
-  - `BindProperty`：为接口属性生成 Get/Set 访问器 — Getter 返回 `FScriptInterface::GetObject()`；Setter 先校验 `ImplementsInterface`，通过后走双字段写入，不通过则 `ensure` + 静默跳过（不崩溃）
-- [ ] **P2.3** 📦 Git 提交：`[Interface] Feat: bridge FScriptInterface in argument/return/property paths`
+探查结论改写了原 Plan 的多处假设：
 
-- [ ] **P2.4** TypeFinder 识别 C++ 侧 `TScriptInterface<IFoo>` 属性
-  - `Bind_BlueprintType.cpp` 的 TypeFinder lambda（`BindUClassLookup` 所在段）补 `CastField<FInterfaceProperty>(Property)` 分支，返回 `FAngelscriptTypeUsage::FromClass(InterfaceClass)`，让 C++ 定义的 `UPROPERTY() TScriptInterface<IFoo>` 自动映射到 AS 接口类型
-  - 确保脚本侧能读写这种属性
-- [ ] **P2.4** 📦 Git 提交：`[Interface] Feat: TypeFinder recognizes FInterfaceProperty`
+1. **`FUObjectType` 继承 `TAngelscriptPODType<UObject*>`（8B）**，无法直接容纳 16B 的 `FScriptInterface`（`ObjectPointer + InterfacePointer` 双字段）。`TScriptInterface<I>` 必须**单独注册**为 `FScriptInterfaceType : TAngelscriptCppType<FScriptInterface>`，与现有 `FObjectPtrType`（`Bind_BlueprintType.cpp:1994`, 242行）、`FWeakObjectPtrType`（L2322, 210行）、`FSubclassOfType`（L1757, 207行）范式一致。
+2. **预处理器完全不做 `TSubclassOf/TWeakObjectPtr/TSoftObjectPtr` 的字符串替换**，这些是 AS 引擎原生 template class 机制处理。**原 P2.5 预处理器语法糖步骤作废** — 只需注册 AS template class + TemplateCallback 就能让脚本直接写 `TScriptInterface<UIFoo>`。
+3. **`FInterfaceProperty` 在插件中完全未处理**（仓库命中仅两处占位注释）。`TScriptInterface<...>` 也 0 处出现。Phase 2 需要从零新增完整支持链路。
+4. **`BindProperty` 默认返回 false**（`AngelscriptType.h:265`）；现有大部分类型不重载它，走 `BindProperties` 的默认 DB 路径（`Bind_BlueprintType.cpp:820-870` `bGeneratedHandle/bGeneratedSetter/...`）。`FScriptInterfaceType` 可以选择不重载 BindProperty，只需让该路径识别接口属性走新 helper。
+5. **TypeFinder 注册是必须入口**（`Bind_BlueprintType.cpp:2653` 的中心 TypeFinder）：对 `FInterfaceProperty` 的识别必须加在这里，让 `FAngelscriptTypeUsage::FromProperty(FInterfaceProperty*)` 能正确映射回 `FScriptInterfaceType + SubTypes[0]=InterfaceClass`。
+6. **原 P2.2"让脚本裸 `UIFoo Ref` 也走 `FInterfaceProperty`"需要与 `FUObjectType::CreateProperty` 协调**：裸接口引用的属性语义与 `TScriptInterface<UIFoo>` 不同（前者只存 UObject 指针），改动风险比预想大；推荐**不改**裸接口引用，只让 `TScriptInterface<>` 显式使用 `FInterfaceProperty`。
 
-- [ ] **P2.5** 脚本侧 `TScriptInterface<UIFoo>` 语法糖（预处理器）
-  - 决定是保持 "脚本里直接写 `UIFoo Ref`（Phase 2.2 已让它走 FInterfaceProperty）"还是"显式允许 `TScriptInterface<UIFoo> Ref`"
-  - 本计划选**两者都支持**：`UIFoo Ref` 与 `TScriptInterface<UIFoo> Ref` 产生完全相同的 FInterfaceProperty；预处理器把后者在 chunk 分析阶段替换成前者（与现有 `TSubclassOf<T>` 语法糖类似处理方式，参考 `AngelscriptPreprocessor.cpp` 的类型替换段）
-  - 参考预处理器现有 `TMap/TArray/TSubclassOf/TSoftObjectPtr` 等泛型类型处理的写法，新增一条 `TScriptInterface` 规则
-- [ ] **P2.5** 📦 Git 提交：`[Interface] Feat: preprocessor TScriptInterface<T> alias to T for interface types`
+#### 推荐子阶段拆分（预估 600+ 行新增代码）
 
-- [x] **P2.6** 扩展 `Shared/AngelscriptNativeInterfaceTestTypes.h/cpp`（已在 Phase 2 结束时提前实现）
-  - 现有 fixture 只覆盖 C++ 实现类 `ATestNativeParentInterfaceActor`，但它是**单继承**（只实现一个接口），`PointerOffset` 通常为 0，测不出双指针偏移
-  - 新增 `UAngelscriptNativeSecondaryInterface`（2 方法 `GetSecondaryValue` / `SetSecondaryLabel`）+ `ATestNativeMultiInterfaceActor` 同时实现 Parent + Secondary，让 Secondary 接口 `PointerOffset` 非零
-  - 带 `UPROPERTY() TScriptInterface<…>` 字段的 fixture 类推迟到 Phase 3 真正开始时补（需要与 FInterfaceProperty 支持同步落地）
-- [x] **P2.6** 📦 Git 提交：`[Test/Interface] Feat: add multi-interface native fixture for pointer offset coverage`（commit `7cb4e4d`）
+受代码规模所限（涉及 5+ 处锚点、8 个测试用例），Phase 2 按以下子阶段执行以保持可回归：
 
-- [ ] **P2.7** 新增 `AngelscriptInterfacePropertyTests.cpp` 5 个用例
-  - `InterfaceProperty.GetSet` — 脚本读写 `UPROPERTY() TScriptInterface<UIFoo>`，设置实现类对象后再读出一致
-  - `InterfaceProperty.SetInvalid` — 赋值未实现接口的对象时 Setter 安全返回，不崩溃
-  - `InterfaceProperty.Null` — 空引用读写
-  - `InterfaceProperty.CallThrough` — 通过属性取到接口引用后调用方法
-  - `InterfaceProperty.CppSideProperty` — C++ 类上的 `TScriptInterface<IFoo>` 属性在脚本中可读写
-- [ ] **P2.7** 📦 Git 提交：`[Test/Interface] Feat: add TScriptInterface property tests`
+- [ ] **P2.a** 注册 `TScriptInterface<class T>` AS template + `FScriptInterfaceType : TAngelscriptCppType<FScriptInterface>` + `FAngelscriptScriptInterfaceHelpers`（构造/拷贝/Get/Set/IsValid/opEquals），参考 `FSubclassOfType` 与 `Bind_TSubclassOf_Declaration`；验收：脚本 `TScriptInterface<UIFoo> Ref;` 可编译
+- [ ] **P2.a** 📦 Git 提交：`[Interface] Feat: register TScriptInterface<T> template and FScriptInterfaceType`
 
-- [ ] **P2.8** 新增 `AngelscriptInterfaceArgumentTests.cpp` 3 个用例
-  - `InterfaceArg.PassThrough` — UFUNCTION 参数为 `TScriptInterface<UIFoo>` 时脚本↔C++ 互传正确
-  - `InterfaceArg.Return` — UFUNCTION 返回 `TScriptInterface<UIFoo>` 时调用者拿到正确桥接对象
-  - `InterfaceArg.NullPass` — 空 TScriptInterface 传参和返回不崩溃
-- [ ] **P2.8** 📦 Git 提交：`[Test/Interface] Feat: add TScriptInterface argument/return tests`
+- [ ] **P2.b** 扩展 `BindUClassLookup()` 的 TypeFinder：`CastField<FInterfaceProperty>` → `FAngelscriptTypeUsage` 含 `Type=ScriptInterfaceType`、`SubTypes[0]=FromClass(InterfaceClass)`；验收：C++ 类上 `UPROPERTY TScriptInterface<IFoo>` 属性在脚本中能看到
+- [ ] **P2.b** 📦 Git 提交：`[Interface] Feat: TypeFinder recognizes FInterfaceProperty`
+
+- [ ] **P2.c** `FScriptInterfaceType::CreateProperty` → `new FInterfaceProperty(...) + SetInterfaceClass`；`MatchesProperty` → `CastField<FInterfaceProperty>` + `InterfaceClass` 比对；验收：脚本声明 `TScriptInterface<UIFoo>` 属性落盘为 `FInterfaceProperty`
+- [ ] **P2.c** 📦 Git 提交：`[Interface] Feat: emit FInterfaceProperty for TScriptInterface<T> UPROPERTY`
+
+- [ ] **P2.d** `SetArgument/GetReturnValue` 桥接：UE→AS 方向 `FScriptInterface::GetObject()`；AS→UE 方向 `SetObject() + SetInterface(GetInterfacePointerForCast(...))`；验收：UFUNCTION 参数为 `TScriptInterface<UIFoo>` 时跨边界调用正确
+- [ ] **P2.d** 📦 Git 提交：`[Interface] Feat: bridge FScriptInterface in argument/return paths`
+
+- [ ] **P2.e** `Bind_Helpers.h` 新增 `GetScriptInterfaceFromProperty` / `SetScriptInterfaceFromProperty` + 对应 `_Native` 变体共 4 helper；`BindProperties` DB 路径（`Bind_BlueprintType.cpp:820`）识别 `bGeneratedScriptInterface` 分支并生成 Get/Set 访问器；验收：脚本 `UPROPERTY TScriptInterface<UIFoo>` 可读可写，且 C++ 侧读取到正确的 `InterfacePointer`
+- [ ] **P2.e** 📦 Git 提交：`[Interface] Feat: generate Get/Set accessors for FInterfaceProperty`
+
+- [ ] **P2.f** `AngelscriptNativeInterfaceTestTypes.h` 追加 `UPROPERTY TScriptInterface<IAngelscriptNativeParentInterface>` 字段；新增 `AngelscriptInterfacePropertyTests.cpp`（5 用例：GetSet/SetInvalid/Null/CallThrough/CppSideProperty）+ `AngelscriptInterfaceArgumentTests.cpp`（3 用例：PassThrough/Return/NullPass）
+- [ ] **P2.f** 📦 Git 提交：`[Test/Interface] Feat: TScriptInterface property and argument tests`
+
+每个子阶段独立 commit + 独立回归；P2.a/P2.b 完成后即可启动测试编写（P2.f 可提前打开），其余功能逐步补齐。
+
+**本会话规模限制**：本 Phase 预计需要 5~8 个后续迭代才能完成，作为下一轮会话的入口起点。
+
+##### 已完成的 Phase 2 子项（做 Phase 3 时一并落地）
+
+- [x] **P2.1 helper** 新增 `GetInterfacePointerForCast(UObject*, UClass*)` — commit `7c91abe`，这是 Phase 2 的基础设施，目前仅 Phase 3 opCast 决策段引用；Phase 2 所有 `SetInterface` 路径都将调用它
+- [x] **P2.6 fixture** 新增 `ATestNativeMultiInterfaceActor` + `UAngelscriptNativeSecondaryInterface` — commit `7cb4e4d`
+  - TScriptInterface 属性字段的 fixture 将在 P2.f 进一步补齐
+
+##### 原 P2.1-P2.8 映射表（对照新拆分）
+
+| 原条目 | 映射 | 状态 |
+|--------|------|------|
+| P2.1 helper | P2.1（已做） | ✅ `7c91abe` |
+| P2.2 CreateProperty | P2.c | ⏳ |
+| P2.3 argument/return/property 桥接 | P2.d + P2.e | ⏳ |
+| P2.4 TypeFinder | P2.b | ⏳ |
+| P2.5 预处理器语法糖 | 取消 | — |
+| P2.6 fixture | P2.6（已做，P2.f 补 TScriptInterface 字段） | ✅ `7cb4e4d` |
+| P2.7 Property 测试 5 例 | P2.f | ⏳ |
+| P2.8 Argument 测试 3 例 | P2.f | ⏳ |
 
 ### Phase 3：C++ 原生实现类的接口指针偏移修复
 
