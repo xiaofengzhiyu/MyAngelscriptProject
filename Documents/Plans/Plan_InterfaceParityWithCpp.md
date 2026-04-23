@@ -112,13 +112,13 @@ ThirdParty（仅列已有注入，本计划不新增）：
   - 已确认 `asCObjectType::IsInterface()` 当前强制 `return false`（`as_objecttype.cpp:284-290`），启用会引发 `as_builder.cpp` 8+ 处接口路径联动，与 ForkStrategy 的"脚本 interface 不支持"结构性分叉点冲突
   - 已确认 `AngelscriptChange.md` 当前不存在；ThirdParty 修改惯例是 `[UE++]` 注释
   - 将现状、决策、Phase 拆分、验收、风险一次性落盘，作为 Phase 1-6 的唯一 source of truth
-- [ ] **P0.1** 📦 Git 提交：`[Interface] Docs: add Plan_InterfaceParityWithCpp with zero-ThirdParty decision`
+- [x] **P0.1** 📦 Git 提交：`[Interface] Docs: add Plan_InterfaceParityWithCpp with zero-ThirdParty decision`（commit `fc970bc`）
 
-- [ ] **P0.2** 在 `Documents/Plans/Plan_OpportunityIndex.md` 与 `Plan_StatusPriorityRoadmap.md` 中登记本计划
-  - Plan_OpportunityIndex.md 负责全景索引，需要添加本 Plan 的一行条目（主题：接口一致性补齐；状态：建设中）
-  - Plan_StatusPriorityRoadmap.md 管理当前优先级，本计划置于"feature parity & validation closure"阶段
-  - 同时在 `Plan_InterfaceBinding.md` 顶部加入一个"2026-04-24 承接说明"小节，标注 Phase 4/5 由本计划承接
-- [ ] **P0.2** 📦 Git 提交：`[Docs] Chore: register InterfaceParityWithCpp in plan indexes`
+- [x] **P0.2** 在 `Documents/Plans/Plan_OpportunityIndex.md` 登记本计划，并在 `Plan_InterfaceBinding.md` 顶部加承接说明
+  - `Plan_OpportunityIndex.md §4.1` 新增一行 `B2` 条目，指向本 Plan，状态"进行中（Phase 0 完成）"
+  - `Plan_InterfaceBinding.md` 顶部新增"2026-04-24 承接说明"小节，标注 Phase 4/5 由本计划承接
+  - `Plan_StatusPriorityRoadmap.md` 暂不改动：其"事实快照"文字较多且与本计划并无冲突，承接关系已通过 Plan_OpportunityIndex + Plan_InterfaceBinding 双入口充分表达
+- [x] **P0.2** 📦 Git 提交：`[Docs] Chore: register InterfaceParityWithCpp in plan indexes`
 
 ### Phase 1：接口方法签名完整校验
 

@@ -1,5 +1,7 @@
 # Angelscript 接口绑定完善计划
 
+> **2026-04-24 承接说明**：本计划的 Phase 4（`FInterfaceProperty` 支持）、Phase 5（方法签名校验增强）以及接口方法 `BlueprintNativeEvent` 语义、C++ 原生实现类指针偏移修复、`Obj.Implements<T>()` 泛型查询等一致性补齐工作，已由 [`Plan_InterfaceParityWithCpp.md`](./Plan_InterfaceParityWithCpp.md) 承接并重新编排为 6 个 Phase。本文件保留作为完整设计思路与决策选项的参考资料，不再作为活跃执行 Plan。
+
 ## 背景与目标
 
 ### 背景
