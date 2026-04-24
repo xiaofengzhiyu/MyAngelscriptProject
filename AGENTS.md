@@ -118,7 +118,6 @@
 - ✅ Test macro optimization (`BEGIN/END`, `SHARE_CLEAN/SHARE_FRESH`, group closure) — archived
 - ✅ Technical debt Phase 0-6 closure — archived
 - ✅ UFunction reflective fallback binding — archived
-- ✅ Interface / C++ UInterface parity (signature validation, TScriptInterface<> local+CppUPROPERTY bridging, native pointer offset, BlueprintNativeEvent specifier propagation, `Obj.Implements<T>()` sugar) — archived
 - ✅ UHT tool plugin generated function tables and legacy shard removal — merged to main
 - ✅ BlueprintImpact Commandlet and editor integration — merged to main
 - ✅ UE 5.7 binding and debugger adaptation (38 + 16 Disabled tests re-enabled) — merged to main

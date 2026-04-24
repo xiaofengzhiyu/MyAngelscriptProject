@@ -297,7 +297,6 @@ bool FAngelscriptPreprocessor::Preprocess()
 	{
 		PostProcessRangeBasedFor(File);
 		PostProcessLiteralAssets(File);
-		PostProcessImplementsTemplate(File);
 	}
 
 	OnPostProcessCode.Broadcast(*this);
@@ -1136,96 +1135,17 @@ void FAngelscriptPreprocessor::AnalyzeClasses(FFile& File, FChunk& Chunk)
 			FString Body = Chunk.Content.Mid(OpenBrace + 1, CloseBrace - OpenBrace - 1);
 			TArray<FString> Lines;
 			Body.ParseIntoArrayLines(Lines);
-
-			// Phase 4: parse UFUNCTION() specifiers on interface methods so the
-			// generated UFunction stub can carry the correct FUNC_* flags. The
-			// default (no UFUNCTION macro, or `BlueprintImplementableEvent` alone)
-			// is `FUNC_Event | FUNC_BlueprintEvent` — a pure script-overridable
-			// event. `BlueprintNativeEvent` additionally adds `FUNC_Native` so
-			// UHT/C++ implementors can supply a `_Implementation` default path.
-			// `BlueprintCallable` / `BlueprintPure` add the matching flags.
-			const uint32 DefaultInterfaceMethodFlags = FUNC_Event | FUNC_BlueprintEvent;
-			uint32 PendingFlags = DefaultInterfaceMethodFlags;
-			bool bHasPendingFlags = false;
-
-			auto ParseInterfaceUFunctionSpecifiers = [&](const FString& UFunctionLine) -> uint32
-			{
-				// Extract the argument list between "UFUNCTION(" and its matching ")".
-				int32 OpenParen = UFunctionLine.Find(TEXT("("));
-				int32 LastClose = UFunctionLine.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
-				if (OpenParen == INDEX_NONE || LastClose <= OpenParen + 1)
-				{
-					// Empty `UFUNCTION()` — treat as BlueprintImplementableEvent equivalent.
-					return DefaultInterfaceMethodFlags;
-				}
-
-				FString Arguments = UFunctionLine.Mid(OpenParen + 1, LastClose - OpenParen - 1);
-				TArray<FSpecifier> Specs = ParseSpecifiers(Arguments);
-
-				uint32 Flags = DefaultInterfaceMethodFlags;
-				for (const FSpecifier& Spec : Specs)
-				{
-					// AS fork uses `BlueprintEvent` as a generic script-overridable
-					// event specifier, which already implies FUNC_Event|FUNC_BlueprintEvent.
-					// `BlueprintImplementableEvent` is a C++-ism that maps to the same
-					// baseline; `BlueprintNativeEvent` is the one that adds FUNC_Native.
-					static const FName NAME_BlueprintNativeEvent("BlueprintNativeEvent");
-					static const FName NAME_BlueprintImplementableEvent("BlueprintImplementableEvent");
-					static const FName NAME_BlueprintCallable_Local("BlueprintCallable");
-					static const FName NAME_BlueprintPure_Local("BlueprintPure");
-
-					if (Spec.Name == NAME_BlueprintNativeEvent)
-					{
-						Flags |= FUNC_Native;
-					}
-					else if (Spec.Name == NAME_BlueprintImplementableEvent)
-					{
-						// Explicit BlueprintImplementableEvent — strip FUNC_Native if
-						// some other specifier tried to set it (defensive; ordering
-						// within a single UFUNCTION is not guaranteed).
-						Flags &= ~FUNC_Native;
-					}
-					else if (Spec.Name == NAME_BlueprintCallable_Local)
-					{
-						Flags |= FUNC_BlueprintCallable;
-					}
-					else if (Spec.Name == NAME_BlueprintPure_Local)
-					{
-						Flags |= FUNC_BlueprintCallable | FUNC_BlueprintPure;
-					}
-					// Other specifiers (Category, Meta, DisplayName, ...) are
-					// ignored here — they belong to the eventual UFunction's
-					// metadata pass, not to FunctionFlags.
-				}
-				return Flags;
-			};
-
 			for (const FString& Line : Lines)
 			{
 				FString Trimmed = Line.TrimStartAndEnd();
-				// Skip empty lines and comments.
-				if (Trimmed.Len() == 0 || Trimmed.StartsWith(TEXT("//")))
+				// Skip empty lines, comments, and UFUNCTION macros
+				if (Trimmed.Len() == 0 || Trimmed.StartsWith(TEXT("//")) || Trimmed.StartsWith(TEXT("UFUNCTION")))
 					continue;
-
-				// UFUNCTION macro rows cache their specifiers for the next
-				// method declaration on the following non-empty non-comment line.
-				if (Trimmed.StartsWith(TEXT("UFUNCTION")))
-				{
-					PendingFlags = ParseInterfaceUFunctionSpecifiers(Trimmed);
-					bHasPendingFlags = true;
-					continue;
-				}
-
 				// Remove trailing semicolon
 				if (Trimmed.EndsWith(TEXT(";")))
 					Trimmed = Trimmed.Left(Trimmed.Len() - 1).TrimEnd();
 				if (Trimmed.Len() > 0)
-				{
 					ClassDesc->InterfaceMethodDeclarations.Add(NormalizeInterfaceMethodDeclaration(Trimmed));
-					ClassDesc->InterfaceMethodFlags.Add(bHasPendingFlags ? PendingFlags : DefaultInterfaceMethodFlags);
-					PendingFlags = DefaultInterfaceMethodFlags;
-					bHasPendingFlags = false;
-				}
 			}
 		}
 
@@ -3914,18 +3834,8 @@ void FAngelscriptPreprocessor::ParseIntoChunks(FFile& File)
 					ParsingMacro.Type = EMacroType::Property;
 				}
 				else if (FCString::Strncmp(&File.RawCode[ChunkEnd], TEXT("UFUNCTION("), 10) == 0
-					&& (ChunkType != EChunkType::Enum)
-					&& (ChunkType != EChunkType::Interface))
+					&& (ChunkType != EChunkType::Enum))
 				{
-					// Phase 4: UFUNCTION inside an interface block is NOT consumed
-					// as a general function macro here. Interface chunks have their
-					// own body-text scan above (see `if (ClassDesc->bIsInterface)`)
-					// which reads the UFUNCTION specifier into `InterfaceMethodFlags`
-					// and strips the entire block to spaces. Routing the macro into
-					// `ProcessFunctionMacro` would reject `BlueprintNativeEvent` /
-					// `BlueprintImplementableEvent` as unknown specifiers (those
-					// names are interface-only and have no meaning on regular
-					// UFUNCTION methods in the AS fork).
 					bIsParsingMacro = true;
 					ParsingMacro.Type = EMacroType::Function;
 				}
@@ -4738,138 +4648,6 @@ void FAngelscriptPreprocessor::PostProcessLiteralAssets(FFile& File)
 		return;
 
 	if(PrevPosition < File.ProcessedCode.Len())
-		NewCode += File.ProcessedCode.Mid(PrevPosition);
-	File.ProcessedCode = NewCode;
-}
-
-// Phase 5: Sugar `Obj.Implements<UIFoo>()` → `Obj.ImplementsInterface(UIFoo::StaticClass())`
-// so AS-side code reads more like C++ `Obj->Implements<UFoo>()`. This is a
-// pure textual rewrite performed on already-preprocessed module source, so it
-// composes naturally with namespace-qualified type names (e.g.
-// `Obj.Implements<Namespace::UIFoo>()` → `Obj.ImplementsInterface(Namespace::UIFoo::StaticClass())`).
-//
-// The template argument is restricted to identifier characters + `::` so that
-// unrelated `<` tokens (e.g. less-than comparisons, `TArray<int>`, etc.) are
-// never touched. The rewrite preserves the outer call site's trailing `()`.
-void FAngelscriptPreprocessor::PostProcessImplementsTemplate(FFile& File)
-{
-	static const FRegexPattern ImplementsTemplatePattern(
-		TEXT("\\.Implements\\s*<\\s*([A-Za-z_][A-Za-z0-9_:]*)\\s*>\\s*\\(\\s*\\)"));
-
-	bool bInString = false;
-	bool bInLineComment = false;
-	bool bInBlockComment = false;
-
-	auto IsEscapedQuote = [&File](int32 QuotePos)
-	{
-		int32 EscapeCount = 0;
-		for (int32 CheckPos = QuotePos - 1; CheckPos >= 0 && File.ProcessedCode[CheckPos] == '\\'; --CheckPos)
-		{
-			++EscapeCount;
-		}
-		return (EscapeCount % 2) == 1;
-	};
-
-	auto AdvanceLexState = [&File, &bInString, &bInLineComment, &bInBlockComment, &IsEscapedQuote](int32 StartPos, int32 EndPos)
-	{
-		const int32 CodeLen = File.ProcessedCode.Len();
-		for (int32 Pos = StartPos; Pos < EndPos && Pos < CodeLen; ++Pos)
-		{
-			const TCHAR Char = File.ProcessedCode[Pos];
-
-			if (bInLineComment)
-			{
-				if (Char == '\n')
-				{
-					bInLineComment = false;
-				}
-				continue;
-			}
-
-			if (bInBlockComment)
-			{
-				if (Char == '*' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen && File.ProcessedCode[Pos + 1] == '/')
-				{
-					bInBlockComment = false;
-					++Pos;
-				}
-				continue;
-			}
-
-			if (bInString)
-			{
-				if (Char == '"' && !IsEscapedQuote(Pos))
-				{
-					bInString = false;
-				}
-				continue;
-			}
-
-			if (Char == '/' && (Pos + 1) < EndPos && (Pos + 1) < CodeLen)
-			{
-				if (File.ProcessedCode[Pos + 1] == '/')
-				{
-					bInLineComment = true;
-					++Pos;
-					continue;
-				}
-
-				if (File.ProcessedCode[Pos + 1] == '*')
-				{
-					bInBlockComment = true;
-					++Pos;
-					continue;
-				}
-			}
-
-			if (Char == '"' && !IsEscapedQuote(Pos))
-			{
-				bInString = true;
-			}
-		}
-	};
-
-	FString NewCode;
-	int32 PrevPosition = 0;
-	FRegexMatcher Match(ImplementsTemplatePattern, File.ProcessedCode);
-
-	while (Match.FindNext())
-	{
-		const int32 MatchStart = Match.GetMatchBeginning();
-		AdvanceLexState(PrevPosition, MatchStart);
-
-		if (MatchStart > PrevPosition)
-		{
-			NewCode.Reserve(File.ProcessedCode.Len() + 256);
-			NewCode += File.ProcessedCode.Mid(PrevPosition, MatchStart - PrevPosition);
-		}
-
-		const int32 MatchEnd = Match.GetMatchEnding();
-		if (bInString || bInLineComment || bInBlockComment)
-		{
-			NewCode += File.ProcessedCode.Mid(MatchStart, MatchEnd - MatchStart);
-			AdvanceLexState(MatchStart, MatchEnd);
-			PrevPosition = MatchEnd;
-			continue;
-		}
-
-		FString InterfaceTypeName = Match.GetCaptureGroup(1);
-		// Preserve length (and thus line/column information) by padding the
-		// rewrite to occupy roughly the same number of characters — not
-		// strictly necessary since the rewrite only shrinks/expands within a
-		// single logical statement, but match the AS fork's "keep line layout
-		// stable where cheap" convention followed by other post-process passes.
-		NewCode += FString::Printf(TEXT(".ImplementsInterface(%s::StaticClass())"), *InterfaceTypeName);
-
-		AdvanceLexState(MatchStart, MatchEnd);
-		PrevPosition = MatchEnd;
-	}
-
-	// If no matches were found at all, don't need to do anything
-	if (PrevPosition == 0)
-		return;
-
-	if (PrevPosition < File.ProcessedCode.Len())
 		NewCode += File.ProcessedCode.Mid(PrevPosition);
 	File.ProcessedCode = NewCode;
 }

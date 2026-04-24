@@ -4,7 +4,6 @@
 #include "Core/AngelscriptEngine.h"
 #include "Core/AngelscriptType.h"
 #include "ClassGenerator/AngelscriptClassGenerator.h"
-#include "Binds/Bind_Helpers.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_scriptengine.h"
@@ -58,21 +57,6 @@ namespace AngelscriptNativeInterfaceTestHelpers
 				{
 					ExistingType->CopySystemType(UObjectType);
 				}
-			}
-
-			// Bind a namespace-scoped `StaticClass()` entry to mirror what the
-			// main Bind_BlueprintType.cpp path produces for BlueprintType
-			// UClasses. This lets script-side `UIFoo::StaticClass()` — and
-			// therefore the Phase 5 `Obj.Implements<UIFoo>()` sugar rewrite —
-			// resolve correctly when the interface was registered dynamically
-			// via this test helper rather than through the static bind pass.
-			{
-				FAngelscriptBinds::FNamespace Namespace(TypeName);
-				FAngelscriptBinds::BindGlobalFunction(
-					"UClass StaticClass()",
-					FUNC_TRIVIAL(FAngelscriptBindHelpers::GetStaticClassFromClass),
-					InterfaceClass);
-				FAngelscriptBinds::PreviousBindPassScriptFunctionAsFirstParam();
 			}
 		}
 

@@ -1267,37 +1267,6 @@ FInterfaceMethodSignature* FAngelscriptEngine::RegisterInterfaceMethodSignature(
 	return RawSignature;
 }
 
-FInterfaceMethodSignature* FAngelscriptEngine::RegisterInterfaceMethodSignature(
-	FName FunctionName,
-	TArray<FAngelscriptTypeUsage> ParamTypes,
-	FAngelscriptTypeUsage ReturnType,
-	uint32 FunctionFlags,
-	bool bIsConst)
-{
-	FInterfaceMethodSignature* RawSignature = RegisterInterfaceMethodSignature(FunctionName);
-	PopulateInterfaceMethodSignature(RawSignature, MoveTemp(ParamTypes), MoveTemp(ReturnType), FunctionFlags, bIsConst);
-	return RawSignature;
-}
-
-void FAngelscriptEngine::PopulateInterfaceMethodSignature(
-	FInterfaceMethodSignature* Signature,
-	TArray<FAngelscriptTypeUsage> ParamTypes,
-	FAngelscriptTypeUsage ReturnType,
-	uint32 FunctionFlags,
-	bool bIsConst)
-{
-	if (Signature == nullptr)
-	{
-		return;
-	}
-
-	Signature->ParamTypes = MoveTemp(ParamTypes);
-	Signature->ReturnType = MoveTemp(ReturnType);
-	Signature->FunctionFlags = FunctionFlags;
-	Signature->bIsConst = bIsConst;
-	Signature->bSignatureResolved = true;
-}
-
 void FAngelscriptEngine::ReleaseInterfaceMethodSignature(FInterfaceMethodSignature* Signature)
 {
 	if (Signature == nullptr)

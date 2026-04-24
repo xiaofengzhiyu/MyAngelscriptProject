@@ -193,7 +193,6 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptPreprocessor
 
 	void PostProcessRangeBasedFor(FFile& file);
 	void PostProcessLiteralAssets(FFile& file);
-	void PostProcessImplementsTemplate(FFile& file);
 
 	void DetectClasses(FFile& File);
 	void DetectClasses(FFile& File, FChunk& Chunk);

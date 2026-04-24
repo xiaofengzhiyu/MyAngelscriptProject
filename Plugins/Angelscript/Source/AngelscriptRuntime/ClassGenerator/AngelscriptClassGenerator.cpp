@@ -2960,18 +2960,8 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 			};
 
 			// Create UFunctions for each interface method declaration
-			for (int32 MethodIndex = 0; MethodIndex < InterfaceDesc->InterfaceMethodDeclarations.Num(); ++MethodIndex)
+			for (const FString& MethodDecl : InterfaceDesc->InterfaceMethodDeclarations)
 			{
-				const FString& MethodDecl = InterfaceDesc->InterfaceMethodDeclarations[MethodIndex];
-				// Phase 4: Pull the per-method UFUNCTION-specifier flags parsed by
-				// the preprocessor. When the preprocessor didn't record flags for
-				// this index (legacy modules pre-Phase-4 or rebuilt arrays out of
-				// sync), fall back to the old default of FUNC_Event|FUNC_BlueprintEvent
-				// which keeps behavior identical to prior releases.
-				const uint32 ParsedMethodFlags = InterfaceDesc->InterfaceMethodFlags.IsValidIndex(MethodIndex)
-					? InterfaceDesc->InterfaceMethodFlags[MethodIndex]
-					: (uint32)(FUNC_Event | FUNC_BlueprintEvent);
-
 				// Parse "ReturnType MethodName(ParamType ParamName, ...)" format
 				int32 ParenPos = MethodDecl.Find(TEXT("("));
 				if (ParenPos == INDEX_NONE)
@@ -2987,13 +2977,7 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 				asIScriptFunction* ScriptMethod = ResolveInterfaceScriptMethod(InterfaceScriptType, MethodDecl, FuncName);
 
 				UFunction* NewFunction = NewObject<UFunction>(NewClass, *FuncName, RF_Public);
-				// Phase 4: honor the UFUNCTION specifier parsed by the preprocessor
-				// (BlueprintNativeEvent → includes FUNC_Native; BlueprintPure →
-				// FUNC_BlueprintPure|FUNC_BlueprintCallable; bare declaration →
-				// FUNC_Event|FUNC_BlueprintEvent baseline). `FUNC_Public` is always
-				// added here because the stub is visible from the implementing
-				// script class.
-				NewFunction->FunctionFlags = (EFunctionFlags)(ParsedMethodFlags | FUNC_Public);
+				NewFunction->FunctionFlags = FUNC_Event | FUNC_BlueprintEvent | FUNC_Public;
 				NewFunction->ReturnValueOffset = MAX_uint16;
 				NewFunction->FirstPropertyToInit = nullptr;
 				NewFunction->NumParms = 0;
@@ -3004,13 +2988,6 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 					NewFunction->FunctionFlags |= FUNC_Const;
 				}
 
-				// Collect structured signature data that will be written back to
-				// `FInterfaceMethodSignature` at the end of this loop — this lets
-				// `FinalizeClass` perform full parameter-type validation against
-				// script implementations (Phase 1).
-				FAngelscriptTypeUsage SignatureReturnType;
-				TArray<FAngelscriptTypeUsage> SignatureParamTypes;
-
 				FProperty* ReturnProperty = nullptr;
 				if (ScriptMethod != nullptr && ScriptMethod->GetReturnTypeId() != asTYPEID_VOID)
 				{
@@ -3019,7 +2996,6 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 					{
 						ReturnProperty = AddFunctionReturnType(NewFunction, ReturnType);
 						NewFunction->FunctionFlags |= FUNC_HasOutParms;
-						SignatureReturnType = ReturnType;
 					}
 				}
 
@@ -3081,7 +3057,6 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 
 						FProperty* NewProperty = AddFunctionArgument(NewFunction, ArgDesc);
 						ArgumentProperties.Add(NewProperty);
-						SignatureParamTypes.Add(Type);
 
 						if (NewProperty->HasAnyPropertyFlags(CPF_OutParm))
 						{
@@ -3108,26 +3083,6 @@ void FAngelscriptClassGenerator::DoFullReload(FModuleData& ModuleData, FClassDat
 				NewFunction->Next = NewClass->Children;
 				NewClass->Children = NewFunction;
 				NewClass->AddFunctionToFunctionMap(NewFunction, NewFunction->GetFName());
-
-				// Write the resolved signature back into `FInterfaceMethodSignature`.
-				// The preprocessor already created the signature (name-only) and
-				// attached it to the AS method via `SetUserData`; now that the full
-				// param/return types and flags are known, we populate the remaining
-				// fields so `FinalizeClass` can validate implementations structurally.
-				if (ScriptMethod != nullptr)
-				{
-					FInterfaceMethodSignature* Sig =
-						(FInterfaceMethodSignature*)((asCScriptFunction*)ScriptMethod)->GetUserData();
-					if (Sig != nullptr)
-					{
-						FAngelscriptEngine::Get().PopulateInterfaceMethodSignature(
-							Sig,
-							SignatureParamTypes,
-							SignatureReturnType,
-							NewFunction->FunctionFlags,
-							(NewFunction->FunctionFlags & FUNC_Const) != 0);
-					}
-				}
 			}
 
 			NewClass->Bind();
@@ -5476,121 +5431,6 @@ void FAngelscriptClassGenerator::FinalizeClass(FModuleData& ModuleData, FClassDa
 		}
 
 		// Verify that the implementing class provides all methods required by its interfaces
-		// Build a compact diagnostic string from a UFunction's FProperty chain so mismatch
-		// messages can show "expected vs actual" signatures in a single log line.
-		auto BuildFunctionSignatureString = [](UFunction* Func) -> FString
-		{
-			if (Func == nullptr)
-				return TEXT("<null>");
-
-			FString ReturnString = TEXT("void");
-			TArray<FString> ParamStrings;
-			for (TFieldIterator<FProperty> PropIt(Func); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
-			{
-				FProperty* Property = *PropIt;
-				FString TypeName = Property->GetClass() != nullptr
-					? Property->GetClass()->GetName()
-					: FString(TEXT("?"));
-				if (Property->PropertyFlags & CPF_ReturnParm)
-				{
-					ReturnString = TypeName;
-				}
-				else
-				{
-					FString Piece;
-					if (Property->HasAnyPropertyFlags(CPF_ConstParm))
-						Piece += TEXT("const ");
-					Piece += TypeName;
-					if (Property->HasAnyPropertyFlags(CPF_ReferenceParm | CPF_OutParm))
-						Piece += TEXT("&");
-					if (!Property->GetName().IsEmpty())
-					{
-						Piece += TEXT(" ");
-						Piece += Property->GetName();
-					}
-					ParamStrings.Add(Piece);
-				}
-			}
-
-			FString Result = FString::Printf(TEXT("%s(%s)"), *ReturnString, *FString::Join(ParamStrings, TEXT(", ")));
-			if (Func->HasAnyFunctionFlags(FUNC_Const))
-			{
-				Result += TEXT(" const");
-			}
-			return Result;
-		};
-
-		// Structural signature check: returns true when the implementation matches the
-		// interface declaration in parameter count, per-parameter type, return type, and
-		// const-ness. Uses FProperty::SameType as the primary check, with a narrow
-		// relaxation for Float↔Double because the AS fork's type mapping currently
-		// produces FDoubleProperty for script-implementation side but FFloatProperty
-		// for interface-stub side when the source declaration is `float`. Treating the
-		// two as compatible mirrors the fork's "script float is a generic floating
-		// point" stance and avoids flagging perfectly-matching user code as a mismatch.
-		auto ArePropertiesTypeCompatible = [](FProperty* A, FProperty* B) -> bool
-		{
-			if (A == nullptr || B == nullptr)
-				return false;
-			if (A->SameType(B))
-				return true;
-			const bool bAFloat = A->IsA(FFloatProperty::StaticClass()) || A->IsA(FDoubleProperty::StaticClass());
-			const bool bBFloat = B->IsA(FFloatProperty::StaticClass()) || B->IsA(FDoubleProperty::StaticClass());
-			return bAFloat && bBFloat;
-		};
-
-		auto DoesImplementationMatchInterfaceSignature = [&ArePropertiesTypeCompatible](UFunction* InterfaceFunc, UFunction* ImplFunc) -> bool
-		{
-			if (InterfaceFunc == nullptr || ImplFunc == nullptr)
-				return false;
-
-			// const-ness must agree: C++ reflection treats a non-const impl satisfying
-			// a const interface as an error, mirror that.
-			if (InterfaceFunc->HasAnyFunctionFlags(FUNC_Const) != ImplFunc->HasAnyFunctionFlags(FUNC_Const))
-				return false;
-
-			auto CollectProperties = [](UFunction* Func, FProperty*& OutReturnProperty, TArray<FProperty*>& OutParamProperties)
-			{
-				for (TFieldIterator<FProperty> PropIt(Func); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
-				{
-					FProperty* Property = *PropIt;
-					if (Property->PropertyFlags & CPF_ReturnParm)
-					{
-						OutReturnProperty = Property;
-					}
-					else
-					{
-						OutParamProperties.Add(Property);
-					}
-				}
-			};
-
-			FProperty* ExpectedReturn = nullptr;
-			FProperty* ActualReturn = nullptr;
-			TArray<FProperty*> ExpectedParams;
-			TArray<FProperty*> ActualParams;
-			CollectProperties(InterfaceFunc, ExpectedReturn, ExpectedParams);
-			CollectProperties(ImplFunc, ActualReturn, ActualParams);
-
-			if (ExpectedParams.Num() != ActualParams.Num())
-				return false;
-
-			for (int32 i = 0; i < ExpectedParams.Num(); ++i)
-			{
-				if (!ArePropertiesTypeCompatible(ExpectedParams[i], ActualParams[i]))
-					return false;
-			}
-
-			const bool bExpectedVoid = (ExpectedReturn == nullptr);
-			const bool bActualVoid = (ActualReturn == nullptr);
-			if (bExpectedVoid != bActualVoid)
-				return false;
-			if (!bExpectedVoid && !ArePropertiesTypeCompatible(ExpectedReturn, ActualReturn))
-				return false;
-
-			return true;
-		};
-
 		for (const FImplementedInterface& Impl : NewClass->Interfaces)
 		{
 			UClass* InterfaceClass = Impl.Class;
@@ -5613,28 +5453,6 @@ void FAngelscriptClassGenerator::FinalizeClass(FModuleData& ModuleData, FClassDa
 						ModuleData.NewModule, ClassDesc->LineNumber,
 						FString::Printf(TEXT("Class %s implements interface %s but is missing required method '%s'."),
 						*ClassDesc->ClassName, *InterfaceClass->GetName(), *InterfaceFunc->GetName()));
-					ModuleData.NewModule->bModuleSwapInError = true;
-					continue;
-				}
-
-				// Structural signature match (Phase 1). The interface UFunction always
-				// carries a complete FProperty chain (C++ UHT generated, or script
-				// interface generator built in DoFullReload), so comparing against
-				// the implementation's FProperty chain is sufficient without consulting
-				// `FInterfaceMethodSignature`.
-				if (!DoesImplementationMatchInterfaceSignature(InterfaceFunc, ImplFunc))
-				{
-					FAngelscriptEngine::Get().ScriptCompileError(
-						ModuleData.NewModule, ClassDesc->LineNumber,
-						FString::Printf(
-							TEXT("Class %s implements interface %s but method '%s' has a mismatching signature. Expected: %s %s. Actual: %s %s."),
-							*ClassDesc->ClassName,
-							*InterfaceClass->GetName(),
-							*InterfaceFunc->GetName(),
-							*InterfaceFunc->GetName(),
-							*BuildFunctionSignatureString(InterfaceFunc),
-							*ImplFunc->GetName(),
-							*BuildFunctionSignatureString(ImplFunc)));
 					ModuleData.NewModule->bModuleSwapInError = true;
 				}
 			}

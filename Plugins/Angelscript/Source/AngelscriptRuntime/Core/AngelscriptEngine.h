@@ -58,32 +58,7 @@ ANGELSCRIPTRUNTIME_API bool PrepareAngelscriptContextWithLog(class asIScriptCont
 
 struct FInterfaceMethodSignature
 {
-	// Unique method name on the interface. Always populated.
 	FName FunctionName;
-
-	// Full parameter type chain, populated when the signature is fully known
-	// (C++ UInterface auto-bind path fills this immediately from the UFunction's
-	// FProperty chain; script-defined interfaces fill this in the class generator
-	// once FAngelscriptTypeUsage::FromParam/FromReturn can be called on the
-	// resolved asIScriptFunction). Empty means "signature not yet resolved —
-	// FinalizeClass will fall back to name-only match for backward compatibility."
-	TArray<FAngelscriptTypeUsage> ParamTypes;
-
-	// Return type. Invalid `FAngelscriptTypeUsage` for void.
-	FAngelscriptTypeUsage ReturnType;
-
-	// UE FUNC_* flags derived from the interface declaration / UFUNCTION specifiers.
-	// BlueprintNativeEvent/BlueprintImplementableEvent handling in Phase 4 will
-	// use this to set matching flags on the stub UFunction.
-	uint32 FunctionFlags = 0;
-
-	// True when the method is declared const (AS `const` suffix or UE FUNC_Const).
-	bool bIsConst = false;
-
-	// True once ParamTypes/ReturnType/FunctionFlags/bIsConst have been populated.
-	// `FinalizeClass` uses this to decide whether to run full signature validation
-	// or fall back to name-only matching (legacy path).
-	bool bSignatureResolved = false;
 };
 
 struct ANGELSCRIPTRUNTIME_API FAngelscriptEngineConfig
@@ -188,31 +163,6 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptEngine
 	void InitializeForTesting();
 	void Shutdown();
 	FInterfaceMethodSignature* RegisterInterfaceMethodSignature(FName FunctionName);
-
-	// Overload that immediately records the full signature. The C++ UInterface
-	// auto-bind path already has ParamTypes/ReturnType/FunctionFlags/bIsConst
-	// at hand when registering, so it prefers this variant. The script-defined
-	// interface path keeps using the FName-only overload and later fills the
-	// signature via PopulateInterfaceMethodSignature once the resolved
-	// asIScriptFunction is available in DoFullReload.
-	FInterfaceMethodSignature* RegisterInterfaceMethodSignature(
-		FName FunctionName,
-		TArray<FAngelscriptTypeUsage> ParamTypes,
-		FAngelscriptTypeUsage ReturnType,
-		uint32 FunctionFlags,
-		bool bIsConst);
-
-	// Setter used by the script-defined interface path to upgrade a
-	// previously registered name-only signature once the AS function has
-	// been resolved (typically during DoFullReload). Safe to call on a
-	// signature whose owner has already released it (no-op guarded by ptr).
-	void PopulateInterfaceMethodSignature(
-		FInterfaceMethodSignature* Signature,
-		TArray<FAngelscriptTypeUsage> ParamTypes,
-		FAngelscriptTypeUsage ReturnType,
-		uint32 FunctionFlags,
-		bool bIsConst);
-
 	void ReleaseInterfaceMethodSignature(FInterfaceMethodSignature* Signature);
 	TArray<FString> DiscoverScriptRoots(bool bOnlyProjectRoot = false) const;
 
@@ -1160,21 +1110,6 @@ struct FAngelscriptClassDesc
 	/* Raw method declarations from the interface body (e.g., "void TakeDamage(float Amount)").
 	 * Only populated for interface classes (bIsInterface == true). */
 	TArray<FString> InterfaceMethodDeclarations;
-
-	/* UE FUNC_* flags parsed from the UFUNCTION() specifier on each interface
-	 * method declaration, aligned by index with `InterfaceMethodDeclarations`.
-	 * - Default (no UFUNCTION macro or `BlueprintImplementableEvent`) produces
-	 *   `FUNC_Event | FUNC_BlueprintEvent` — a pure scripted event where only
-	 *   implementations dispatch.
-	 * - `BlueprintNativeEvent` adds `FUNC_Native` so UHT/C++ implementors
-	 *   can supply a `_Implementation` default.
-	 * - `BlueprintPure` / `BlueprintCallable` add the matching flags so the
-	 *   interface method is callable from script/blueprint without needing
-	 *   an override.
-	 * The `FUNC_Public` / `FUNC_Const` / `FUNC_HasOutParms` bits are added
-	 * by the class generator based on visibility / signature, so they are
-	 * intentionally NOT part of this array. */
-	TArray<uint32> InterfaceMethodFlags;
 
 	/* Name of the config file to use. */
 	FString ConfigName;
