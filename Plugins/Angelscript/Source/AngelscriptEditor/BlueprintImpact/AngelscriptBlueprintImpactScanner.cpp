@@ -185,6 +185,20 @@ namespace AngelscriptEditor::BlueprintImpact
 						AddUniqueReason(OutReasons, EBlueprintImpactReason::NodeDependency);
 						break;
 					}
+					// UE 5.7: UK2Node_CallFunction::HasExternalDependencies adds
+					// the UFunction* (not the owning UClass*) to the output array.
+					// Resolve through the function's owner class.
+					if (UFunction* DepFunc = Cast<UFunction>(Dependency))
+					{
+						if (UClass* OwnerClass = DepFunc->GetOwnerClass())
+						{
+							if (Symbols.Classes.Contains(OwnerClass))
+							{
+								AddUniqueReason(OutReasons, EBlueprintImpactReason::NodeDependency);
+								break;
+							}
+						}
+					}
 				}
 			}
 

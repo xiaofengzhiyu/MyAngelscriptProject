@@ -9,7 +9,9 @@
 #include "HAL/FileManager.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
+#include "K2Node_Event.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "GameFramework/Actor.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Misc/AutomationTest.h"
@@ -199,14 +201,6 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptBlueprintImpactScannerTests
 		CallFunctionNode->PostPlacedNewNode();
 		CallFunctionNode->SetFromFunction(Function);
 		CallFunctionNode->AllocateDefaultPins();
-		// UE 5.7: FBlueprintEditorUtils::GetAllNodesOfClass only surfaces nodes that
-		// are part of the blueprint's compiled graph tree. Running ReconstructNode()
-		// here resolves the FunctionReference (so UK2Node::HasExternalDependencies
-		// reports the callee's Outer UClass) and a subsequent CompileBlueprint pass
-		// registers the node through the ubergraph traversal path, matching what
-		// real UI-driven node placement does.
-		CallFunctionNode->ReconstructNode();
-		FKismetEditorUtilities::CompileBlueprint(&Blueprint);
 		return CallFunctionNode;
 	}
 
@@ -524,7 +518,24 @@ bool FAngelscriptBlueprintImpactAnalyzeReferencedAssetTest::RunTest(const FStrin
 
 bool FAngelscriptBlueprintImpactAnalyzeDelegateSignatureTest::RunTest(const FString& Parameters)
 {
-	UBlueprint* Blueprint = CreateTransientBlueprintChild(*this, UObject::StaticClass(), TEXT("DelegateSignature"));
+	UDelegateFunction* DelegateFunc = nullptr;
+	for (TFieldIterator<FProperty> It(AActor::StaticClass()); It; ++It)
+	{
+		if (FMulticastDelegateProperty* MulticastProp = CastField<FMulticastDelegateProperty>(*It))
+		{
+			DelegateFunc = Cast<UDelegateFunction>(MulticastProp->SignatureFunction);
+			if (DelegateFunc != nullptr)
+			{
+				break;
+			}
+		}
+	}
+	if (!TestNotNull(TEXT("BlueprintImpact.AnalyzeDelegateSignature should find a delegate function on AActor"), DelegateFunc))
+	{
+		return false;
+	}
+
+	UBlueprint* Blueprint = CreateTransientBlueprintChild(*this, AActor::StaticClass(), TEXT("DelegateSignature"));
 	ON_SCOPE_EXIT { CleanupBlueprint(Blueprint); };
 	if (!TestNotNull(TEXT("BlueprintImpact.AnalyzeDelegateSignature should create a blueprint"), Blueprint))
 	{
@@ -537,23 +548,15 @@ bool FAngelscriptBlueprintImpactAnalyzeDelegateSignatureTest::RunTest(const FStr
 		return false;
 	}
 
-	UK2Node_CustomEvent* CustomEventNode = NewObject<UK2Node_CustomEvent>(EventGraph);
-	EventGraph->AddNode(CustomEventNode, false, false);
-	CustomEventNode->CustomFunctionName = TEXT("BlueprintImpactDelegateSignatureEvent");
-	CustomEventNode->CreateNewGuid();
-	CustomEventNode->PostPlacedNewNode();
-	CustomEventNode->AllocateDefaultPins();
+	UK2Node_Event* EventNode = NewObject<UK2Node_Event>(EventGraph);
+	EventGraph->AddNode(EventNode, false, false);
+	EventNode->CreateNewGuid();
+	EventNode->EventReference.SetExternalMember(DelegateFunc->GetFName(), DelegateFunc->GetOwnerClass());
+	EventNode->PostPlacedNewNode();
+	EventNode->AllocateDefaultPins();
 
-	// UE 5.7: UK2Node_CustomEvent's EventReference is resolved during node
-	// reconstruction plus a blueprint compile pass — only then does
-	// FindEventSignatureFunction() return a non-null UDelegateFunction (the
-	// skeleton-class signature the scanner matches on). Mirror the UI-driven
-	// flow here so the scanner's Cast<UDelegateFunction> branch actually runs.
-	CustomEventNode->ReconstructNode();
-	FKismetEditorUtilities::CompileBlueprint(Blueprint);
-
-	UDelegateFunction* SignatureFunction = Cast<UDelegateFunction>(CustomEventNode->FindEventSignatureFunction());
-	if (!TestNotNull(TEXT("BlueprintImpact.AnalyzeDelegateSignature should expose a delegate signature function after reconstruct+compile"), SignatureFunction))
+	UDelegateFunction* SignatureFunction = Cast<UDelegateFunction>(EventNode->FindEventSignatureFunction());
+	if (!TestNotNull(TEXT("BlueprintImpact.AnalyzeDelegateSignature should expose a delegate signature function from the event reference"), SignatureFunction))
 	{
 		return false;
 	}
