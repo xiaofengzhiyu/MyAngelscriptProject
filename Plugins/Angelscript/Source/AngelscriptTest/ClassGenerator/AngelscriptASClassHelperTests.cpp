@@ -114,8 +114,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptTestASClassHierarchyHelpersResolveScriptAndNativeAncestorsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	static const FName ModuleName(TEXT("TestASClassHierarchyHelpers"));
 	ON_SCOPE_EXIT
 	{
@@ -185,7 +185,7 @@ class AScriptHierarchyHelperParent : AActor
 	TestTrue(TEXT("ASClass helper scenario should resolve the script parent from the Blueprint child actor instance"), ScriptAncestorFromBlueprintActor == ScriptParentClass);
 	TestTrue(TEXT("ASClass helper scenario should prefer the script ancestor over the generated Blueprint class"), ScriptOrNativeFromBlueprintClass == ScriptParentClass);
 	TestTrue(TEXT("ASClass helper scenario should return AActor for native AActor fallback"), ScriptOrNativeFromNativeActor == AActor::StaticClass());
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return true;
 }

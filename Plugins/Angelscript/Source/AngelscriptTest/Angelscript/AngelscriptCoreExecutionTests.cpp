@@ -390,17 +390,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptCoreCreateEngineIsolatedModuleRegistriesTest::RunTest(const FString& Parameters)
 {
 	const FName ModuleName(TEXT("ASCoreCreateEngineIsolationA"));
-	FCoreEngineContextStackGuard ContextGuard;
-	DestroySharedTestEngine();
-	if (FAngelscriptEngine::IsInitialized()) { FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine(); }
-	ContextGuard.DiscardSavedStack();
-	ON_SCOPE_EXIT
-	{
-		if (FAngelscriptEngine::IsInitialized()) { FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine(); }
-		DestroySharedTestEngine();
-	};
-	const FAngelscriptEngineConfig Config; const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateForTesting(Config, Dependencies), EngineB = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	const FAngelscriptEngineConfig Config;
+	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
+	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> EngineB = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
 	int32 Result = 0;
 	if (!TestNotNull(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create engine A"), EngineA.Get()) || !TestNotNull(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create engine B"), EngineB.Get())) return false;
 	if (!TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create distinct script engines"), EngineA->GetScriptEngine() != nullptr && EngineB->GetScriptEngine() != nullptr && EngineA->GetScriptEngine() != EngineB->GetScriptEngine())

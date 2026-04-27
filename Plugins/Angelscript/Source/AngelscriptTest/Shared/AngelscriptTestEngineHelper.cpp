@@ -339,6 +339,7 @@ namespace AngelscriptTestSupport
 		Engine->Diagnostics.Empty();
 		Engine->LastEmittedDiagnostics.Empty();
 		Engine->bDiagnosticsDirty = false;
+		Engine->bIgnoreCompileErrorDiagnostics = false;
 
 		if (bUsePreprocessor && IsEffectivelyEmptyScript(Script))
 		{

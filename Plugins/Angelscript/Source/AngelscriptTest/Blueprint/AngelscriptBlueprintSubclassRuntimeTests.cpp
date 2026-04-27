@@ -752,7 +752,7 @@ class ATestBlueprintChildOverrideChainParent : AActor
 }
 
 UCLASS()
-class ATestBlueprintChildOverrideChainScriptChild : AScenarioBlueprintChildOverrideChainParent
+class ATestBlueprintChildOverrideChainScriptChild : ATestBlueprintChildOverrideChainParent
 {
 	UPROPERTY()
 	int ChildBeginPlayCount = 0;

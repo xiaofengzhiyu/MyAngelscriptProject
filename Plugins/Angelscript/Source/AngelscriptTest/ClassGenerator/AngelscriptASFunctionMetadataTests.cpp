@@ -73,8 +73,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASFunctionNetValidateCachesValidateFunctionTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*NetValidateModuleName.ToString());
@@ -154,7 +154,7 @@ class AASFunctionNetValidateCache : AActor
 		return false;
 	}
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 

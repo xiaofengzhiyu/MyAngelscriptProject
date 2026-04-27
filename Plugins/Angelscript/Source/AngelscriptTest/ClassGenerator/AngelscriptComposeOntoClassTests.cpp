@@ -183,8 +183,8 @@ bool FAngelscriptComposeOntoClassMissingTargetFailsClosedTest::RunTest(const FSt
 		1);
 
 	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 
 	Engine.Diagnostics.Empty();
 	Engine.LastEmittedDiagnostics.Empty();
@@ -254,7 +254,7 @@ bool FAngelscriptComposeOntoClassMissingTargetFailsClosedTest::RunTest(const FSt
 		!Engine.GetModuleByModuleName(PreparedModuleName).IsValid());
 	bPassed = bCompileFailed && bReportedComposeDiagnostic && bNoGeneratedClass && bNoModuleRecord;
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 
@@ -270,8 +270,8 @@ bool FAngelscriptComposeOntoClassValidTargetFailsClosedTest::RunTest(const FStri
 		1);
 
 	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 
 	Engine.Diagnostics.Empty();
 	Engine.LastEmittedDiagnostics.Empty();
@@ -356,7 +356,7 @@ bool FAngelscriptComposeOntoClassValidTargetFailsClosedTest::RunTest(const FStri
 		!Engine.GetModuleByModuleName(PreparedModuleName).IsValid());
 	bPassed = bCompileFailed && bReportedComposeDiagnostic && bNoProjectedClass && bNoModuleRecord;
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

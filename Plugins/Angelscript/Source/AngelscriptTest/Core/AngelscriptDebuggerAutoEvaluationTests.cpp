@@ -79,8 +79,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptDebuggerAutoEvaluateRespectsBlacklistAndTracksSourcePropertyTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 
 	static const FName ModuleName(TEXT("CoreDebuggerAutoEvaluateWorldless"));
 	static const FName GeneratedClassName(TEXT("UDebuggerAutoEvaluateWorldlessProbe"));
@@ -199,7 +199,7 @@ class UDebuggerAutoEvaluateWorldlessProbe : UObject
 		}
 	}
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

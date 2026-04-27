@@ -40,9 +40,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASStructDiscardModuleClearsScriptTypeAndNativeOpsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_FRESH
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
@@ -116,7 +116,7 @@ struct FDiscardableStruct
 		TEXT("ASStruct discard test should clear STRUCT_IdenticalNative after discard"),
 		EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

@@ -57,8 +57,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptTestInterfaceNativeImplementCppImplementerScriptCallTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 
@@ -157,7 +157,7 @@ class ATestInterfaceNativeCppImplementerBridge : AActor
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return !HasAnyErrors();
 }
 

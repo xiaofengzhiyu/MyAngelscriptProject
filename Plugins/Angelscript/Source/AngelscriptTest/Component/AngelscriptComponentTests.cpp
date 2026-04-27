@@ -311,7 +311,7 @@ class UTestComponentActorOwner : UAngelscriptComponent
 	UFUNCTION(BlueprintOverride)
 	void BeginPlay()
 	{
-		AScenarioComponentOwnerActor OwnerActor = Cast<AScenarioComponentOwnerActor>(GetOwner());
+		ATestComponentOwnerActor OwnerActor = Cast<ATestComponentOwnerActor>(GetOwner());
 		if (OwnerActor != null)
 		{
 			ReadOwnerValue = OwnerActor.OwnerValue;
@@ -392,7 +392,7 @@ UCLASS()
 class ATestDefaultComponentBasic : AActor
 {
 	UPROPERTY(DefaultComponent, RootComponent)
-	UScenarioDefaultComponentBasicRoot RootScene;
+	UTestDefaultComponentBasicRoot RootScene;
 }
 )AS"),
 		TEXT("ATestDefaultComponentBasic"));
@@ -463,10 +463,10 @@ UCLASS()
 class ATestDefaultComponentMultiple : AActor
 {
 	UPROPERTY(DefaultComponent, RootComponent)
-	UScenarioDefaultComponentMultipleRoot RootScene;
+	UTestDefaultComponentMultipleRoot RootScene;
 
 	UPROPERTY(DefaultComponent, Attach = RootScene)
-	UScenarioDefaultComponentMultipleBillboard Billboard;
+	UTestDefaultComponentMultipleBillboard Billboard;
 }
 )AS"),
 		TEXT("ATestDefaultComponentMultiple"));

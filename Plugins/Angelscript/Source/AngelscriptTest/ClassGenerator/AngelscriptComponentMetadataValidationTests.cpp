@@ -93,8 +93,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptComponentInvalidAttachParentFailsClosedTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ComponentMetadataValidationModuleName.ToString());
@@ -148,7 +148,7 @@ bool FAngelscriptComponentInvalidAttachParentFailsClosedTest::RunTest(const FStr
 		&& bNoGeneratedClass
 		&& bNoModuleRecord;
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 
@@ -160,8 +160,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptComponentMissingOverrideTargetFailsClosedTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*MissingOverrideTargetModuleName.ToString());
@@ -220,7 +220,7 @@ bool FAngelscriptComponentMissingOverrideTargetFailsClosedTest::RunTest(const FS
 		&& bNoModuleRecord
 		&& bNoSilentSuccess;
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

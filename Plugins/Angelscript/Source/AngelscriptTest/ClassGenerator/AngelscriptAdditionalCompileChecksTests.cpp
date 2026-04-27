@@ -83,8 +83,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptAdditionalCompileChecksInvokeCompileAndPostReloadHooksTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 
 	TSharedPtr<FTestAdditionalCompileChecks> Recorder = MakeShared<FTestAdditionalCompileChecks>();
 	Engine.AdditionalCompileChecks.Add(UObject::StaticClass(), StaticCastSharedPtr<FAngelscriptAdditionalCompileChecks>(Recorder));
@@ -207,7 +207,7 @@ class UAdditionalChecksRejectedTarget : UObject
 	TestEqual(TEXT("A rejecting additional compile check should report the rejected class name"), Recorder->LastClassName, AdditionalChecksRejectedClassName.ToString());
 	TestNull(TEXT("A rejecting additional compile check should not publish the rejected class"), FindGeneratedClass(&Engine, AdditionalChecksRejectedClassName));
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 

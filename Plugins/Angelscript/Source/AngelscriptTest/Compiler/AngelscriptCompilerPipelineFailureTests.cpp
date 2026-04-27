@@ -208,8 +208,8 @@ class UBrokenCarrier : UObject
 }
 )AS");
 
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
+	ASTEST_BEGIN_SHARE_FRESH
 
 	ON_SCOPE_EXIT
 	{
@@ -385,7 +385,7 @@ class UBrokenCarrier : UObject
 			9);
 	}
 
-	ASTEST_END_SHARE_CLEAN
+	ASTEST_END_SHARE_FRESH
 	return bPassed;
 }
 

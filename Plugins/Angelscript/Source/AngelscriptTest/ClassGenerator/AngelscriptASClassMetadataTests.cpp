@@ -63,8 +63,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASClassIsDeveloperOnlyRecognizesNestedEditorModuleNamesTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 
 	const TArray<ASClassMetadataTests::FDeveloperOnlyModuleCase> Cases =
 	{
@@ -113,15 +113,15 @@ bool FAngelscriptASClassIsDeveloperOnlyRecognizesNestedEditorModuleNamesTest::Ru
 			TestCase.bExpectedDeveloperOnly);
 	}
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 
 bool FAngelscriptASClassIsFunctionImplementedInScriptTurnsFalseAfterDiscardTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 
 	static const FName ModuleName(TEXT("Game.Tools.Runtime.DiscardMetadata"));
 	static const FName GeneratedClassName(TEXT("UMetadataDiscardCarrier"));
@@ -202,7 +202,7 @@ class UMetadataDiscardCarrier : UObject
 		&& SourceLineBeforeDiscard > 0
 		&& (SourcePathAfterDiscard.IsEmpty() || SourceLineAfterDiscard == -1);
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

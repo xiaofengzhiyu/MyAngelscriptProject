@@ -127,8 +127,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptDebuggerValueGetterPropertyTrackingTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	static const FName ModuleName(TEXT("InternalsDebuggerValueGetterTracking"));
 	ON_SCOPE_EXIT
 	{
@@ -241,7 +241,7 @@ class ADebuggerValueGetterProbe : AActor
 		}
 	}
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 
@@ -253,8 +253,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptDebuggerValueFunctionEvaluationGuardsTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	static const FName ModuleName(TEXT("InternalsDebuggerValueFunctionEvaluationGuards"));
 	ON_SCOPE_EXIT
 	{
@@ -419,7 +419,7 @@ class UDebuggerValueGuardProbe : UObject
 		}
 	}
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 
@@ -431,8 +431,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FAngelscriptDebuggerValueInheritedGetterTracksBasePropertyAddressTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	static const FName ModuleName(TEXT("InternalsDebuggerValueInheritedGetterTracking"));
 	ON_SCOPE_EXIT
 	{
@@ -555,7 +555,7 @@ class ADebuggerValueDerivedProbe : ADebuggerValueBaseProbe
 		}
 	}
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 

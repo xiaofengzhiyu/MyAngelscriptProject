@@ -124,8 +124,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASClassRuntimeAddReferencedObjectsKeepsScriptOnlyObjectReferenceAliveTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ReferenceSchemaModuleName.ToString());
@@ -250,7 +250,7 @@ class UReferenceSchemaHolder : UObject
 
 	CollectGarbage(RF_NoFlags, true);
 	TestFalse(TEXT("Reference-schema GC scenario should release the transient target after clearing the last script-only reference"), WeakTarget.IsValid());
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return true;
 }
@@ -262,8 +262,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASClassReferenceSchemaDoesNotDuplicateAcrossRepeatedSoftReloadTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ReferenceSchemaSoftReloadModuleName.ToString());
@@ -539,7 +539,7 @@ class UReferenceSchemaReloadHolder : UObject
 		TEXT("Reference-schema soft-reload scenario should preserve the same stored object identity after repeated reloads"),
 		GetStoredAfterGC.ReturnValue == WeakTarget.Get());
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 

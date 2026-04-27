@@ -40,8 +40,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptTestInterfaceNativeImplementTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 	AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -154,15 +154,15 @@ class ATestInterfaceNativeImplement : AActor, UAngelscriptNativeParentInterface
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return !HasAnyErrors();
 }
 
 bool FAngelscriptTestInterfaceNativeInheritedImplementTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 	AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -290,15 +290,15 @@ class ATestInterfaceNativeInheritedImplement : AActor, UAngelscriptNativeChildIn
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return !HasAnyErrors();
 }
 
 bool FAngelscriptTestInterfaceNativeReferenceRoundTripTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 	AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -382,15 +382,15 @@ class ATestInterfaceNativeReferenceRoundTrip : AActor, UAngelscriptNativeParentI
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return !HasAnyErrors();
 }
 
 bool FAngelscriptTestInterfaceNativeReferenceRoundTripCppBridgeMutatesActorStateTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 	AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -516,15 +516,15 @@ class ATestInterfaceNativeReferenceRoundTripCppBridgeState : AActor, UAngelscrip
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return !HasAnyErrors();
 }
 
 bool FAngelscriptTestInterfaceNativeInheritedParentBridgeSetterAndRefTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 	AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -610,7 +610,7 @@ class ATestInterfaceNativeInheritedParentBridge : AActor, UAngelscriptNativeChil
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return !HasAnyErrors();
 }

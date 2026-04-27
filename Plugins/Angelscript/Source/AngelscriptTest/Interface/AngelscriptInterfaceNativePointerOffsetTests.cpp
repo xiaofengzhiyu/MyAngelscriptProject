@@ -82,8 +82,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptTestInterfaceNativePointerOffsetMultiInterfaceCastTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 
@@ -192,14 +192,14 @@ class ATestInterfaceNativePointerOffset : AActor
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return !HasAnyErrors();
 }
 
 bool FAngelscriptTestInterfaceNativePointerOffsetScriptClassStillZeroOffsetTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	do
 	{
 
@@ -317,7 +317,7 @@ class ATestInterfaceNativePointerOffsetScriptZero : AActor, UAngelscriptNativePa
 
 	}
 	while (false);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return !HasAnyErrors();
 }
 

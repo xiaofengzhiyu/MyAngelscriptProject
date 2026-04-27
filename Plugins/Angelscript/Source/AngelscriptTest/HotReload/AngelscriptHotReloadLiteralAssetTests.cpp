@@ -16,7 +16,7 @@ namespace AngelscriptTest_HotReload_AngelscriptHotReloadLiteralAssetTests_Privat
 	static const FName LiteralAssetReloadModuleName(TEXT("HotReloadLiteralAssetMod"));
 	static const FString LiteralAssetReloadFilename(TEXT("HotReloadLiteralAssetMod.as"));
 	static const FName LiteralAssetClassName(TEXT("ULiteralReloadAsset"));
-	static const FName LiteralAssetObjectName(TEXT("ExampleAsset"));
+	static const FName LiteralAssetObjectName(TEXT("ReloadExampleAsset"));
 
 	bool IsHandledReloadResult(const ECompileResult ReloadResult)
 	{
@@ -65,7 +65,7 @@ class ULiteralReloadAsset : UObject
 {
 }
 
-asset ExampleAsset of ULiteralReloadAsset
+asset ReloadExampleAsset of ULiteralReloadAsset
 {
 }
 )AS");
@@ -78,7 +78,7 @@ class ULiteralReloadAsset : UObject
 	int ExtraValue = 2;
 }
 
-asset ExampleAsset of ULiteralReloadAsset
+asset ReloadExampleAsset of ULiteralReloadAsset
 {
 }
 )AS");
@@ -162,7 +162,7 @@ asset ExampleAsset of ULiteralReloadAsset
 	TestEqual(TEXT("Literal-asset reload callback should capture the new asset class before replacement"), NewAssetClassSeenDuringReload, NewAssetClass);
 	TestEqual(TEXT("New canonical asset should use the reloaded generated class"), AssetAfterReload->GetClass(), NewAssetClass);
 	TestTrue(TEXT("Old literal asset should lose the canonical asset name after replacement"), !OldAssetNameSeenDuringReload.IsEmpty() && OldAssetNameSeenDuringReload != LiteralAssetObjectName.ToString());
-	TestTrue(TEXT("Old literal asset should be renamed to the REPLACED_ASSET_* pattern"), OldAssetNameSeenDuringReload.StartsWith(TEXT("REPLACED_ASSET_ExampleAsset_")));
+	TestTrue(TEXT("Old literal asset should be renamed to the REPLACED_ASSET_* pattern"), OldAssetNameSeenDuringReload.StartsWith(TEXT("REPLACED_ASSET_ReloadExampleAsset_")));
 	TestTrue(TEXT("Old literal asset should move out of the canonical assets package"), OldAssetOuterSeenDuringReload != nullptr && OldAssetOuterSeenDuringReload != FAngelscriptEngine::Get().AssetsPackage);
 	TestTrue(TEXT("Reloaded literal asset should keep the canonical asset name"), AssetAfterReload->GetFName() == LiteralAssetObjectName);
 	TestNull(TEXT("Old generated asset class should keep its pre-reload reflected layout"), FindFProperty<FIntProperty>(OldAssetClass, TEXT("ExtraValue")));

@@ -165,8 +165,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASClassDefaultComponentMetadataCapturesRootAndAttachLayoutTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ASClassComponentMetadataModuleName.ToString());
@@ -258,7 +258,7 @@ class AMetadataDerivedActor : AMetadataBaseActor
 	TestEqual(TEXT("ASClass component metadata test should record which base component gets overridden"), OverrideEntry->OverrideComponentName, ASClassBillboardComponentName);
 	TestEqual(TEXT("ASClass component metadata test should record the overriding property name"), OverrideEntry->VariableName, ASClassOverrideVariableName);
 	TestTrue(TEXT("ASClass component metadata test should preserve the generated override component class"), OverrideEntry->ComponentClass == ReplacementBillboardComponentClass);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return true;
 }
@@ -270,8 +270,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASClassSoftReloadPreservesDefaultComponentMetadataWithoutDuplicationTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ASClassComponentMetadataSoftReloadModuleName.ToString());
@@ -473,7 +473,7 @@ class ASoftMetadataDerivedActor : ASoftMetadataBaseActor
 	}
 
 	TestEqual(TEXT("ASClass component metadata soft-reload scenario should observe the updated function body after reload"), VersionAfterReload, 2);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return true;
 }

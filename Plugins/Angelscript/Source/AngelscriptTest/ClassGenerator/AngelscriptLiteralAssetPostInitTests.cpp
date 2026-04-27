@@ -122,8 +122,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptLiteralAssetPostInitMaterializesAssetOnceTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
 
 	ON_SCOPE_EXIT
@@ -217,7 +217,7 @@ bool FAngelscriptLiteralAssetPostInitMaterializesAssetOnceTest::RunTest(const FS
 		SnapshotAfterTouch.InitMarker,
 		LiteralAssetPostInitTest::ExpectedInitMarker);
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 
@@ -328,8 +328,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptLiteralAssetPostInitResolvesGeneratedGetterInsteadOfNameCollisionTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
 
 	ON_SCOPE_EXIT
@@ -417,7 +417,7 @@ bool FAngelscriptLiteralAssetPostInitResolvesGeneratedGetterInsteadOfNameCollisi
 		SnapshotAfterTouch.WrongCalls,
 		0);
 
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 	return true;
 }
 

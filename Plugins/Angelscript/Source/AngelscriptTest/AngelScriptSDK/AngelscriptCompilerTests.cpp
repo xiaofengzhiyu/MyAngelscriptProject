@@ -238,8 +238,8 @@ bool FAngelscriptCompilerVariableScopeTest::RunTest(const FString& Parameters)
 bool FAngelscriptCompilerVariableScopeOutOfScopeUseRejectedTest::RunTest(const FString& Parameters)
 {
 	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
+	ASTEST_BEGIN_SHARE_FRESH
 
 	const FName ModuleName(TEXT("CompilerVariableScopesOutOfScope"));
 	const FString ScriptFilename = FPaths::Combine(
@@ -301,7 +301,7 @@ int Entry()
 		TEXT("Compiler.VariableScopes.OutOfScopeUseRejected should not leave a compiled module behind"),
 		!Engine.GetModuleByModuleName(ModuleName.ToString()).IsValid());
 
-	ASTEST_END_SHARE_CLEAN
+	ASTEST_END_SHARE_FRESH
 	return bPassed;
 }
 

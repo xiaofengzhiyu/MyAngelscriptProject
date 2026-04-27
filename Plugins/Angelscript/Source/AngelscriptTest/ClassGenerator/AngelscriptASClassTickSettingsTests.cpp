@@ -29,8 +29,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FAngelscriptASClassTickSettingsEnableChildTickWhenReceiveTickIsImplementedTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
-	ASTEST_BEGIN_SHARE_FRESH
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ASClassTickSettingsModuleName.ToString());
@@ -95,7 +95,7 @@ class AScriptTickChild : AScriptTickParent
 
 	TestTrue(TEXT("ASClass tick-settings test should propagate bCanEverTick onto a spawned child actor"), SpawnedChild->PrimaryActorTick.bCanEverTick);
 	TestTrue(TEXT("ASClass tick-settings test should propagate bStartWithTickEnabled onto a spawned child actor"), SpawnedChild->PrimaryActorTick.bStartWithTickEnabled);
-	ASTEST_END_SHARE_FRESH
+	ASTEST_END_SHARE_CLEAN
 
 	return true;
 }
