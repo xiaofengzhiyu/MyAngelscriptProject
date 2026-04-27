@@ -87,7 +87,7 @@
 | G | 新一轮技术债刷新与分流 | `Plan_TechnicalDebtRefresh.md` | 未开始（先校准 debt baseline 与 owner，再进入下一批实施） |
 | H | StructUtils 运行时边界迁移 | `Plan_StructUtilsMigration.md` | 未开始 |
 | I | Detached Class 积极清理优化 | `Plan_DetachedClassEagerCleanup.md` | 未开始 |
-| J | Core 目录细分（GAS/Commandlet 迁移至子目录） | `Plan_CoreDirectorySubdivision.md` | 进行中 |
+| J | Core 目录细分（GAS/Commandlet 迁移至子目录） | `Plan_CoreDirectorySubdivision.md` | 已完成 |
 
 ### 3.2 新建议 Plan
 

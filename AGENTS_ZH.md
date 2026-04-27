@@ -24,6 +24,8 @@
 
 - `Plugins/Angelscript/Source/AngelscriptRuntime/`：运行时模块，插件核心能力优先落在这里。
   - `Core/`：引擎核心、绑定管理器、类型系统。
+    - `Core/GAS/`：GAS（Gameplay Ability System）脚本化基类、组件、工具库（18 个文件）。
+    - `Core/Commandlets/`：工具类 Commandlet 入口（4 个文件）。
   - `ClassGenerator/`：动态类生成、热重载、版本链。
   - `Binds/`：123 个 `Bind_*.cpp`，覆盖引擎 API 绑定面。
   - `Debugging/`：DebugServer V2 协议。

@@ -22,6 +22,8 @@
 
 - `Plugins/Angelscript/Source/AngelscriptRuntime/`: Runtime module — plugin core capabilities land here first.
   - `Core/`: Engine core, binding manager, type system.
+    - `Core/GAS/`: GAS (Gameplay Ability System) scripted base classes, components, and utility libraries (18 files).
+    - `Core/Commandlets/`: Tool-class Commandlet entry points (4 files).
   - `ClassGenerator/`: Dynamic class generation, hot reload, version chaining.
   - `Binds/`: 124 `Bind_*.cpp` files covering engine API bindings.
   - `Debugging/`: DebugServer V2 protocol.
