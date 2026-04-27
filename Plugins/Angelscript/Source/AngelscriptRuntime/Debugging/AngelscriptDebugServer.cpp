@@ -661,6 +661,8 @@ bool FAngelscriptDebugServer::HandleConnectionAccepted(class FSocket* ClientSock
 
 FAngelscriptDebugServer::~FAngelscriptDebugServer()
 {
+	UnbindAssetRegistry();
+
 #if PLATFORM_WINDOWS && WITH_AS_DEBUGSERVER
 	DataBreakpoint_Windows::GActiveDebugServer.Store(nullptr);
 	::RemoveVectoredExceptionHandler(DataBreakpoint_Windows::DegbugRegisterExceptionHandlerHandle);
@@ -968,9 +970,22 @@ void FAngelscriptDebugServer::PauseExecution(FStoppedMessage* StopMessage)
 		Context->m_loopDetectionTimer = -1.0;
 	}
 
+	const double PauseDeadline = MaxPauseTimeoutSeconds > 0.0f
+		? FPlatformTime::Seconds() + MaxPauseTimeoutSeconds
+		: 0.0;
+
 	// Wait for the debugger to unpause
 	while (bIsPaused)
 	{
+		if (PauseDeadline > 0.0 && FPlatformTime::Seconds() >= PauseDeadline)
+		{
+			UE_LOG(Angelscript, Warning,
+				TEXT("PauseExecution auto-resuming after %.1f second safety timeout (no Continue received from debugger client)."),
+				MaxPauseTimeoutSeconds);
+			bIsPaused = false;
+			break;
+		}
+
 		ProcessMessages();
 		FPlatformProcess::Sleep(0);
 	}
@@ -2399,7 +2414,7 @@ void FAngelscriptDebugServer::BindAssetRegistry()
 		IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
 		// Sign up to sending newly changed assets to the clients
-		AssetRegistry.OnAssetAdded().AddLambda([this](const FAssetData& AssetData)
+		FDelegateHandle AddedHandle = AssetRegistry.OnAssetAdded().AddLambda([this](const FAssetData& AssetData)
 		{
 			if (ClientsThatWantDebugDatabase.Num() == 0)
 				return;
@@ -2412,7 +2427,9 @@ void FAngelscriptDebugServer::BindAssetRegistry()
 			for (auto* ConnectedClient : ClientsThatWantDebugDatabase)
 				SendMessageToClient(ConnectedClient, EDebugMessageType::AssetDatabase, UpdateMessage);
 		});
-		AssetRegistry.OnAssetRemoved().AddLambda([this](const FAssetData& AssetData)
+		AssetRegistryDelegateHandles.Add(AddedHandle);
+
+		FDelegateHandle RemovedHandle = AssetRegistry.OnAssetRemoved().AddLambda([this](const FAssetData& AssetData)
 		{
 			if (ClientsThatWantDebugDatabase.Num() == 0)
 				return;
@@ -2426,7 +2443,9 @@ void FAngelscriptDebugServer::BindAssetRegistry()
 			for (auto* ConnectedClient : ClientsThatWantDebugDatabase)
 				SendMessageToClient(ConnectedClient, EDebugMessageType::AssetDatabase, UpdateMessage);
 		});
-		AssetRegistry.OnAssetRenamed().AddLambda([this](const FAssetData& AssetData, const FString& OldObjectPath)
+		AssetRegistryDelegateHandles.Add(RemovedHandle);
+
+		FDelegateHandle RenamedHandle = AssetRegistry.OnAssetRenamed().AddLambda([this](const FAssetData& AssetData, const FString& OldObjectPath)
 		{
 			if (ClientsThatWantDebugDatabase.Num() == 0)
 				return;
@@ -2441,12 +2460,13 @@ void FAngelscriptDebugServer::BindAssetRegistry()
 			for (auto* ConnectedClient : ClientsThatWantDebugDatabase)
 				SendMessageToClient(ConnectedClient, EDebugMessageType::AssetDatabase, UpdateMessage);
 		});
+		AssetRegistryDelegateHandles.Add(RenamedHandle);
 	};
 
 	if (AssetRegistry.IsLoadingAssets())
 	{
 		//  Send the registry as soon as it becomes available
-		AssetRegistry.OnFilesLoaded().AddLambda([this, BindAssetRegistryChanges]()
+		FDelegateHandle FilesLoadedHandle = AssetRegistry.OnFilesLoaded().AddLambda([this, BindAssetRegistryChanges]()
 		{
 			FAssetRegistryModule& AssetRegistryModule = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
 			IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
@@ -2457,12 +2477,36 @@ void FAngelscriptDebugServer::BindAssetRegistry()
 
 			BindAssetRegistryChanges();
 		});
+		AssetRegistryDelegateHandles.Add(FilesLoadedHandle);
 	}
 	else
 	{
 		// Already loaded, sign up to changes now
 		BindAssetRegistryChanges();
 	}
+}
+
+void FAngelscriptDebugServer::UnbindAssetRegistry()
+{
+	if (!bAssetRegistryBound)
+		return;
+
+	if (FModuleManager::Get().IsModuleLoaded(TEXT("AssetRegistry")))
+	{
+		FAssetRegistryModule& AssetRegistryModule = FModuleManager::Get().GetModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+		IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+
+		for (const FDelegateHandle& Handle : AssetRegistryDelegateHandles)
+		{
+			AssetRegistry.OnAssetAdded().Remove(Handle);
+			AssetRegistry.OnAssetRemoved().Remove(Handle);
+			AssetRegistry.OnAssetRenamed().Remove(Handle);
+			AssetRegistry.OnFilesLoaded().Remove(Handle);
+		}
+	}
+
+	AssetRegistryDelegateHandles.Empty();
+	bAssetRegistryBound = false;
 }
 
 void FAngelscriptDebugServer::SendAssetDatabase(FSocket* Client)

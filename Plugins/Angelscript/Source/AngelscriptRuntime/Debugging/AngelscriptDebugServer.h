@@ -628,6 +628,11 @@ public:
 	void SleepForCommunicate(float Duration);
 	void ReapplyBreakpoints();
 
+	// Maximum seconds PauseExecution will block before auto-resuming.
+	// 0 = unlimited (production default). Set by test infrastructure to
+	// prevent indefinite hangs in headless automation environments.
+	float MaxPauseTimeoutSeconds = 0.0f;
+
 
 public:
 
@@ -749,5 +754,7 @@ public:
 	TArray<void*> StackFrameThis;
 
 	bool bAssetRegistryBound = false;
+	TArray<FDelegateHandle> AssetRegistryDelegateHandles;
 	void BindAssetRegistry();
+	void UnbindAssetRegistry();
 };

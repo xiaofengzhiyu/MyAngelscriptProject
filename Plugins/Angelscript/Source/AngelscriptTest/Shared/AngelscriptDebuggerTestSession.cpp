@@ -135,6 +135,8 @@ namespace AngelscriptTestSupport
 			return false;
 		}
 
+		DebugServer->MaxPauseTimeoutSeconds = DefaultTimeoutSeconds;
+
 		return true;
 	}
 
