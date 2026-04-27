@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "EditorSubsystem.h"
 #include "Editor.h"
+#include "AngelscriptEngine.h"
+#include "ClassGenerator/ASClass.h"
 #include "ScriptEditorSubsystem.generated.h"
 
 UCLASS(NotBlueprintable, Abstract, Meta = (NoBlueprintsOfChildren))
@@ -27,20 +29,35 @@ public:
 	{
 		if (IsUnreachable())
 			return false;
+		if (GetClass()->HasAnyClassFlags(CLASS_NewerVersionExists))
+			return false;
+		if (FAngelscriptEngine::TryGetCurrentEngine() == nullptr)
+			return false;
 		return BP_ShouldCreateSubsystem(Outer);
+	}
+
+	bool CanCallScriptFunctions() const
+	{
+		FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine();
+		if (IsUnreachable() || CurrentEngine == nullptr)
+			return false;
+		if (const UASClass* ASClass = Cast<UASClass>(GetClass()))
+			return ASClass->OwnerScriptEngine != nullptr
+				&& ASClass->OwnerScriptEngine == CurrentEngine->GetScriptEngine();
+		return true;
 	}
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override
 	{
 		bSubsystemInitialized = true;
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_Initialize();
 	}
 
 	virtual void Deinitialize() override
 	{
 		bSubsystemInitialized = false;
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_Deinitialize();
 	}
 
@@ -79,6 +96,8 @@ public:
 
 	virtual void Tick(float DeltaTime) override
 	{
+		if (!CanCallScriptFunctions())
+			return;
 		FEditorScriptExecutionGuard ScriptGuard;
 		BP_Tick(DeltaTime);
 	}

@@ -1,6 +1,8 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
+#include "AngelscriptEngine.h"
+#include "ClassGenerator/ASClass.h"
 #include "ScriptLocalPlayerSubsystem.generated.h"
 
 UCLASS(Blueprintable, Abstract)
@@ -14,21 +16,36 @@ public:
 	{
 		if (IsUnreachable() || !Super::ShouldCreateSubsystem(Outer))
 			return false;
+		if (GetClass()->HasAnyClassFlags(CLASS_NewerVersionExists))
+			return false;
+		if (FAngelscriptEngine::TryGetCurrentEngine() == nullptr)
+			return false;
 
 		return BP_ShouldCreateSubsystem(Outer);
+	}
+
+	bool CanCallScriptFunctions() const
+	{
+		FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine();
+		if (IsUnreachable() || CurrentEngine == nullptr)
+			return false;
+		if (const UASClass* ASClass = Cast<UASClass>(GetClass()))
+			return ASClass->OwnerScriptEngine != nullptr
+				&& ASClass->OwnerScriptEngine == CurrentEngine->GetScriptEngine();
+		return true;
 	}
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override
 	{
 		Super::Initialize(Collection);
 
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_Initialize();
 	}
 
 	virtual void Deinitialize() override
 	{
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_Deinitialize();
 
 		Super::Deinitialize();

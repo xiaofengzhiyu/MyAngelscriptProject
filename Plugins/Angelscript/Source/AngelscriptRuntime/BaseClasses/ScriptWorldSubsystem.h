@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "Streaming/StreamingWorldSubsystemInterface.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "AngelscriptEngine.h"
+#include "ClassGenerator/ASClass.h"
 #include "ScriptWorldSubsystem.generated.h"
 
 UCLASS(Blueprintable, Abstract)
@@ -29,6 +31,10 @@ public:
 	{
 		if (IsUnreachable() || !Super::ShouldCreateSubsystem(Outer))
 			return false;
+		if (GetClass()->HasAnyClassFlags(CLASS_NewerVersionExists))
+			return false;
+		if (FAngelscriptEngine::TryGetCurrentEngine() == nullptr)
+			return false;
 
 		UWorld* World = Cast<UWorld>(Outer);
 		switch (World->WorldType)
@@ -50,18 +56,29 @@ public:
 		return BP_ShouldCreateSubsystem(Outer);
 	}
 
+	bool CanCallScriptFunctions() const
+	{
+		FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine();
+		if (IsUnreachable() || CurrentEngine == nullptr)
+			return false;
+		if (const UASClass* ASClass = Cast<UASClass>(GetClass()))
+			return ASClass->OwnerScriptEngine != nullptr
+				&& ASClass->OwnerScriptEngine == CurrentEngine->GetScriptEngine();
+		return true;
+	}
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override
 	{
 		Super::Initialize(Collection);
 
 		bInitialized = true;
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_Initialize();
 	}
 
 	virtual void Deinitialize() override
 	{
-		if (!IsUnreachable() && bInitialized)
+		if (bInitialized && CanCallScriptFunctions())
 			BP_Deinitialize();
 		bInitialized = false;
 		Super::Deinitialize();
@@ -71,13 +88,13 @@ public:
 	{
 		Super::PostInitialize();
 
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_PostInitialize();
 	}
 
 	virtual void Tick(float DeltaTime) override
 	{
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_Tick(DeltaTime);
 	}
 
@@ -85,7 +102,7 @@ public:
 	{
 		Super::OnWorldBeginPlay(InWorld);
 
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_OnWorldBeginPlay();
 	}
 
@@ -93,13 +110,13 @@ public:
 	{
 		Super::OnWorldComponentsUpdated(InWorld);
 
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_OnWorldComponentsUpdated();
 	}
 
 	virtual void OnUpdateStreamingState() override
 	{
-		if (!IsUnreachable())
+		if (CanCallScriptFunctions())
 			BP_UpdateStreamingState();
 	}
 

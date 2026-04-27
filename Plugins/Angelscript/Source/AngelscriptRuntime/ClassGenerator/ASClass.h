@@ -27,6 +27,7 @@ public:
 	UClass* ComposeOntoClass = nullptr;
 	//WILL-EDIT
 	void* ScriptTypePtr = nullptr;
+	void* OwnerScriptEngine = nullptr;
 	bool bIsScriptClass = false;
 	//TMap<FName, TPair<FGenericFuncPtr, ASAutoCaller::FunctionCaller>> GenericFuncPtrMap;
 	//static TMap<FName, TMap<FName, TPair<FGenericFuncPtr, ASAutoCaller::FunctionCaller>>> GFuncMaps;

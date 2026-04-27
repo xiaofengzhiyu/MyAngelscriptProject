@@ -2526,6 +2526,7 @@ void FAngelscriptClassGenerator::PerformReload(bool bFullReload)
 						if (ClassData.ReplacedClass->ScriptTypePtr != nullptr)
 							RemovedScriptTypes.Add(ClassData.ReplacedClass->ScriptTypePtr);
 						ClassData.ReplacedClass->ScriptTypePtr = nullptr;
+						ClassData.ReplacedClass->OwnerScriptEngine = nullptr;
 						ClassData.ReplacedClass->ConstructFunction = nullptr;
 						ClassData.ReplacedClass->DefaultsFunction = nullptr;
 					}
@@ -2548,12 +2549,15 @@ void FAngelscriptClassGenerator::PerformReload(bool bFullReload)
 
 				//if (Class->ScriptTypePtr == nullptr)
 				//if (asClass != nullptr && asClass->ScriptTypePtr == nullptr)
-				if (asClass == nullptr || asClass->ScriptTypePtr == nullptr)
-					continue;
-				//if (RemovedScriptTypes.Contains(Class->ScriptTypePtr))
-				if (RemovedScriptTypes.Contains(asClass->ScriptTypePtr))
-					//Class->ScriptTypePtr = nullptr;
-					asClass->ScriptTypePtr = nullptr;
+			if (asClass == nullptr || asClass->ScriptTypePtr == nullptr)
+				continue;
+			if (RemovedScriptTypes.Contains(asClass->ScriptTypePtr))
+			{
+				asClass->ScriptTypePtr = nullptr;
+				asClass->OwnerScriptEngine = nullptr;
+				asClass->ConstructFunction = nullptr;
+				asClass->DefaultsFunction = nullptr;
+			}
 			}
 		}
 
@@ -3677,6 +3681,7 @@ void FAngelscriptClassGenerator::DoFullReloadClass(FModuleData& ModuleData, FCla
 	NewClass->MinAlignment = MinAlignment;
 	NewClass->ScriptPropertyOffset = ParentCodeClass->GetPropertiesSize();
 	NewClass->ScriptTypePtr = ScriptType;
+	NewClass->OwnerScriptEngine = ScriptType ? ScriptType->GetEngine() : nullptr;
 	NewClass->CodeSuperClass = ParentCodeClass;
 
 	// Record data about the class in the descriptor for further pipeline use
@@ -4181,6 +4186,7 @@ void FAngelscriptClassGenerator::DoSoftReload(FModuleData& ModuleData, FClassDat
 	asITypeInfo* OldScriptType = ClassData.OldClass->ScriptType;
 	asITypeInfo* ScriptType = GetNamespacedTypeInfoForClass(ClassData.NewClass, ModuleData.NewModule);
 	Class->ScriptTypePtr = ScriptType;
+	Class->OwnerScriptEngine = ScriptType ? ScriptType->GetEngine() : nullptr;
 
 	Class->SetPropertiesSize(PropertiesSize);
 	if (ScriptType != nullptr)
@@ -4285,8 +4291,8 @@ void FAngelscriptClassGenerator::DoSoftReload(FModuleData& ModuleData, FClassDat
 			ensure(asClass->ScriptTypePtr == OldScriptType);
 
 			// Update the actual angelscript type we're using
-			//CheckClass->ScriptTypePtr = Class->ScriptTypePtr;
 			asClass->ScriptTypePtr = Class->ScriptTypePtr;
+			asClass->OwnerScriptEngine = Class->OwnerScriptEngine;
 
 			// Refresh the serialization schema
 			DestroyAngelscriptUnversionedSchema(CheckClass);
@@ -4974,6 +4980,7 @@ void FAngelscriptClassGenerator::CleanupRemovedClass(TSharedPtr<FAngelscriptClas
 	if (Class != nullptr)
 	{
 		Class->ScriptTypePtr = nullptr;
+		Class->OwnerScriptEngine = nullptr;
 		Class->ConstructFunction = nullptr;
 		Class->DefaultsFunction = nullptr;
 

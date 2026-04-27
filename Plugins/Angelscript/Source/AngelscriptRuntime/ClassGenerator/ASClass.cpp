@@ -107,17 +107,17 @@ FORCEINLINE static asCScriptFunction* ResolveScriptVirtual(UASFunction* Function
 	if (VirtualScriptFunction->vfTableIdx == -1)
 		return VirtualScriptFunction;
 
-	//asCObjectType* ObjectType = (asCObjectType*)Object->GetClass()->ScriptTypePtr;
 	UASClass* asClass = UASClass::GetFirstASClass(Object);
-	if (asClass == nullptr) return nullptr;
+	if (asClass == nullptr) return VirtualScriptFunction;
 
 	asCObjectType* ObjectType = (asCObjectType*)asClass->ScriptTypePtr;
-	checkSlow(ObjectType != nullptr);
+	if (ObjectType == nullptr)
+		return VirtualScriptFunction;
 	checkSlow(VirtualScriptFunction->vfTableIdx >= 0);
 	checkSlow(VirtualScriptFunction->vfTableIdx < (int)ObjectType->virtualFunctionTable.GetLength());
 
 	asCScriptFunction* RealScriptFunction = ObjectType->virtualFunctionTable[VirtualScriptFunction->vfTableIdx];
-	return RealScriptFunction;
+	return RealScriptFunction ? RealScriptFunction : VirtualScriptFunction;
 }
 
 template<typename TContext>
@@ -1088,6 +1088,9 @@ void* UASClass::AllocScriptObject(class asITypeInfo* ScriptType, size_t Size)
 
 static FORCEINLINE_DEBUGGABLE void ExecuteDefaultsFunctions(UObject* Object, UASClass* Class)
 {
+	if (Class->OwnerScriptEngine == nullptr)
+		return;
+
 	UASClass* DefaultsClass = Class;
 	UASClass* ParentDefaults = Cast<UASClass>(Class->GetSuperClass());
 
@@ -1108,7 +1111,7 @@ static FORCEINLINE_DEBUGGABLE void ExecuteDefaultsFunctions(UObject* Object, UAS
 		TArray<asIScriptFunction*, TFixedAllocator<32>> DefaultsFunctions;
 		while (DefaultsClass != nullptr)
 		{
-			if (DefaultsClass->DefaultsFunction != nullptr)
+			if (DefaultsClass->DefaultsFunction != nullptr && DefaultsClass->OwnerScriptEngine != nullptr)
 				DefaultsFunctions.Add(DefaultsClass->DefaultsFunction);
 			DefaultsClass = Cast<UASClass>(DefaultsClass->GetSuperClass());
 		}
@@ -1127,7 +1130,7 @@ static FORCEINLINE_DEBUGGABLE void ExecuteDefaultsFunctions(UObject* Object, UAS
 
 static FORCEINLINE_DEBUGGABLE void ExecuteConstructFunction(UObject* Object, UASClass* Class)
 {
-	if (Class->ConstructFunction != nullptr)
+	if (Class->ConstructFunction != nullptr && Class->OwnerScriptEngine != nullptr)
 	{
 		FAngelscriptContext Context(Object, Class->ConstructFunction->GetEngine());
 		if (!PrepareAngelscriptContext(Context, Class->ConstructFunction, *Class->GetPathName()))
@@ -1993,6 +1996,11 @@ void UASFunction_NoParams::RuntimeCallFunction(UObject* Object, FFrame& Stack, R
 		return;
 
 	asCScriptFunction* RealFunction = ResolveScriptVirtual(this, Object);
+	if (UNLIKELY(RealFunction == nullptr))
+	{
+		P_FINISH;
+		return;
+	}
 	if (auto* JitFunc = RealFunction->jitFunction_Raw)
 	{
 		P_FINISH;
@@ -2022,6 +2030,8 @@ void UASFunction_NoParams::RuntimeCallEvent(UObject* Object, void* Parms)
 		return;
 
 	asCScriptFunction* RealFunction = ResolveScriptVirtual(this, Object);
+	if (UNLIKELY(RealFunction == nullptr))
+		return;
 	if (auto* JitFunc = RealFunction->jitFunction_Raw)
 	{
 		MakeRawJITCall_NoParam(Object, JitFunc);

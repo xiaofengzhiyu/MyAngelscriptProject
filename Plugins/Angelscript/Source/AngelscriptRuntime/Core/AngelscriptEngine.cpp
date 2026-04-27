@@ -1061,6 +1061,7 @@ bool FAngelscriptEngine::DiscardModule(const TCHAR* ModuleName)
 			if (UASClass* ScriptClass = Cast<UASClass>(Class->Class))
 			{
 				ScriptClass->ScriptTypePtr = nullptr;
+				ScriptClass->OwnerScriptEngine = nullptr;
 				ScriptClass->ConstructFunction = nullptr;
 				ScriptClass->DefaultsFunction = nullptr;
 
@@ -1214,6 +1215,29 @@ void FAngelscriptEngine::Shutdown()
 		{
 			LocalSharedState->ActiveParticipants = FMath::Max(0, LocalSharedState->ActiveParticipants - 1);
 			LocalSharedState->ActiveCloneCount = FMath::Max(0, LocalSharedState->ActiveCloneCount - 1);
+		}
+	}
+
+	if (bShouldReleaseOwnedEngine && Engine != nullptr)
+	{
+		for (UClass* ClassObj : TObjectRange<UClass>())
+		{
+			UASClass* ASClass = Cast<UASClass>(ClassObj);
+			if (ASClass == nullptr || ASClass->OwnerScriptEngine != Engine)
+				continue;
+			ASClass->ScriptTypePtr = nullptr;
+			ASClass->OwnerScriptEngine = nullptr;
+			ASClass->ConstructFunction = nullptr;
+			ASClass->DefaultsFunction = nullptr;
+
+			for (TFieldIterator<UFunction> FunctionIt(ASClass, EFieldIteratorFlags::ExcludeSuper); FunctionIt; ++FunctionIt)
+			{
+				if (UASFunction* ScriptFunction = Cast<UASFunction>(*FunctionIt))
+				{
+					ScriptFunction->ScriptFunction = nullptr;
+					ScriptFunction->ValidateFunction = nullptr;
+				}
+			}
 		}
 	}
 
