@@ -1,8 +1,10 @@
 #include "SourceNavigation/AngelscriptSourceCodeNavigation.h"
 #include "SourceCodeNavigation.h"
 #include "AngelscriptEngine.h"
+#include "AngelscriptSettings.h"
 #include "ClassGenerator/ASClass.h"
 #include "ClassGenerator/ASStruct.h"
+#include "Misc/Paths.h"
 
 namespace
 {
@@ -22,6 +24,22 @@ namespace
 		GOpenLocationOverrideForTesting(Location);
 		return true;
 	}
+
+	FString BuildVSCodeOpenParameters(FString Params, const FString& VSCodeWorkspacePath, bool bOpenFolderOnVSCodeSourceLinks, const FString& ScriptRootDirectory)
+	{
+		if (!VSCodeWorkspacePath.IsEmpty())
+		{
+			const FString WorkspacePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), VSCodeWorkspacePath);
+			return FString::Printf(TEXT("\"%s\" %s"), *WorkspacePath, *Params);
+		}
+
+		if (bOpenFolderOnVSCodeSourceLinks && !ScriptRootDirectory.IsEmpty())
+		{
+			return FString::Printf(TEXT("\"%s\" %s"), *ScriptRootDirectory, *Params);
+		}
+
+		return Params;
+	}
 }
 
 namespace AngelscriptSourceNavigation
@@ -34,6 +52,11 @@ namespace AngelscriptSourceNavigation
 	void ResetOpenLocationOverrideForTesting()
 	{
 		GOpenLocationOverrideForTesting = nullptr;
+	}
+
+	FString BuildVSCodeOpenParametersForTesting(FString Params, const FString& VSCodeWorkspacePath, bool bOpenFolderOnVSCodeSourceLinks, const FString& ScriptRootDirectory)
+	{
+		return BuildVSCodeOpenParameters(MoveTemp(Params), VSCodeWorkspacePath, bOpenFolderOnVSCodeSourceLinks, ScriptRootDirectory);
 	}
 }
 
@@ -138,9 +161,9 @@ private:
 		if (TryHandleOpenLocationOverride(Path, LineNo))
 			return;
 		if (LineNo != -1)
-			FPlatformMisc::OsExecute(nullptr, TEXT("code"), *FString::Printf(TEXT("--goto \"%s:%d\""), *Path, LineNo));
+			OpenVsCode(FString::Printf(TEXT("--goto \"%s:%d\""), *Path, LineNo));
 		else
-			FPlatformMisc::OsExecute(nullptr, TEXT("code"), *FString::Printf(TEXT("\"%s\""), *Path));
+			OpenVsCode(FString::Printf(TEXT("\"%s\""), *Path));
 	}
 
 	void OpenFile(const FString& Path, int LineNo = -1)
@@ -148,9 +171,31 @@ private:
 		if (TryHandleOpenLocationOverride(Path, LineNo))
 			return;
 		if (LineNo != -1)
-			FPlatformMisc::OsExecute(nullptr, TEXT("code"), *FString::Printf(TEXT("--goto \"%s:%d\""), *Path, LineNo));
+			OpenVsCode(FString::Printf(TEXT("--goto \"%s:%d\""), *Path, LineNo));
 		else
-			FPlatformMisc::OsExecute(nullptr, TEXT("code"), *FString::Printf(TEXT("\"%s\""), *Path));
+			OpenVsCode(FString::Printf(TEXT("\"%s\""), *Path));
+	}
+
+	void OpenVsCode(FString Params)
+	{
+		const UAngelscriptSettings* Settings = GetDefault<UAngelscriptSettings>();
+		FString ScriptRootDirectory;
+		if (Settings != nullptr && Settings->bOpenFolderOnVSCodeSourceLinks)
+		{
+			if (FAngelscriptEngine::TryGetCurrentEngine() != nullptr)
+			{
+				ScriptRootDirectory = FAngelscriptEngine::GetScriptRootDirectory();
+			}
+			else
+			{
+				UE_LOG(Angelscript, Warning, TEXT("[SourceNavigation] No Angelscript engine is current; opening source file without Script workspace folder."));
+			}
+		}
+
+		const FString VSCodeWorkspacePath = Settings != nullptr ? Settings->VSCodeWorkspacePath : FString();
+		const bool bOpenFolderOnVSCodeSourceLinks = Settings != nullptr && Settings->bOpenFolderOnVSCodeSourceLinks;
+		Params = BuildVSCodeOpenParameters(MoveTemp(Params), VSCodeWorkspacePath, bOpenFolderOnVSCodeSourceLinks, ScriptRootDirectory);
+		FPlatformMisc::OsExecute(nullptr, TEXT("code"), *Params);
 	}
 
 	TSharedPtr<FAngelscriptClassDesc> GetClassDesc(const UStruct* Struct, TSharedPtr<FAngelscriptModuleDesc>* OutModule = nullptr)

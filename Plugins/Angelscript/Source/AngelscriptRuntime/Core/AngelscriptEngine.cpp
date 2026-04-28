@@ -14,6 +14,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Misc/MessageDialog.h"
+#include "Misc/ScopeExit.h"
 #include "Async/Async.h"
 #include "Async/ParallelFor.h"
 #include "Engine/Engine.h"
@@ -34,8 +35,13 @@
 #include "StaticJIT/AngelscriptStaticJIT.h"
 #include "StaticJIT/StaticJITHeader.h"
 
-#include "Widgets/Layout/SScrollBox.h"
+#include "Framework/Application/SlateApplication.h"
+#include "HAL/ThreadSafeBool.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Layout/SBorder.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/SWindow.h"
 
 #include "StartAngelscriptHeaders.h"
 //#include "as_context.h"
@@ -2304,28 +2310,93 @@ void FAngelscriptEngine::InitialCompile()
 		for (const FFilenamePair& Filename : Filenames)
 			PreviouslyFailedReloadFiles.Add(Filename);
 
-		volatile bool bErrorResponseDone = false;
+		FThreadSafeBool bErrorResponseDone(false);
 		auto ShowErrorDialog = [&]()
 		{
+			ON_SCOPE_EXIT
+			{
+				bErrorResponseDone = true;
+			};
+
+#if !PLATFORM_DESKTOP
+			const FString CompileDiagnostics = FormatDiagnostics();
+			const FString Message = FString::Printf(
+				TEXT("Angelscript code failed to compile at engine startup:")
+				TEXT("\n\n%s"),
+				*CompileDiagnostics);
+
+			UE_LOG(Angelscript, Error, TEXT("[StartupCompileFailure] Cannot display reload dialog on non-desktop platform. Requesting exit.\n%s"), *CompileDiagnostics);
+			FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(Message));
+			GIsCriticalError = true;
+			FPlatformMisc::RequestExit(true);
+			return;
+#else
+			if (!FSlateApplication::IsInitialized())
+			{
+				const FString CompileDiagnostics = FormatDiagnostics();
+				const FString Message = FString::Printf(
+					TEXT("Angelscript code failed to compile at engine startup, but Slate is not initialized so the retry window cannot be shown.")
+					TEXT("\n\n%s"),
+					*CompileDiagnostics);
+
+				UE_LOG(Angelscript, Error, TEXT("[StartupCompileFailure] Slate is not initialized; cannot display compile-error retry dialog. Requesting exit.\n%s"), *CompileDiagnostics);
+				FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(Message));
+				GIsCriticalError = true;
+				FPlatformMisc::RequestExit(true);
+				return;
+			}
+
 			// Prematurely start the hot reload thread since we will be using it in our modal window
 			bUseHotReloadCheckerThread = true;
 			StartHotReloadThread();
+			UE_LOG(Angelscript, Warning, TEXT("[StartupCompileFailure] Initial compile failed. Opening modal retry dialog for %d failed file(s)."), PreviouslyFailedReloadFiles.Num());
+
+			auto OpenScriptButton = SNew(SButton)
+				.Text(FText::FromString("Open Angelscript workspace (VS Code)"))
+				.OnClicked_Lambda([this]() -> FReply
+				{
+					const UAngelscriptSettings* Settings = ConfigSettings != nullptr ? ConfigSettings : GetDefault<UAngelscriptSettings>();
+					FString WorkspacePath;
+					if (Settings != nullptr && !Settings->VSCodeWorkspacePath.IsEmpty())
+					{
+						WorkspacePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->VSCodeWorkspacePath);
+					}
+					else
+					{
+						WorkspacePath = AllRootPaths.IsEmpty() ? FPaths::ProjectDir() / TEXT("Script") : AllRootPaths[0];
+					}
+
+					UE_LOG(Angelscript, Display, TEXT("[StartupCompileFailure] Opening Angelscript workspace in VS Code: %s"), *WorkspacePath);
+					FPlatformMisc::OsExecute(nullptr, TEXT("code"), *FString::Printf(TEXT("\"%s\""), *WorkspacePath));
+					return FReply::Handled();
+				});
 
 			auto PromptWindow = SNew(SWindow)
 				.Title(FText::FromString("Angelscript Compile Errors"))
 				.ClientSize(FVector2D(800, 600))
 				.SizingRule(ESizingRule::UserSized);
 
-			auto PromptText = SNew(STextBlock);
+			TSharedPtr<SMultiLineEditableTextBox> PromptText;
 			PromptWindow->SetContent(
 				SNew(SBorder)
 				[
-					SNew(SScrollBox)
-					+ SScrollBox::Slot()
-						.Padding(10.f)
-						[
-							PromptText
-						]
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot()
+					.FillHeight(1.f)
+					.Padding(10.f)
+					[
+						SAssignNew(PromptText, SMultiLineEditableTextBox)
+						.IsReadOnly(true)
+						.AutoWrapText(true)
+					]
+
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					.Padding(10.f, 5.f, 10.f, 10.f)
+					.HAlign(HAlign_Right)
+					[
+						OpenScriptButton
+					]
 				]);
 
 			auto TickHandle = FSlateApplication::Get().GetOnModalLoopTickEvent().AddLambda([&](float DeltaTime)
@@ -2333,19 +2404,23 @@ void FAngelscriptEngine::InitialCompile()
 				if (PreviouslyFailedReloadFiles.Num() == 0)
 				{
 					// We succesfully compiled! Close the prompt.
+					UE_LOG(Angelscript, Display, TEXT("[StartupCompileFailure] Startup compile errors resolved by hot reload. Closing retry dialog."));
 					FSlateApplication::Get().RequestDestroyWindow(PromptWindow);
 					bSuccess = true;
 				}
 
 				// Show an error and prompt for retry
-				FString Callstack = FormatDiagnostics();
-				FString Message = FString::Printf(
+				const FString CompileDiagnostics = FormatDiagnostics();
+				const FText Message = FText::FromString(FString::Printf(
 					TEXT("Angelscript code failed to compile at engine startup.\n")
 					TEXT("Various assets will not load correctly without working angelscript code.\n")
 					TEXT("\n\nPlease fix the errors and save the script files to proceed to open the editor.")
 					TEXT("\n\n%s"),
-					*Callstack);
-				PromptText->SetText(FText::FromString(Message));
+					*CompileDiagnostics));
+				if (!PromptText->GetText().EqualTo(Message))
+				{
+					PromptText->SetText(Message);
+				}
 
 				// Make sure we detect hot reloads when we need them
 				CheckForHotReload(ECompileType::FullReload);
@@ -2354,21 +2429,22 @@ void FAngelscriptEngine::InitialCompile()
 	#if WITH_AS_DEBUGSERVER
 				if (DebugServer != nullptr)
 					DebugServer->ProcessMessages();
-	#endif
+#endif
 			});
 
+			UE_LOG(Angelscript, Display, TEXT("[StartupCompileFailure] Showing startup compile-error modal dialog."));
 			FSlateApplication::Get().AddModalWindow(PromptWindow, nullptr);
 			FSlateApplication::Get().GetOnModalLoopTickEvent().Remove(TickHandle);
+			UE_LOG(Angelscript, Display, TEXT("[StartupCompileFailure] Startup compile-error modal dialog closed. success=%s"), bSuccess ? TEXT("true") : TEXT("false"));
 
 			if (!bSuccess)
 			{
+				UE_LOG(Angelscript, Error, TEXT("[StartupCompileFailure] Startup compile errors were not resolved before dialog close. Requesting exit."));
+				GIsCriticalError = true;
 				FPlatformMisc::RequestExit(true);
 				return;
 			}
-			else
-			{
-				bErrorResponseDone = true;
-			}
+#endif
 		};
 
 		if (IsInGameThread())

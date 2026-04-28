@@ -17,4 +17,5 @@ namespace AngelscriptSourceNavigation
 	ANGELSCRIPTEDITOR_API bool NavigateToStructForTesting(const UStruct* InStruct);
 	ANGELSCRIPTEDITOR_API void SetOpenLocationOverrideForTesting(FOpenLocationOverride InOverride);
 	ANGELSCRIPTEDITOR_API void ResetOpenLocationOverrideForTesting();
+	ANGELSCRIPTEDITOR_API FString BuildVSCodeOpenParametersForTesting(FString Params, const FString& VSCodeWorkspacePath, bool bOpenFolderOnVSCodeSourceLinks, const FString& ScriptRootDirectory);
 }

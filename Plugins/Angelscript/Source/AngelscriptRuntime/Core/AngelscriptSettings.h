@@ -154,6 +154,20 @@ public:
 	bool bWarnIntegerDivision = true;
 
 	/**
+	 * When opening a file in VS Code by clicking a source link, open a VS Code workspace with the Script folder.
+	 * Turn this off when using a dedicated .code-workspace file through VSCodeWorkspacePath.
+	 */
+	UPROPERTY(Config, EditDefaultsOnly, Category = "Editor")
+	bool bOpenFolderOnVSCodeSourceLinks = true;
+
+	/**
+	 * Relative path from the project directory to a VS Code .code-workspace file.
+	 * When set, this takes precedence over bOpenFolderOnVSCodeSourceLinks.
+	 */
+	UPROPERTY(Config, EditDefaultsOnly, Category = "Editor")
+	FString VSCodeWorkspacePath = FString("");
+
+	/**
 	 * Throw an exception when calling a function that requires a World Context to be set, but the current object is not in a world.
 	 * Note: this error is only checked in editor for performance reasons.
 	 */
