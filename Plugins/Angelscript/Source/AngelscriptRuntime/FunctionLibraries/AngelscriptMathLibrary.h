@@ -239,49 +239,12 @@ public:
 		}
 	}
 
-	/**
-	 * Wraps X to be between Min and Max, inclusive.
-	 * When X can wrap to both Min and Max, it will wrap to Min if it lies below the range and wrap to Max if it is above the range. 
-	 **/
-	//UFUNCTION(BlueprintCallable, Meta = (ScriptName = "Wrap", DeprecatedFunction, DeprecationMessage = "Wrapping integers is inclusive, and returns unintuitive values. Use Math::WrapIndex for the natural behavior."))
-	//static uint32 WrapUInt(uint32 X, uint32 Min, uint32 Max)
-	//{
-	//	// This is not implemented with FMath::Wrap, because that uses while loops for some reason,
-	//	// and can be slow on large numbers.
-	//	uint32 Range = (Max - Min);
-	//	if (X < Min)
-	//	{
-	//		if (Range == 0)
-	//			return Min;
-	//
-	//		uint32 Remainder = (Min - X) % Range;
-	//
-	//		// Need to special case remainder 0, because unreal Wrap returns Min in that case, not Max,
-	//		// and we want to be compatible
-	//		if (Remainder == 0)
-	//			return Min;
-	//		else
-	//			return Max - Remainder;
-	//	}
-	//	else if (X > Max)
-	//	{
-	//		if (Range == 0)
-	//			return Max;
-	//
-	//		uint32 Remainder = (X - Max) % Range;
-	//
-	//		// Need to special case remainder 0, because unreal Wrap returns Max in that case, not Min
-	//		// and we want to be compatible
-	//		if (Remainder == 0)
-	//			return Max;
-	//		else
-	//			return Min + Remainder;
-	//	}
-	//	else
-	//	{
-	//		return X;
-	//	}
-	//}
+	// WrapUInt(uint32) intentionally NOT exposed via UFUNCTION here:
+	// Hazelight upstream uses UFUNCTION(ScriptCallable, ...) which bypasses Blueprint's type
+	// restrictions, but this fork standardised on UFUNCTION(BlueprintCallable, ...) + reflective
+	// fallback (Bind_BlueprintType.cpp:1428-1437); UHT rejects uint32 on BlueprintCallable.
+	// Use WrapInt(int32) above for AS scripts; the uint32 variant is deferred until a ScriptCallable
+	// migration path lands. Tracked in Plan_FunctionLibrariesCleanup.md P5.2 Math sub-task.
 
 	/**
 	 * Wrap the index so it is always [>= Min, < Max)
@@ -410,6 +373,12 @@ public:
 	{
 		return FMath::VInterpConstantTo(Vector, Target, StepSize, 1.0f);
 	}
+
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial))
+	static FVector GetSafeNormal2D(const FVector& Vector, const FVector& UpDirection, double Tolerance = 0.0, const FVector& ResultIfZero = FVector::ZeroVector)
+	{
+		return FVector::VectorPlaneProject(Vector, UpDirection).GetSafeNormal(Tolerance <= 0.0 ? SMALL_NUMBER : Tolerance, ResultIfZero);
+	}
 };
 
 //UCLASS(Meta = (ScriptMixin = "FVector3f"))
@@ -533,6 +502,46 @@ public:
 	{
 		return FMath::RadiansToDegrees(A.Quaternion().AngularDistance(B.Quaternion()));
 	}
+
+	/**
+	 * Get the delta rotation from OriginRotation to TargetRotation.
+	 * NB: Equivalent to TargetRotation * OriginRotation.Inverse()
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FRotator GetDelta(const FRotator& OriginRotation, const FRotator& TargetRotation)
+	{
+		return (TargetRotation.Quaternion() * OriginRotation.Quaternion().Inverse()).Rotator();
+	}
+
+	/**
+	 * Apply a delta rotation to OriginRotation, producing TargetRotation.
+	 * NB: Equivalent to DeltaRotation * OriginRotation.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FRotator ApplyDelta(const FRotator& OriginRotation, const FRotator& DeltaRotation)
+	{
+		return (DeltaRotation.Quaternion() * OriginRotation.Quaternion()).Rotator();
+	}
+
+	/**
+	 * Get the relative rotation of a child given the parent's world rotation and the child's world rotation.
+	 * NB: Equivalent to ParentWorldRotation.Inverse() * ChildWorldRotation.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FRotator GetRelative(const FRotator& ParentWorldRotation, const FRotator& ChildWorldRotation)
+	{
+		return (ParentWorldRotation.Quaternion().Inverse() * ChildWorldRotation.Quaternion()).Rotator();
+	}
+
+	/**
+	 * Apply a relative rotation for a child when attached to the given parent rotation.
+	 * NB: Equivalent to ParentWorldRotation * ChildRelativeRotation.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FRotator ApplyRelative(const FRotator& ParentWorldRotation, const FRotator& ChildRelativeRotation)
+	{
+		return (ParentWorldRotation.Quaternion() * ChildRelativeRotation.Quaternion()).Rotator();
+	}
 };
 
 //UCLASS(Meta = (ScriptMixin = "FRotator3f", ScriptName = "FRotator3f"))
@@ -651,6 +660,83 @@ public:
 	static FQuat MakeFromAxes(const FVector& Forward, const FVector& Right, const FVector& Up)
 	{
 		return FMatrix(Forward.GetSafeNormal(), Right.GetSafeNormal(), Up.GetSafeNormal(), FVector::ZeroVector).ToQuat();
+	}
+
+	/**
+	 * Get the delta rotation from OriginRotation to TargetRotation.
+	 * NB: Equivalent to TargetRotation * OriginRotation.Inverse()
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FQuat GetDelta(const FQuat& OriginRotation, const FQuat& TargetRotation)
+	{
+		return TargetRotation * OriginRotation.Inverse();
+	}
+
+	/**
+	 * Apply a delta rotation to OriginRotation, producing TargetRotation.
+	 * NB: Equivalent to DeltaRotation * OriginRotation.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FQuat ApplyDelta(const FQuat& OriginRotation, const FQuat& DeltaRotation)
+	{
+		return DeltaRotation * OriginRotation;
+	}
+
+	/**
+	 * Get the relative rotation of a child given the parent's world rotation and the child's world rotation.
+	 * NB: Equivalent to ParentWorldRotation.Inverse() * ChildWorldRotation.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FQuat GetRelative(const FQuat& ParentWorldRotation, const FQuat& ChildWorldRotation)
+	{
+		return ParentWorldRotation.Inverse() * ChildWorldRotation;
+	}
+
+	/**
+	 * Apply a relative rotation for a child when attached to the given parent rotation.
+	 * NB: Equivalent to ParentWorldRotation * ChildRelativeRotation.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FQuat ApplyRelative(const FQuat& ParentWorldRotation, const FQuat& ChildRelativeRotation)
+	{
+		return ParentWorldRotation * ChildRelativeRotation;
+	}
+
+	/**
+	 * Make a delta rotation from angular velocity and delta time.
+	 * NB: Equivalent to FQuat(AngularVelocity.Normal, AngularVelocity.Size * DeltaTime).
+	 *
+	 * @param AngularVelocity A vector defining a rotation around an axis at a rotational speed around said axis.
+	 * @param DeltaTime The time we spend rotating at the angular velocity.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FQuat MakeDeltaRotationFromAngularVelocity(const FVector& AngularVelocity, float DeltaTime)
+	{
+		if (DeltaTime < KINDA_SMALL_NUMBER)
+			return FQuat::Identity;
+
+		const float AngularSpeed = AngularVelocity.Size();
+		if (AngularSpeed < KINDA_SMALL_NUMBER)
+			return FQuat::Identity;
+
+		const FVector Axis = AngularVelocity / AngularSpeed;
+		const float Angle = AngularSpeed * DeltaTime;
+		return FQuat(Axis, Angle);
+	}
+
+	/**
+	 * Make an angular velocity vector from a delta rotation and delta time.
+	 * NB: Equivalent to DeltaRotation.Axis * (DeltaRotation.Angle / DeltaTime).
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FVector MakeAngularVelocityFromDeltaRotation(const FQuat& DeltaRotation, float DeltaTime)
+	{
+		if (DeltaTime < KINDA_SMALL_NUMBER)
+			return FVector::ZeroVector;
+
+		const FVector Axis = DeltaRotation.GetRotationAxis();
+		const float Angle = DeltaRotation.GetAngle();
+		return Axis * (Angle / DeltaTime);
 	}
 };
 
@@ -795,6 +881,46 @@ public:
 	static FTransform MakeFromZY(const FVector& ZAxis, const FVector& YAxis)
 	{
 		return FTransform(FRotationMatrix::MakeFromZY(ZAxis, YAxis));
+	}
+
+	/**
+	 * Get the delta transform from OriginTransform to TargetTransform.
+	 * NB: Equivalent to OriginTransform.Inverse() * TargetTransform
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FTransform GetDelta(const FTransform& OriginTransform, const FTransform& TargetTransform)
+	{
+		return OriginTransform.Inverse() * TargetTransform;
+	}
+
+	/**
+	 * Apply a delta transform to OriginTransform, producing TargetTransform.
+	 * NB: Equivalent to OriginTransform * DeltaTransform
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FTransform ApplyDelta(const FTransform& OriginTransform, const FTransform& DeltaTransform)
+	{
+		return OriginTransform * DeltaTransform;
+	}
+
+	/**
+	 * Get the relative transform of a child given the parent's world transform and the child's world transform.
+	 * NB: Equivalent to ChildWorldTransform.GetRelativeTransform(ParentWorldTransform).
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FTransform GetRelative(const FTransform& ParentWorldTransform, const FTransform& ChildWorldTransform)
+	{
+		return ChildWorldTransform.GetRelativeTransform(ParentWorldTransform);
+	}
+
+	/**
+	 * Apply a relative transform for a child when attached to the given parent transform.
+	 * NB: Equivalent to ChildRelativeTransform * ParentWorldTransform.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptNoDiscard))
+	static FTransform ApplyRelative(const FTransform& ParentWorldTransform, const FTransform& ChildRelativeTransform)
+	{
+		return ChildRelativeTransform * ParentWorldTransform;
 	}
 };
 

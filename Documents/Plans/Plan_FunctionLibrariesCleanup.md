@@ -279,8 +279,17 @@ C1 提交后建议立即跑 `RunBuild.ps1 -Label fnlib-cleanup` + `RunTestSuite.
   - **未做但已观察到**：UAssetManagerMixinLibrary 中 `GetPrimaryAssetTypeInfo / GetPrimaryAssetTypeInfoList / GetPrimaryAssetRules` 仍是裸 `UFUNCTION()`，与 P2.1 ActorLibrary dead code 嫌疑同形态（不进入反射路径）；超出 P5.2 范围，延期
   - **验证**：构建 0 错误（54s）；`ProductionScriptMixinSignatures` 1/1 PASS；`FunctionLibraries.*` 23/23 PASS；`Actor.*` 24/24 PASS。零回归
 - [x] **P5.2-小文件部分** 📦 Git 提交：4 个 commit，每文件一条
-- [ ] **P5.2-MathLibrary 部分** 16 函数（4 transform 三重载 + 4 单函数），依 §2.1.3 矩阵；执行规模较大，单独后置
-- [ ] **P5.2-MathLibrary 部分** 📦 Git 提交：`[FunctionLibraries] Feat: restore 16 missing helpers in MathLibrary from Hazelight upstream`
+- [x] **P5.2-MathLibrary 部分** 16 函数（4 transform 三重载 + 4 单函数），依 §2.1.3 矩阵 ✅ 2026-04-28 完成（实际 15/16 落地，1 处 deferred）
+  - **15 函数已恢复**（按子类分布）：
+    - 主 `UAngelscriptMathLibrary` 子类：0（计划中的 `WrapUInt` deferred，见下）
+    - `UAngelscriptFVectorMixinLibrary` 子类：1 函数 — `GetSafeNormal2D(const FVector&, const FVector&, double=0.0, const FVector& = FVector::ZeroVector)` `Meta = (ScriptTrivial)`
+    - `UAngelscriptFRotatorLibrary` 子类：4 函数 — `GetDelta` / `ApplyDelta` / `GetRelative` / `ApplyRelative` 全部 `Meta = (ScriptTrivial, ScriptNoDiscard)`
+    - `UAngelscriptFQuatLibrary` 子类：6 函数 — `GetDelta` / `ApplyDelta` / `GetRelative` / `ApplyRelative` + `MakeDeltaRotationFromAngularVelocity(FVector, float)` + `MakeAngularVelocityFromDeltaRotation(FQuat, float)` 全部 `Meta = (ScriptTrivial, ScriptNoDiscard)`
+    - `UAngelscriptFTransformLibrary` 子类：4 函数 — `GetDelta` / `ApplyDelta` / `GetRelative` / `ApplyRelative` 全部 `Meta = (ScriptTrivial, ScriptNoDiscard)`
+  - **`WrapUInt`（uint32 X, uint32 Min, uint32 Max）— Deferred、不可恢复**：尝试取消注释（行 246-284 之前的死注释段）+ 升级到 `UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, ScriptName = "Wrap", ScriptNoDiscard, DeprecatedFunction, ...))` 后，UHT 报 `Type 'uint32' is not supported by blueprint. Function: WrapUInt Parameter X / Min / Max / ReturnValue` 4 错。**根因**：Hazelight 上游用 `UFUNCTION(ScriptCallable, ...)` 跳过 Blueprint 类型限制；fork 当前依赖 `UFUNCTION(BlueprintCallable, ...)` + 反射兜底，UHT 拒绝 `uint32` 参数。**处置**：把死注释段换成结构化的"deferred"注释（指向本计划），保留 `WrapInt(int32)` 作为 AS 脚本可用的版本。**根本解决方案**：要么走 `Helper_FunctionSignature.h` 选择性恢复 `ScriptCallable` meta、要么改写为 `int64` 包装然后内部 cast 回 uint32（语义不等价），均超出 P5.2 范围
+  - **同步发现**：fork 行 318 `UFUNCTION(Meta = (ScriptName = "WrapIndex"))` `WrapIndexUInt` 同样是 dead code（裸 `UFUNCTION(Meta = ...)` 不进反射路径）—— 这是 fork 处理 uint32 helper 的统一 dead-code 形态，非新增问题
+  - **验证**：构建 0 错误（55s，先一次失败因 `WrapUInt` UHT 错被回退、二次构建成功）；`ProductionScriptMixinSignatures` 1/1 PASS；`FunctionLibraries.*` 23/23 PASS；`Bindings.*` 134 中 133 PASS + 1 已知 flaky（`ConsoleCommandLifecycleOriginalReplacementUnload` 单独重跑 1/1 PASS，与 Math 改动无关，IConsoleManager 时序问题）。零回归
+- [x] **P5.2-MathLibrary 部分** 📦 Git 提交：`[FunctionLibraries] Feat: restore 15 missing helpers in MathLibrary (4 transform x 3 + GetSafeNormal2D + 2 angular velocity); WrapUInt deferred per UHT uint32 restriction`
 
 - [ ] **P5.3** 补缺失的 mixin 子类（MathLibrary 缺 3 个 active UCLASS，已在 P5.1 矩阵确认）
   - **缺漏的 3 个子类**（依 [`HazelightDiffMatrix.md`](./Plan_FunctionLibrariesCleanup/HazelightDiffMatrix.md) §2.1.1）：`UAngelscriptFQuatStaticLibrary`（`ScriptName = "FQuat"`）/ `UAngelscriptFRotatorStaticLibrary`（`ScriptName = "FRotator"`）/ `UAngelscriptFTransformStaticLibrary`（`ScriptName = "FTransform"`）—— 全部是 fork 完全没写过的"主子类承载 mixin 方法 + Static 子类承载静态构造/常量/工具"双子类模式中的 Static 半部

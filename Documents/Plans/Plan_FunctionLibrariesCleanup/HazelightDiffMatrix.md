@@ -8,7 +8,7 @@
 
 | 汇总维度 | 数值 | 落点 |
 |---|---:|---|
-| ① 缺函数总数（active `UFUNCTION`） | **21**（19 + Phase 2 后新增 ActorLibrary 缺 `GetAttachedActors` / `GetAttachedActorsOfClass` 2 处）| P5.2 实施目标 |
+| ① 缺函数总数（active `UFUNCTION`） | **21**（19 + Phase 2 后新增 ActorLibrary 缺 `GetAttachedActors` / `GetAttachedActorsOfClass` 2 处）— P5.2 完成 **20/21**：5 小文件函数 + 15 Math 函数已恢复；1 处 `WrapUInt(uint32)` 因 UHT BlueprintCallable + uint32 不兼容**永久 deferred**（详见 Plan P5.2 Math 部分实施记录）| P5.2 已收口 |
 | ② 缺 mixin 子类总数（active `UCLASS`） | **3** | P5.3 实施目标 |
 | ③ 可清理锚点注释数（`//UCLASS(Meta = (ScriptMixin = "..."))` 但 Hazelight 上游也无该 mixin） | **0** | P5.4 实施目标，**所有 16 处锚点全是真 parity gap** |
 
