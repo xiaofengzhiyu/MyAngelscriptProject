@@ -77,6 +77,30 @@ bool FAngelscriptMiscMultiAssignTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptMiscMultiAssignOrderSensitiveTest,
+	"Angelscript.TestModule.Angelscript.Misc.MultiAssign.OrderSensitive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptMiscMultiAssignOrderSensitiveTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	int32 Result = 0;
+	ASTEST_COMPILE_RUN_INT(
+		Engine,
+		"ASMiscMultiAssignOrderSensitive",
+		TEXT("int Test() { int A = 1, B = 2, C = 3, Result = 0; Result = A = B = C = 4; return A * 1000 + B * 100 + C * 10 + Result; }"),
+		TEXT("int Test()"),
+		Result);
+
+	TestEqual(TEXT("Misc.MultiAssign.OrderSensitive should propagate the chained assignment return value into the outer assignment while updating every local in right-to-left order"), Result, 4444);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptMiscAssignTest,
 	"Angelscript.TestModule.Angelscript.Misc.Assign",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

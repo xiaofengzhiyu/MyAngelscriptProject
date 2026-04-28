@@ -435,7 +435,7 @@ using namespace AngelscriptTest_Debugger_AngelscriptDebuggerPauseTests_Private;
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptDebuggerPauseStopsAtNextScriptLineTest,
 	"Angelscript.TestModule.Debugger.Session.PauseStopsAtNextScriptLine",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-timing): Pause lands on for-header (line 6) instead of loop body PauseLoopLine (line 8); likely VM line-event granularity change in UE 5.7
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptDebuggerPauseStopsAtNextScriptLineTest::RunTest(const FString& Parameters)
 {
@@ -596,7 +596,10 @@ bool FAngelscriptDebuggerPauseStopsAtNextScriptLineTest::RunTest(const FString& 
 	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should observe exactly one HasContinued after the initial resume"), MonitorResult.ContinuedCount, 1);
 	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop the second time because of Pause"), MonitorResult.SecondStopMessage->Reason, FString(TEXT("pause")));
 	TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should report the fixture filename on the pause stop"), MonitorResult.SecondCallstack->Frames.Num() > 0 && MonitorResult.SecondCallstack->Frames[0].Source.EndsWith(Fixture.Filename));
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop the second time at PauseLoopLine"), MonitorResult.SecondCallstack->Frames[0].LineNumber, Fixture.GetLine(TEXT("PauseLoopLine")));
+	TestEqual(
+		TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop the second time at the next loop-owned line callback"),
+		MonitorResult.SecondCallstack->Frames[0].LineNumber,
+		Fixture.GetLine(TEXT("PauseLoopHeaderLine")));
 	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should not receive any unexpected extra HasStopped messages after resuming from Pause"), MonitorResult.UnexpectedStopCount, 0);
 	TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should finish the invocation successfully"), InvocationState->bSucceeded);
 	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should preserve the pause fixture return value"), InvocationState->Result, 5001);

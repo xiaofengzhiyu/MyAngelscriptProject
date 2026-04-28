@@ -2,6 +2,7 @@
 #include "../Shared/AngelscriptTestMacros.h"
 #include "../Shared/AngelscriptTestEngineHelper.h"
 
+#include "Kismet/KismetMathLibrary.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -50,6 +51,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptMathDeterministicBindingsTest,
 	"Angelscript.TestModule.Bindings.MathDeterministicCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptMathSpatialHelpersBindingsTest,
+	"Angelscript.TestModule.Bindings.MathSpatialHelpers",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -281,6 +287,176 @@ int Entry()
 	}
 
 	bPassed &= TestEqual(TEXT("Deterministic Math helpers should match the native baseline"), Result, 1);
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptMathSpatialHelpersBindingsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	constexpr float VectorTolerance = 0.001f;
+	constexpr double ScalarTolerance = 0.0001;
+
+	FVector ExpectedIntersection = FVector::ZeroVector;
+	bPassed &= TestTrue(
+		TEXT("Native SegmentIntersection2D baseline should detect the crossing diagonals"),
+		FMath::SegmentIntersection2D(
+			FVector(0.0f, 0.0f, 0.0f),
+			FVector(10.0f, 10.0f, 0.0f),
+			FVector(0.0f, 10.0f, 0.0f),
+			FVector(10.0f, 0.0f, 0.0f),
+			ExpectedIntersection));
+	bPassed &= TestTrue(
+		TEXT("Native SegmentIntersection2D baseline should intersect at the expected midpoint"),
+		ExpectedIntersection.Equals(FVector(5.0f, 5.0f, 0.0f), 0.0f));
+
+	FVector ExpectedNearestPointOnFirst = FVector::ZeroVector;
+	FVector ExpectedNearestPointOnSecond = FVector::ZeroVector;
+	UKismetMathLibrary::FindNearestPointsOnLineSegments(
+		FVector(-5.0f, 0.0f, 0.0f),
+		FVector(5.0f, 0.0f, 0.0f),
+		FVector(0.0f, 3.0f, 0.0f),
+		FVector(0.0f, 3.0f, 10.0f),
+		ExpectedNearestPointOnFirst,
+		ExpectedNearestPointOnSecond);
+	bPassed &= TestTrue(
+		TEXT("Native FindNearestPointsOnLineSegments baseline should clamp to the expected point on the first segment"),
+		ExpectedNearestPointOnFirst.Equals(FVector(0.0f, 0.0f, 0.0f), 0.0f));
+	bPassed &= TestTrue(
+		TEXT("Native FindNearestPointsOnLineSegments baseline should clamp to the expected point on the second segment"),
+		ExpectedNearestPointOnSecond.Equals(FVector(0.0f, 3.0f, 0.0f), 0.0f));
+
+	const double ExpectedNormalized = UKismetMathLibrary::NormalizeToRange(75.0, 50.0, 150.0);
+	const float ExpectedGridSnap32 = FMath::GridSnap(13.4f, 2.5f);
+	const double ExpectedGridSnap64 = FMath::GridSnap(13.4, 2.5);
+	const float ExpectedNoise1D = FMath::PerlinNoise1D(0.375f);
+	const float ExpectedNoise2D = FMath::PerlinNoise2D(FVector2D(0.25f, -0.75f));
+	const float ExpectedNoise3D = FMath::PerlinNoise3D(FVector(0.125f, 0.5f, -0.25f));
+
+	if (!bPassed)
+	{
+		return false;
+	}
+
+	FString Script = TEXT(R"(
+int Entry()
+{
+	FVector IntersectionPoint = FVector::ZeroVector;
+	if (!Math::SegmentIntersection2D(
+		FVector(0.0f, 0.0f, 0.0f),
+		FVector(10.0f, 10.0f, 0.0f),
+		FVector(0.0f, 10.0f, 0.0f),
+		FVector(10.0f, 0.0f, 0.0f),
+		IntersectionPoint))
+	{
+		return 10;
+	}
+
+	if (!IntersectionPoint.Equals($EXPECTED_INTERSECTION$, $VECTOR_TOLERANCE$))
+	{
+		return 20;
+	}
+
+	FVector NonIntersectionPoint = FVector(99.0f, 99.0f, 99.0f);
+	if (Math::SegmentIntersection2D(
+		FVector(0.0f, 0.0f, 0.0f),
+		FVector(1.0f, 0.0f, 0.0f),
+		FVector(0.0f, 2.0f, 0.0f),
+		FVector(1.0f, 2.0f, 0.0f),
+		NonIntersectionPoint))
+	{
+		return 30;
+	}
+
+	FVector Segment1Point = FVector::ZeroVector;
+	FVector Segment2Point = FVector::ZeroVector;
+	Math::FindNearestPointsOnLineSegments(
+		FVector(-5.0f, 0.0f, 0.0f),
+		FVector(5.0f, 0.0f, 0.0f),
+		FVector(0.0f, 3.0f, 0.0f),
+		FVector(0.0f, 3.0f, 10.0f),
+		Segment1Point,
+		Segment2Point);
+
+	if (!Segment1Point.Equals($EXPECTED_SEGMENT1_POINT$, $VECTOR_TOLERANCE$))
+	{
+		return 40;
+	}
+
+	if (!Segment2Point.Equals($EXPECTED_SEGMENT2_POINT$, $VECTOR_TOLERANCE$))
+	{
+		return 50;
+	}
+
+	if (!Math::IsNearlyEqual(Math::NormalizeToRange(75.0, 50.0, 150.0), $EXPECTED_NORMALIZED$, $SCALAR_TOLERANCE$))
+	{
+		return 60;
+	}
+
+	if (!Math::IsNearlyEqual(Math::GridSnap(13.4f, 2.5f), $EXPECTED_GRIDSNAP32$, $SCALAR_TOLERANCE$))
+	{
+		return 70;
+	}
+
+	if (!Math::IsNearlyEqual(Math::GridSnap(13.4, 2.5), $EXPECTED_GRIDSNAP64$, $SCALAR_TOLERANCE$))
+	{
+		return 80;
+	}
+
+	if (!Math::IsNearlyEqual(Math::PerlinNoise1D(0.375f), $EXPECTED_NOISE1D$, $SCALAR_TOLERANCE$))
+	{
+		return 90;
+	}
+
+	if (!Math::IsNearlyEqual(Math::PerlinNoise2D(FVector2D(0.25f, -0.75f)), $EXPECTED_NOISE2D$, $SCALAR_TOLERANCE$))
+	{
+		return 100;
+	}
+
+	if (!Math::IsNearlyEqual(Math::PerlinNoise3D(FVector(0.125f, 0.5f, -0.25f)), $EXPECTED_NOISE3D$, $SCALAR_TOLERANCE$))
+	{
+		return 110;
+	}
+
+	return 1;
+}
+)");
+
+	Script.ReplaceInline(TEXT("$EXPECTED_INTERSECTION$"), *FormatScriptVectorLiteral(ExpectedIntersection));
+	Script.ReplaceInline(TEXT("$EXPECTED_SEGMENT1_POINT$"), *FormatScriptVectorLiteral(ExpectedNearestPointOnFirst));
+	Script.ReplaceInline(TEXT("$EXPECTED_SEGMENT2_POINT$"), *FormatScriptVectorLiteral(ExpectedNearestPointOnSecond));
+	Script.ReplaceInline(TEXT("$EXPECTED_NORMALIZED$"), *FormatScriptFloatLiteral(ExpectedNormalized));
+	Script.ReplaceInline(TEXT("$EXPECTED_GRIDSNAP32$"), *FormatScriptFloatLiteral(ExpectedGridSnap32));
+	Script.ReplaceInline(TEXT("$EXPECTED_GRIDSNAP64$"), *FormatScriptFloatLiteral(ExpectedGridSnap64));
+	Script.ReplaceInline(TEXT("$EXPECTED_NOISE1D$"), *FormatScriptFloatLiteral(ExpectedNoise1D));
+	Script.ReplaceInline(TEXT("$EXPECTED_NOISE2D$"), *FormatScriptFloatLiteral(ExpectedNoise2D));
+	Script.ReplaceInline(TEXT("$EXPECTED_NOISE3D$"), *FormatScriptFloatLiteral(ExpectedNoise3D));
+	Script.ReplaceInline(TEXT("$VECTOR_TOLERANCE$"), *FormatScriptFloatLiteral(VectorTolerance));
+	Script.ReplaceInline(TEXT("$SCALAR_TOLERANCE$"), *FormatScriptFloatLiteral(ScalarTolerance));
+
+	asIScriptModule* Module = BuildModule(*this, Engine, "ASMathSpatialHelpersCompat", Script);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(TEXT("Spatial Math helpers should match the native baseline"), Result, 1);
 
 	ASTEST_END_SHARE_CLEAN
 	return bPassed;

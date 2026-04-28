@@ -205,6 +205,10 @@ namespace AngelscriptTestSupport
 				bSent = Client.SendContinue();
 				break;
 
+			case ESingleClientDebuggerCommand::StopDebugging:
+				bSent = Client.SendStopDebugging();
+				break;
+
 			case ESingleClientDebuggerCommand::StepIn:
 				bSent = Client.SendStepIn();
 				break;
@@ -1038,7 +1042,8 @@ namespace AngelscriptTestSupport
 						return Transcript;
 					}
 
-					if (Action.Command == ESingleClientDebuggerCommand::Continue)
+					if (Action.Command == ESingleClientDebuggerCommand::Continue
+						|| Action.Command == ESingleClientDebuggerCommand::StopDebugging)
 					{
 						if (!WaitForSingleClientMessageType(
 							Client,
@@ -1066,7 +1071,7 @@ namespace AngelscriptTestSupport
 					}
 				}
 
-				Transcript.Error = TEXT("Single-client debugger worker exhausted stop actions without sending Continue.");
+				Transcript.Error = TEXT("Single-client debugger worker exhausted stop actions without sending a terminal resume command.");
 				return Transcript;
 			});
 	}

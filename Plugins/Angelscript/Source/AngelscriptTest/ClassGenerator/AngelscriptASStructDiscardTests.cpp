@@ -29,6 +29,60 @@ namespace ASStructDiscardTest
 	{
 		return FindObject<UASStruct>(FAngelscriptEngine::GetPackage(), *StructName.ToString());
 	}
+
+	bool VerifyStructState(
+		FAutomationTestBase& Test,
+		UASStruct* Struct,
+		const TCHAR* StageLabel,
+		bool bExpectScriptType,
+		bool bExpectToStringFunction,
+		bool bExpectIdentical,
+		bool bExpectHash)
+	{
+		const FString StructMessage = FString::Printf(TEXT("%s should publish a script struct"), StageLabel);
+		if (!Test.TestNotNull(*StructMessage, Struct))
+		{
+			return false;
+		}
+
+		UScriptStruct::ICppStructOps* CppStructOps = Struct->GetCppStructOps();
+		const FString OpsMessage = FString::Printf(TEXT("%s should keep cpp struct ops allocated"), StageLabel);
+		if (!Test.TestNotNull(*OpsMessage, CppStructOps))
+		{
+			return false;
+		}
+
+		const bool bScriptTypeMatches = Test.TestEqual(
+			*FString::Printf(TEXT("%s should keep the expected script type presence"), StageLabel),
+			Struct->ScriptType != nullptr,
+			bExpectScriptType);
+		const bool bToStringMatches = Test.TestEqual(
+			*FString::Printf(TEXT("%s should keep the expected ToString binding presence"), StageLabel),
+			Struct->GetToStringFunction() != nullptr,
+			bExpectToStringFunction);
+		const bool bStructFlagMatches = Test.TestEqual(
+			*FString::Printf(TEXT("%s should keep the expected STRUCT_IdenticalNative flag"), StageLabel),
+			EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative),
+			bExpectIdentical);
+		const bool bHasIdenticalMatches = Test.TestEqual(
+			*FString::Printf(TEXT("%s should keep the expected cpp-ops identical capability"), StageLabel),
+			CppStructOps->HasIdentical(),
+			bExpectIdentical);
+		const bool bHasTypeHashMatches = Test.TestEqual(
+			*FString::Printf(TEXT("%s should keep the expected cpp-ops hash capability"), StageLabel),
+			CppStructOps->HasGetTypeHash(),
+			bExpectHash);
+		const bool bComputedPropertyFlagMatches = Test.TestEqual(
+			*FString::Printf(TEXT("%s should keep the expected CPF_HasGetValueTypeHash computed property flag"), StageLabel),
+			EnumHasAnyFlags(CppStructOps->GetComputedPropertyFlags(), CPF_HasGetValueTypeHash),
+			bExpectHash);
+		return bScriptTypeMatches
+			&& bToStringMatches
+			&& bStructFlagMatches
+			&& bHasIdenticalMatches
+			&& bHasTypeHashMatches
+			&& bComputedPropertyFlagMatches;
+	}
 }
 
 using namespace ASStructDiscardTest;
@@ -88,33 +142,34 @@ struct FDiscardableStruct
 	}
 
 	Struct->PrepareCppStructOps();
-
-	if (!TestNotNull(TEXT("ASStruct discard test should publish a script type before discard"), Struct->ScriptType)
-		|| !TestNotNull(TEXT("ASStruct discard test should create cpp struct ops before discard"), Struct->GetCppStructOps())
-		|| !TestNotNull(TEXT("ASStruct discard test should keep the script ToString binding before discard"), Struct->GetToStringFunction()))
+	if (!ASStructDiscardTest::VerifyStructState(
+			*this,
+			Struct,
+			TEXT("ASStruct discard test before discard"),
+			true,
+			true,
+			true,
+			true))
 	{
 		return false;
 	}
-
-	TestTrue(
-		TEXT("ASStruct discard test should advertise identical-native support before discard"),
-		EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
 
 	const bool bDiscarded = Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
 	bPassed &= TestTrue(TEXT("ASStruct discard test should discard the owning module successfully"), bDiscarded);
 	bPassed &= TestFalse(
 		TEXT("ASStruct discard test should remove the module record after discard"),
 		Engine.GetModuleByModuleName(ASStructDiscardTest::ModuleName.ToString()).IsValid());
-	bPassed &= TestNull(TEXT("ASStruct discard test should clear the struct script type after discard"), Struct->ScriptType);
-	bPassed &= TestNotNull(
-		TEXT("ASStruct discard test should keep the cached cpp struct ops object alive after discard"),
-		Struct->GetCppStructOps());
-	bPassed &= TestNull(
-		TEXT("ASStruct discard test should clear the cached ToString function after discard"),
-		Struct->GetToStringFunction());
-	bPassed &= TestFalse(
-		TEXT("ASStruct discard test should clear STRUCT_IdenticalNative after discard"),
-		EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
+	if (!ASStructDiscardTest::VerifyStructState(
+			*this,
+			Struct,
+			TEXT("ASStruct discard test after discard"),
+			false,
+			false,
+			false,
+			false))
+	{
+		return false;
+	}
 
 	ASTEST_END_SHARE_FRESH
 	return bPassed;

@@ -13,9 +13,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Bindings.IntVectorValueTypesCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptIntPointSizeCompatBindingsTest,
+	"Angelscript.TestModule.Bindings.IntPointSizeCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 namespace AngelscriptTest_Bindings_AngelscriptIntVectorBindingsTests_Private
 {
 	static constexpr ANSICHAR IntVectorBindingsModuleName[] = "ASIntVectorValueTypesCompat";
+	static constexpr ANSICHAR IntPointSizeModuleName[] = "ASIntPointSizeCompat";
 }
 
 using namespace AngelscriptTest_Bindings_AngelscriptIntVectorBindingsTests_Private;
@@ -115,6 +121,65 @@ int Entry()
 
 	bPassed = TestEqual(
 		TEXT("Int vector value-type bindings should preserve the deterministic arithmetic matrix"),
+		Result,
+		1);
+
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptIntPointSizeCompatBindingsTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = false;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	ON_SCOPE_EXIT
+	{
+		Engine.DiscardModule(TEXT("ASIntPointSizeCompat"));
+	};
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		IntPointSizeModuleName,
+		TEXT(R"AS(
+int Entry()
+{
+	FIntPoint FirstTriple(3, 4);
+	if (FirstTriple.Size() != 5)
+		return 10;
+
+	FIntPoint SecondTriple(-6, 8);
+	if (SecondTriple.Size() != 10)
+		return 20;
+
+	FIntPoint ZeroPoint;
+	if (ZeroPoint.Size() != 0)
+		return 30;
+
+	return 1;
+}
+)AS"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = INDEX_NONE;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	bPassed = TestEqual(
+		TEXT("FIntPoint.Size should preserve deterministic integer vector magnitudes for script-visible value types"),
 		Result,
 		1);
 

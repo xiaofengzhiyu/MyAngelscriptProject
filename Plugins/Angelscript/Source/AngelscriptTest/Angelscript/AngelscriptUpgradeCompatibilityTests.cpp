@@ -1,14 +1,12 @@
 #include "Angelscript/AngelscriptTestSupport.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
-
+#include "Misc/ScopeExit.h"
 #include "StartAngelscriptHeaders.h"
 #include "source/as_string.h"
 #include "EndAngelscriptHeaders.h"
-
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
-
 namespace AngelscriptTest_Angelscript_AngelscriptUpgradeCompatibilityTests_Private
 {
 	constexpr int32 P9BAutomaticImportsPropertyId = 41;
@@ -61,7 +59,6 @@ namespace AngelscriptTest_Angelscript_AngelscriptUpgradeCompatibilityTests_Priva
 		GUpgradeMessageCallbackBText = UTF8_TO_TCHAR(Message->message);
 	}
 }
-
 using namespace AngelscriptTest_Angelscript_AngelscriptUpgradeCompatibilityTests_Private;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -123,6 +120,11 @@ bool FAngelscriptUpgradeHeaderCompatibilityTest::RunTest(const FString& Paramete
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptUpgradeEnginePropertyCompatibilityTest,
 	"Angelscript.TestModule.Angelscript.Upgrade.EngineProperties",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptUpgradeEnginePropertyForeachSupportGateTest,
+	"Angelscript.TestModule.Angelscript.Upgrade.EngineProperties.ForeachSupportGate",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -227,6 +229,79 @@ bool FAngelscriptUpgradeEnginePropertyCompatibilityTest::RunTest(const FString& 
 
 	ASTEST_END_SHARE
 	return bCustomPropertiesStillWork;
+}
+
+bool FAngelscriptUpgradeEnginePropertyForeachSupportGateTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	TUniquePtr<FAngelscriptEngine> IsolatedEngine = CreateIsolatedCloneEngine();
+	if (!TestNotNull(TEXT("Upgrade.EngineProperties.ForeachSupportGate should create an isolated clone engine"), IsolatedEngine.Get()))
+	{
+		return false;
+	}
+
+	FAngelscriptEngine& Engine = *IsolatedEngine;
+	FAngelscriptEngineScope EngineScope(Engine);
+	asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+	if (!TestNotNull(TEXT("Upgrade.EngineProperties.ForeachSupportGate should expose the backing script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	static const FName ModuleName(TEXT("UpgradeForeachSupportGate"));
+	static const FString Filename(TEXT("UpgradeForeachSupportGate.as"));
+	static const FString Script = TEXT("int Run() { TArray<int> Values; Values.Add(1); Values.Add(2); Values.Add(3); int Sum = 0; foreach (int Value : Values) { Sum += Value; } return Sum; }");
+	const asPWORD PreviousForeachSupport = ScriptEngine->GetEngineProperty(asEP_FOREACH_SUPPORT);
+	ON_SCOPE_EXIT
+	{
+		ScriptEngine->SetEngineProperty(asEP_FOREACH_SUPPORT, PreviousForeachSupport);
+		Engine.DiscardModule(*ModuleName.ToString());
+	};
+
+	ScriptEngine->SetEngineProperty(asEP_FOREACH_SUPPORT, 0);
+	Engine.ResetDiagnostics();
+	Engine.LastEmittedDiagnostics.Empty();
+
+	FAngelscriptCompileTraceSummary DisabledSummary;
+	UE_SET_LOG_VERBOSITY(Angelscript, Fatal);
+	const bool bCompiledDisabled = CompileModuleWithSummary(&Engine, ECompileType::SoftReloadOnly, ModuleName, Filename, Script, false, DisabledSummary, true);
+	UE_SET_LOG_VERBOSITY(Angelscript, Log);
+
+	const FAngelscriptCompileTraceDiagnosticSummary* DisabledDiagnostic = nullptr;
+	for (const FAngelscriptCompileTraceDiagnosticSummary& Diagnostic : DisabledSummary.Diagnostics)
+	{
+		if (Diagnostic.bIsError && Diagnostic.Message.Contains(TEXT("foreach")))
+		{
+			DisabledDiagnostic = &Diagnostic;
+			break;
+		}
+	}
+
+	bPassed &= TestEqual(TEXT("Upgrade.EngineProperties.ForeachSupportGate should store the disabled foreach flag"), static_cast<int64>(ScriptEngine->GetEngineProperty(asEP_FOREACH_SUPPORT)), int64(0));
+	bPassed &= TestFalse(TEXT("Upgrade.EngineProperties.ForeachSupportGate should reject foreach syntax while the property is disabled"), bCompiledDisabled);
+	bPassed &= TestFalse(TEXT("Upgrade.EngineProperties.ForeachSupportGate should report bCompileSucceeded=false for the disabled foreach compile"), DisabledSummary.bCompileSucceeded);
+	bPassed &= TestEqual(TEXT("Upgrade.EngineProperties.ForeachSupportGate should report ECompileResult::Error for the disabled foreach compile"), DisabledSummary.CompileResult, ECompileResult::Error);
+	bPassed &= TestNotNull(TEXT("Upgrade.EngineProperties.ForeachSupportGate should surface a foreach-oriented diagnostic when the property is disabled"), DisabledDiagnostic);
+	if (DisabledDiagnostic != nullptr)
+	{
+		bPassed &= TestTrue(TEXT("Upgrade.EngineProperties.ForeachSupportGate should report a non-zero diagnostic row for the disabled foreach compile"), DisabledDiagnostic->Row > 0);
+		bPassed &= TestTrue(TEXT("Upgrade.EngineProperties.ForeachSupportGate should report a non-zero diagnostic column for the disabled foreach compile"), DisabledDiagnostic->Column > 0);
+	}
+
+	Engine.DiscardModule(*ModuleName.ToString());
+	Engine.ResetDiagnostics();
+	Engine.LastEmittedDiagnostics.Empty();
+	ScriptEngine->SetEngineProperty(asEP_FOREACH_SUPPORT, 1);
+
+	ECompileResult EnabledCompileResult = ECompileResult::Error;
+	const bool bCompiledEnabled = CompileModuleWithResult(&Engine, ECompileType::SoftReloadOnly, ModuleName, Filename, Script, EnabledCompileResult);
+	int32 Result = 0;
+	bPassed &= TestEqual(TEXT("Upgrade.EngineProperties.ForeachSupportGate should restore the foreach flag before the retry compile"), static_cast<int64>(ScriptEngine->GetEngineProperty(asEP_FOREACH_SUPPORT)), int64(1));
+	bPassed &= TestTrue(TEXT("Upgrade.EngineProperties.ForeachSupportGate should compile foreach syntax again once the property is restored"), bCompiledEnabled);
+	bPassed &= TestTrue(TEXT("Upgrade.EngineProperties.ForeachSupportGate should return a handled compile result after restoring foreach support"), EnabledCompileResult == ECompileResult::FullyHandled || EnabledCompileResult == ECompileResult::PartiallyHandled);
+	bPassed &= TestTrue(TEXT("Upgrade.EngineProperties.ForeachSupportGate should execute the restored foreach script"), ExecuteIntFunction(&Engine, ModuleName, TEXT("int Run()"), Result));
+	bPassed &= TestEqual(TEXT("Upgrade.EngineProperties.ForeachSupportGate should preserve the foreach accumulation result after restoring the property"), Result, 6);
+	return bPassed;
 }
 
 bool FAngelscriptUpgradeEnginePropertyCallStackLimitOverflowTest::RunTest(const FString& Parameters)

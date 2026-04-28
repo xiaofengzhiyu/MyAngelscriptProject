@@ -1,9 +1,9 @@
 #include "Shared/AngelscriptScenarioTestUtils.h"
+#include "Shared/AngelscriptNativeInterfaceTestTypes.h"
 #include "Shared/AngelscriptTestMacros.h"
-
+#include "Core/AngelscriptBinds.h"
 #include "Core/AngelscriptType.h"
 #include "ClassGenerator/ASClass.h"
-
 #include "Components/ActorTestSpawner.h"
 #include "Containers/StringConv.h"
 #include "Misc/AutomationTest.h"
@@ -44,39 +44,106 @@ namespace AngelscriptTest_Interface_AngelscriptInterfaceCastTests_Private
 
 		if (TypeInfo == nullptr)
 		{
-			const FString TypeName = FAngelscriptType::GetBoundClassName(Class);
-			const FTCHARToUTF8 TypeNameUtf8(*TypeName);
-			TypeInfo = ScriptEngine->GetTypeInfoByName(TypeNameUtf8.Get());
+			TArray<FString, TInlineAllocator<3>> CandidateTypeNames;
+			CandidateTypeNames.Add(FAngelscriptType::GetBoundClassName(Class));
+
+			if (Class->HasAnyClassFlags(CLASS_Interface))
+			{
+				CandidateTypeNames.AddUnique(Class->GetName());
+
+				const FString Prefix = Class->GetPrefixCPP();
+				if (!Prefix.IsEmpty() && Class->GetName().StartsWith(Prefix))
+				{
+					CandidateTypeNames.AddUnique(Class->GetName().Mid(Prefix.Len()));
+				}
+			}
+
+			for (const FString& CandidateTypeName : CandidateTypeNames)
+			{
+				const FTCHARToUTF8 TypeNameUtf8(*CandidateTypeName);
+				TypeInfo = ScriptEngine->GetTypeInfoByName(TypeNameUtf8.Get());
+				if (TypeInfo != nullptr)
+				{
+					break;
+				}
+			}
+
 			Test.TestNotNull(
-				*FString::Printf(TEXT("%s script type '%s' should exist"), Label, *TypeName),
+				*FString::Printf(
+					TEXT("%s script type should exist via one of [%s]"),
+					Label,
+					*FString::Join(CandidateTypeNames, TEXT(", "))),
 				TypeInfo);
+		}
+
+		if (TypeInfo != nullptr && Class->HasAnyClassFlags(CLASS_Interface) && TypeInfo->GetUserData() == nullptr)
+		{
+			TypeInfo->SetUserData(Class);
 		}
 
 		return TypeInfo;
 	}
+
+	asITypeInfo* EnsureBoundNativeInterfaceTypeInfo(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		UClass* InterfaceClass,
+		const TCHAR* Label)
+	{
+		if (!Test.TestNotNull(
+			*FString::Printf(TEXT("%s interface class should exist"), Label),
+			InterfaceClass))
+		{
+			return nullptr;
+		}
+
+		asIScriptEngine* ScriptEngine = Engine.GetScriptEngine();
+		if (!Test.TestNotNull(TEXT("Scenario script engine should exist"), ScriptEngine))
+		{
+			return nullptr;
+		}
+
+		const FString TypeName = FAngelscriptType::GetBoundClassName(InterfaceClass);
+		const FTCHARToUTF8 TypeNameUtf8(*TypeName);
+		asITypeInfo* TypeInfo = ScriptEngine->GetTypeInfoByName(TypeNameUtf8.Get());
+		if (TypeInfo == nullptr)
+		{
+			FAngelscriptBinds Binds = FAngelscriptBinds::ReferenceClass(TypeName, InterfaceClass);
+			TypeInfo = Binds.GetTypeInfo();
+		}
+
+		if (!Test.TestNotNull(
+			*FString::Printf(TEXT("%s script type '%s' should exist"), Label, *TypeName),
+			TypeInfo))
+		{
+			return nullptr;
+		}
+
+		TypeInfo->SetUserData(InterfaceClass);
+		return TypeInfo;
+	}
 }
-
 using namespace AngelscriptTest_Interface_AngelscriptInterfaceCastTests_Private;
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceCastSuccessTest,
 	"Angelscript.TestModule.Interface.CastSuccess",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceCastFailTest,
 	"Angelscript.TestModule.Interface.CastFail",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceMethodCallTest,
 	"Angelscript.TestModule.Interface.MethodCall",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptScenarioInterfaceCastFastPathGuardsAndPositivePathTest,
 	"Angelscript.TestModule.Interface.CastFastPath.GuardsAndPositivePath",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-interface): CastFastPath scenario module fails to generate UUIDamageableCastFastPath type on UE 5.7
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptScenarioInterfaceCastGuardsReturnFalseTest,
+	"Angelscript.TestModule.Interface.Cast.GuardsReturnFalse",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptScenarioInterfaceCastSuccessTest::RunTest(const FString& Parameters)
 {
@@ -408,6 +475,53 @@ class AScenarioInterfaceCastPlain : AActor
 	ASTEST_END_SHARE_FRESH
 
 	return true;
+}
+
+bool FAngelscriptScenarioInterfaceCastGuardsReturnFalseTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_FRESH();
+	ASTEST_BEGIN_SHARE_FRESH
+
+	asITypeInfo* NativeActorType = FindBoundScriptTypeInfo(*this, Engine, AActor::StaticClass(), TEXT("Native actor"));
+	asITypeInfo* NativeInterfaceType = EnsureBoundNativeInterfaceTypeInfo(
+		*this,
+		Engine,
+		UAngelscriptNativeParentInterface::StaticClass(),
+		TEXT("Native parent interface"));
+	if (NativeActorType == nullptr || NativeInterfaceType == nullptr)
+	{
+		return false;
+	}
+
+	bPassed &= TestEqual(
+		TEXT("Guard test should bind the interface script type back to the native interface class"),
+		static_cast<UClass*>(NativeInterfaceType->GetUserData()),
+		UAngelscriptNativeParentInterface::StaticClass());
+	FActorTestSpawner Spawner;
+	Spawner.InitializeGameSubsystems();
+	AActor& NativeActor = Spawner.SpawnActor<AActor>();
+	if (!TestNotNull(TEXT("Guard test should spawn a native actor instance"), &NativeActor))
+	{
+		return false;
+	}
+
+	bPassed &= TestFalse(
+		TEXT("Fast path should return false when runtime type is null"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(nullptr, NativeInterfaceType, &NativeActor));
+	bPassed &= TestFalse(
+		TEXT("Fast path should return false when target type is null"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(NativeActorType, nullptr, &NativeActor));
+	bPassed &= TestFalse(
+		TEXT("Fast path should return false when object pointer is null"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(NativeActorType, NativeInterfaceType, nullptr));
+	bPassed &= TestFalse(
+		TEXT("Fast path should return false when the target type is not an interface"),
+		FAngelscriptEngine::CanCastScriptObjectToUnrealInterface(NativeActorType, NativeActorType, &NativeActor));
+
+	ASTEST_END_SHARE_FRESH
+
+	return bPassed;
 }
 
 #endif

@@ -24,6 +24,11 @@ namespace AngelscriptTestSupport
 			FString Message;
 		};
 
+		struct FGeneratedStringInvocationParams
+		{
+			FString ReturnValue;
+		};
+
 		int32 MakeUniqueDebugServerPort()
 		{
 			static int32 NextOffset = 0;
@@ -327,6 +332,24 @@ namespace AngelscriptTestSupport
 			Params.Message = Message;
 			State->bSucceeded = InvokeGeneratedFunction(Engine, Object, Function, &Params);
 			State->bReturnValue = Params.ReturnValue;
+			State->bCompleted = true;
+		});
+
+		return State;
+	}
+
+	TSharedRef<FAsyncGeneratedStringInvocationState> DispatchGeneratedStringInvocation(
+		FAngelscriptEngine& Engine,
+		UObject* Object,
+		UFunction* Function)
+	{
+		TSharedRef<FAsyncGeneratedStringInvocationState> State = MakeShared<FAsyncGeneratedStringInvocationState>();
+
+		AsyncTask(ENamedThreads::GameThread, [&Engine, Object, Function, State]()
+		{
+			FGeneratedStringInvocationParams Params;
+			State->bSucceeded = InvokeGeneratedFunction(Engine, Object, Function, &Params);
+			State->ReturnValue = MoveTemp(Params.ReturnValue);
 			State->bCompleted = true;
 		});
 

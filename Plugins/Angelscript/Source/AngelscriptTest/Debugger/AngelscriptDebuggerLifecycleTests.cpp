@@ -15,14 +15,19 @@ using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_Debugger_AngelscriptDebuggerLifecycleTests_Private
 {
-	bool StartLifecycleDebuggerSession(FAutomationTestBase& Test, FAngelscriptDebuggerTestSession& Session, FAngelscriptDebuggerTestClient& Client)
+	bool StartLifecycleSession(FAutomationTestBase& Test, FAngelscriptDebuggerTestSession& Session)
 	{
 		FAngelscriptDebuggerSessionConfig SessionConfig;
 		// UE 5.7: headless has no production subsystem. Let Initialize() create
 		// an isolated FAngelscriptEngine with its own FAngelscriptDebugServer.
 		SessionConfig.DefaultTimeoutSeconds = 45.0f;
 
-		if (!Test.TestTrue(TEXT("Debugger lifecycle should initialize against the debuggable production engine"), Session.Initialize(SessionConfig)))
+		return Test.TestTrue(TEXT("Debugger lifecycle should initialize against the debuggable production engine"), Session.Initialize(SessionConfig));
+	}
+
+	bool StartLifecycleDebuggerSession(FAutomationTestBase& Test, FAngelscriptDebuggerTestSession& Session, FAngelscriptDebuggerTestClient& Client)
+	{
+		if (!StartLifecycleSession(Test, Session))
 		{
 			return false;
 		}
@@ -452,6 +457,197 @@ bool FAngelscriptDebuggerSessionDisconnectClearsDebugStateTest::RunTest(const FS
 	TestEqual(TEXT("Debugger.Session.DisconnectClearsDebugState should not leave residual debugger messages queued after the reconnect invocation"), MonitorResult.ResidualMessagesAfterInvocation.Num(), 0);
 	TestTrue(TEXT("Debugger.Session.DisconnectClearsDebugState should complete the reconnect invocation successfully"), InvocationState->bSucceeded);
 	TestEqual(TEXT("Debugger.Session.DisconnectClearsDebugState should preserve the reconnect invocation return value"), InvocationState->Result, 8);
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptDebuggerSessionStopDebuggingClearsPausedStateTest,
+	"Angelscript.TestModule.Debugger.Session.StopDebuggingClearsPausedState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptDebuggerSessionStopDebuggingClearsPausedStateTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptDebuggerTestSession Session;
+	if (!StartLifecycleSession(*this, Session))
+	{
+		return false;
+	}
+
+	FAngelscriptEngine& Engine = Session.GetEngine();
+	const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateBreakpointFixture();
+	TAtomic<bool> bWorkerReady(false);
+	TAtomic<bool> bAbortWorker(false);
+	bool bWorkerStarted = false;
+	bool bWorkerJoined = false;
+	TFuture<FSingleClientDebuggerTranscript> WorkerFuture;
+	ON_SCOPE_EXIT
+	{
+		bAbortWorker = true;
+		if (bWorkerStarted && !bWorkerJoined)
+		{
+			WorkerFuture.Wait();
+		}
+
+		Engine.DiscardModule(*Fixture.ModuleName.ToString());
+		CollectGarbage(RF_NoFlags, true);
+	};
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should compile the breakpoint fixture"), Fixture.Compile(Engine)))
+	{
+		return false;
+	}
+
+	FAngelscriptBreakpoint Breakpoint;
+	Breakpoint.Filename = Fixture.Filename;
+	Breakpoint.ModuleName = Fixture.ModuleName.ToString();
+	Breakpoint.LineNumber = Fixture.GetLine(TEXT("BreakpointHelperLine"));
+	Breakpoint.Id = 2401;
+
+	FSingleClientDebuggerWorkerConfig WorkerConfig;
+	WorkerConfig.TimeoutSeconds = Session.GetDefaultTimeoutSeconds();
+	WorkerConfig.InitialBreakpoints.Add(Breakpoint);
+	FSingleClientDebuggerStopAction StopAction;
+	StopAction.bRequestCallStack = true;
+	StopAction.Command = ESingleClientDebuggerCommand::StopDebugging;
+	WorkerConfig.StopActions.Add(StopAction);
+	WorkerFuture = RunSingleClientDebuggerWorker(Session.GetPort(), bWorkerReady, bAbortWorker, WorkerConfig);
+	bWorkerStarted = true;
+
+	if (!WaitForLifecycleMonitorReady(*this, Session, bWorkerReady, TEXT("Debugger.Session.StopDebuggingClearsPausedState should finish the single-client handshake before the paused run")))
+	{
+		return false;
+	}
+
+	if (!WaitForBreakpointCount(*this, Session, 1, TEXT("Debugger.Session.StopDebuggingClearsPausedState should observe the breakpoint registration before the paused run")))
+	{
+		return false;
+	}
+
+	const TSharedRef<FAsyncModuleInvocationState> InvocationState = DispatchModuleInvocation(
+		Engine,
+		Fixture.Filename,
+		Fixture.ModuleName,
+		Fixture.EntryFunctionDeclaration);
+
+	if (!WaitForInvocationCompletion(*this, Session, InvocationState, TEXT("Debugger.Session.StopDebuggingClearsPausedState should let the paused invocation complete after StopDebugging")))
+	{
+		return false;
+	}
+
+	FSingleClientDebuggerTranscript Transcript = WorkerFuture.Get();
+	bWorkerJoined = true;
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should keep the single-client worker error-free"), Transcript.Error.IsEmpty()))
+	{
+		AddError(Transcript.Error);
+		return false;
+	}
+
+	if (!TestFalse(TEXT("Debugger.Session.StopDebuggingClearsPausedState should not time out on the paused stop"), Transcript.bTimedOut))
+	{
+		return false;
+	}
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should receive DebugServerVersion on the same client"), Transcript.DebugServerVersion.IsSet()))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should deserialize exactly one paused stop"), Transcript.StopMessages.Num(), 1);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should deserialize exactly one paused callstack"), Transcript.CallStacks.Num(), 1);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should emit a single HasContinued after StopDebugging releases the pause"), Transcript.HasContinuedCount, 1);
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should capture the paused stop"), Transcript.StopMessages.Num() == 1))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should stop because of the configured breakpoint"), Transcript.StopMessages[0].Reason, FString(TEXT("breakpoint")));
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should capture a top frame while paused"), Transcript.CallStacks.Num() == 1 && Transcript.CallStacks[0].Frames.Num() > 0))
+	{
+		return false;
+	}
+
+	const FAngelscriptCallStack& PausedCallstack = Transcript.CallStacks[0];
+	TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should stop in the breakpoint fixture source"), PausedCallstack.Frames[0].Source.EndsWith(Fixture.Filename));
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should stop at BreakpointHelperLine"), PausedCallstack.Frames[0].LineNumber, Fixture.GetLine(TEXT("BreakpointHelperLine")));
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should let StopDebugging return the debug server to idle"), WaitForDebugServerIdle(Session, Session.GetDefaultTimeoutSeconds())))
+	{
+		AddError(FString::Printf(
+			TEXT("Observed debug server state after StopDebugging: bIsDebugging=%d, bIsPaused=%d, bPauseRequested=%d, BreakpointCount=%d."),
+			Session.GetDebugServer().bIsDebugging ? 1 : 0,
+			Session.GetDebugServer().bIsPaused ? 1 : 0,
+			Session.GetDebugServer().bPauseRequested ? 1 : 0,
+			Session.GetDebugServer().BreakpointCount));
+		return false;
+	}
+
+	TestFalse(TEXT("Debugger.Session.StopDebuggingClearsPausedState should clear bIsDebugging after StopDebugging"), Session.GetDebugServer().bIsDebugging);
+	TestFalse(TEXT("Debugger.Session.StopDebuggingClearsPausedState should clear bIsPaused after StopDebugging"), Session.GetDebugServer().bIsPaused);
+	TestFalse(TEXT("Debugger.Session.StopDebuggingClearsPausedState should clear bPauseRequested after StopDebugging"), Session.GetDebugServer().bPauseRequested);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should clear all breakpoints after StopDebugging"), Session.GetDebugServer().BreakpointCount, 0);
+	TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should let the paused invocation complete successfully"), InvocationState->bSucceeded);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should preserve the paused invocation result"), InvocationState->Result, 8);
+
+	TAtomic<bool> bMonitorReady(false);
+	TAtomic<bool> bMonitorShouldStop(false);
+	TAtomic<bool> bInvocationCompleted(false);
+	TFuture<FLifecycleNoStopMonitorResult> MonitorFuture = StartLifecycleNoStopMonitor(
+		Session.GetPort(),
+		bMonitorReady,
+		bMonitorShouldStop,
+		bInvocationCompleted,
+		Session.GetDefaultTimeoutSeconds());
+	ON_SCOPE_EXIT
+	{
+		bMonitorShouldStop = true;
+		if (MonitorFuture.IsValid())
+		{
+			MonitorFuture.Wait();
+		}
+	};
+
+	if (!WaitForLifecycleMonitorReady(*this, Session, bMonitorReady, TEXT("Debugger.Session.StopDebuggingClearsPausedState should bring the no-stop monitor up before the follow-up run")))
+	{
+		return false;
+	}
+
+	const TSharedRef<FAsyncModuleInvocationState> SecondInvocationState = DispatchModuleInvocation(
+		Engine,
+		Fixture.Filename,
+		Fixture.ModuleName,
+		Fixture.EntryFunctionDeclaration);
+
+	if (!WaitForInvocationCompletion(*this, Session, SecondInvocationState, TEXT("Debugger.Session.StopDebuggingClearsPausedState should complete the follow-up invocation without a lingering stop")))
+	{
+		bMonitorShouldStop = true;
+		return false;
+	}
+
+	bInvocationCompleted = true;
+	bMonitorShouldStop = true;
+	const FLifecycleNoStopMonitorResult MonitorResult = MonitorFuture.Get();
+
+	if (!TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should keep the no-stop monitor error-free"), MonitorResult.Error.IsEmpty()))
+	{
+		AddError(MonitorResult.Error);
+		return false;
+	}
+
+	if (!TestFalse(TEXT("Debugger.Session.StopDebuggingClearsPausedState should not time out during the follow-up run"), MonitorResult.bTimedOut))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should let the follow-up monitor receive DebugServerVersion"), MonitorResult.bReceivedVersion);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should not emit any HasStopped during the follow-up run without re-registering breakpoints"), MonitorResult.UnexpectedStopCount, 0);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should not need any HasContinued messages during the follow-up run"), MonitorResult.ContinuedCount, 0);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should not leave residual debugger messages queued after the follow-up handshake"), MonitorResult.ResidualMessagesAfterHandshake.Num(), 0);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should not leave residual debugger messages queued after the follow-up invocation"), MonitorResult.ResidualMessagesAfterInvocation.Num(), 0);
+	TestTrue(TEXT("Debugger.Session.StopDebuggingClearsPausedState should complete the follow-up invocation successfully"), SecondInvocationState->bSucceeded);
+	TestEqual(TEXT("Debugger.Session.StopDebuggingClearsPausedState should preserve the follow-up invocation return value"), SecondInvocationState->Result, 8);
 	return !HasAnyErrors();
 }
 

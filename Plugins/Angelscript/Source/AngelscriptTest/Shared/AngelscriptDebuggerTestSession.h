@@ -189,6 +189,13 @@ public:
 		bool bReturnValue = false;
 	};
 
+	struct FAsyncGeneratedStringInvocationState : public TSharedFromThis<FAsyncGeneratedStringInvocationState>
+	{
+		TAtomic<bool> bCompleted = false;
+		bool bSucceeded = false;
+		FString ReturnValue;
+	};
+
 	TSharedRef<FAsyncGeneratedVoidInvocationState> DispatchGeneratedVoidInvocation(
 		FAngelscriptEngine& Engine,
 		UObject* Object,
@@ -207,6 +214,11 @@ public:
 		UFunction* Function,
 		bool Condition,
 		const FString& Message);
+
+	TSharedRef<FAsyncGeneratedStringInvocationState> DispatchGeneratedStringInvocation(
+		FAngelscriptEngine& Engine,
+		UObject* Object,
+		UFunction* Function);
 
 	bool WaitForDebugServerIdle(
 		FAngelscriptDebuggerTestSession& Session,

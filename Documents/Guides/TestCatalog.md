@@ -64,6 +64,7 @@
   - [13.2 Runtime 层学习测试](#132-runtime-层学习测试)
 - [14. Examples — 示例脚本编译](#14-examples--示例脚本编译)
 - [15. Template — 模板场景](#15-template--模板场景)
+  - [12.16 Network 网络与 RPC](#1216-network-网络与-rpc)
 - [16. Dump — 状态导出](#16-dump--状态导出)
 
 ---
@@ -307,7 +308,7 @@
 
 ## 4. Bindings — UE API 绑定
 
-> 源文件：`Bindings/` 目录下 15 个测试文件
+> 源文件：`Bindings/` 目录下的专项绑定测试文件
 
 ### 值类型与引擎核心
 
@@ -318,6 +319,45 @@
 | Bindings.TArrayMutationCompat | `int[]`：`FindIndex`/`AddUnique`/`Insert`/`RemoveSingle`/`Remove`/`Reset` | AngelscriptEngineBindingsTests.cpp |
 | Bindings.ForeachCompat | `int[]`/`TArray` 的 `for (x : arr)` 与 `const FVector&` 范围 for | AngelscriptEngineBindingsTests.cpp |
 | Bindings.TArrayIteratorCompat | `TArrayIterator`/`TArrayConstIterator` 可变迭代、常量遍历、别名迭代器累加 | AngelscriptEngineBindingsTests.cpp |
+| Bindings.TransformDeterministicCompat | `FTransform` 的构造、`TransformPosition`/`TransformPositionNoScale`、`InverseTransformPosition`、`GetRelativeTransform`、`SetTranslation`/`SetScale3D` 与 `Equals` | AngelscriptTransformBindingsTests.cpp |
+| Bindings.Transform3fCompat | `FTransform3f` 的 `Identity`、`TransformPosition`/`InverseTransformPosition`、`Inverse`、`Blend`/`BlendWith`、`opMul`、与 `FTransform` 往返转换及 setter/readback | AngelscriptTransform3fBindingsTests.cpp |
+| Bindings.RotatorAndQuat.RotatorCompat | `FRotator`/`FRotator3f` 的 `ZeroRotator`、`MakeFromEuler`、`RotateVector`/`UnrotateVector`、`Vector`、`GetInverse`、`GetNormalized`、`NormalizeAxis`/`ClampAxis` 与 quaternion round-trip | AngelscriptRotatorAndQuatBindingsTests.cpp |
+| Bindings.RotatorAndQuat.Quat4fCompat | `FQuat4f` 的 `Identity`、`Normalize`、`GetForwardVector`/`GetRightVector`/`GetUpVector`、`RotateVector`/`UnrotateVector`、`Inverse`、`Rotator`、`MakeFromEuler` 与 `Slerp` | AngelscriptRotatorAndQuatBindingsTests.cpp |
+| Bindings.VectorExtended.FloatVectorsCompat | `FVector2f`/`FVector3f` 的算术、`Size`、点叉积、归一化，以及 `FVector3f`/`FVector` 间转换 | AngelscriptVectorExtendedBindingsTests.cpp |
+| Bindings.VectorExtended.Vector4Compat | `FVector4`/`FVector4f` 的构造、算术、`FVector`/`FVector3f` 到 4D 向量构造，以及 `FVector4` 到 `FVector4f` 转换 | AngelscriptVectorExtendedBindingsTests.cpp |
+| Bindings.GeometryBounds.DoublePrecisionCompat | `FBox`/`FSphere`/`FPlane`/`FBoxSphereBounds` 的构造、`FBox::BuildAABB`/`Overlap`、`FSphere::TransformBy`/`GetVolume`、`FPlane::RayPlaneIntersection`/`SegmentPlaneIntersection`、`FBoxSphereBounds::ExpandBy`/`ComputeSquaredDistanceFromBoxToPoint` 与 double↔float conversion 路径 | AngelscriptGeometryBoundsBindingsTests.cpp |
+| Bindings.GeometryBounds.FloatPrecisionCompat | `FBox3f`/`FSphere3f`/`FPlane4f`/`FBoxSphereBounds3f` 的 point-expansion、`Intersect`/`GetClosestPointTo`、`GetVolume`、`PlaneDot`、`ExpandBy`/`ComputeSquaredDistanceFromBoxToPoint` 与 double↔float conversion 路径 | AngelscriptGeometryBoundsBindingsTests.cpp |
+| Bindings.ColorAndText.LinearColorCompat | `FLinearColor` 的算术、`GetClamped`、`LinearRGBToHSV`/`HSVToLinearRGB`、`ToFColor` 与静态常量 | AngelscriptColorAndTextBindingsTests.cpp |
+| Bindings.ColorAndText.ColorCompat | `FColor` 的 `DWColor` 往返、`ToHex`/`FromHex`、`opAddAssign`、静态常量与 `ReinterpretAsLinear` | AngelscriptColorAndTextBindingsTests.cpp |
+| Bindings.ColorAndText.TextCompat | `FText` 的 `AsCultureInvariant`、`FromName`、`Join`、`GetFormatPatternParameters`、`IdenticalTo` 与空值语义 | AngelscriptColorAndTextBindingsTests.cpp |
+| Bindings.InputKeyAndValueTypeCompat | `FKey` 的 `FName` 构造、`EKeys::*` 全局值、`IsValid`/`IsMouseButton`/`IsGamepadKey`/`IsAxis2D`/`GetKeyName`/`GetDisplayName`，以及 `FInputActionValue::GetValueTypeFromKey` 与 `FInputActionValue(FVector2D)` 读取 | AngelscriptInputBindingsTests.cpp |
+| Bindings.InputActionMappingAndSettingsCompat | `FInputActionKeyMapping` 的字段读写与 `opEquals`、`FInputBindingHandle::GetHandle` 的脚本编译入口，以及 `UInputSettings` 的 `GetActionMappings`/`DoesActionExist`/`DoesAxisExist`/`GetUniqueActionName` 与原生基线一致 | AngelscriptInputBindingsTests.cpp |
+| Bindings.InputEvents.EventReplyStateCompat | `FEventReply::Handled()` / `Unhandled()` 与 `PreventThrottling`、`SetMousePos`、`SetNavigation`、`ReleaseMouseCapture`、`ReleaseMouseLock`、`ClearUserFocus` 的脚本返回状态保持可观察的 native `FReply` 语义 | AngelscriptInputEventReplyBindingsTests.cpp |
+| Bindings.InputEvents.InputChordConstructorCompat | `FInputChord(FKey)` 与 `FInputChord(FKey,bool,bool,bool,bool)` 在脚本侧保留 key 与 modifier 字段读写语义 | AngelscriptInputEventReplyBindingsTests.cpp |
+| Bindings.InputActionValueMulAssignCompat | `FInputActionValue` 的 `opMulAssign` 链式返回、后续 `opAddAssign` 累积与 `IsNonZero()` 在脚本侧保持可执行 | AngelscriptEnhancedInputBindingsTests.cpp |
+| Bindings.InputActionValue.TypedReadbackCompat | `FInputActionValue` 的 `float32` / `FVector2D` / `FVector` / typed constructor 路径，以及 `Get()` / `GetAxis1D()` / `GetAxis2D()` / `GetAxis3D()` 读回语义 | AngelscriptInputActionValueConversionBindingsTests.cpp |
+| Bindings.InputActionValue.ConversionCompat | `FInputActionValue::ConvertToType(EInputActionValueType)` 与 `ConvertToType(const FInputActionValue&)` 在脚本侧保持 axis truncation、boolean conversion 和后续累加读回语义 | AngelscriptInputActionValueConversionBindingsTests.cpp |
+| Bindings.EnhancedInputComponentConstCompat | `const UEnhancedInputComponent` 只保留只读入口，`Clear*Bindings()` 这类可变方法在 const surface 上应拒绝编译，而可变对象仍可正常通过脚本入口 | AngelscriptEnhancedInputBindingsTests.cpp |
+| Bindings.InputDebugKeyBindingExecuteCompat | `FInputDebugKeyBinding::Execute(...)` 与 `FEnhancedInputActionEventBinding` / `FEnhancedInputActionValueBinding` 的 handle/value surface 可以共存编译，不破坏模块执行 | AngelscriptEnhancedInputBindingsTests.cpp |
+| Bindings.EnhancedInputBindingRemoval | `UEnhancedInputComponent::BindActionValue(...)`、`GetBoundActionValue(...)`、`RemoveBindingByHandle(...)`、typed `RemoveBinding(...)` 与空数组 `RemoveActionValueBinding(0)` 在脚本侧保持与原生一致的零值/移除语义 | AngelscriptEnhancedInputBindingRemovalTests.cpp |
+| FunctionLibraries.PlayerInputMappingMutators | `UPlayerInputScriptMixinLibrary` 与 `UPlayerControllerInputScriptMixinLibrary` 保持 helper type 暴露；`AddActionMapping`/`RemoveActionMapping`/`AddAxisMapping`/`RemoveAxisMapping` 与 `GetPlayerInput` 在 `ClassFuncMaps` 中维持 direct bind，同时 wrapper 调用继续与原生 `UPlayerInput` 的去重与查询结果一致 | AngelscriptPlayerInputMixinBindingsTests.cpp |
+| Bindings.AssetManagerDirectCompat | `UAssetManager` 的 `GetPrimaryAssetIdForPath`/`GetPrimaryAssetPath`/`GetPrimaryAssetIdForData` 与空列表 `UnloadPrimaryAssets` 语义；`LoadPrimaryAsset`/`LoadPrimaryAssets`/`UnloadPrimaryAsset` 保持脚本编译入口可用 | AngelscriptAssetAndDataBindingsTests.cpp |
+| Bindings.PackageDirtyCompat | `UPackage::IsDirty()` 对 transient package 的脚本结果与原生 dirty-flag 基线一致 | AngelscriptAssetAndDataBindingsTests.cpp |
+| Bindings.AnyStructParameterImplicitCompat | `FAngelscriptAnyStructParameter` 可从 reflected `USTRUCT` 值与 `FInstancedStruct` 隐式构造，并通过 `InstancedStruct` 保持底层结构体内容稳定可读 | AngelscriptAnyStructBindingsTests.cpp |
+| Bindings.EnumMetadataCompat | `UEnum` script-visible `NumEnums()` / `GetMaxEnumValue()` / `ContainsExistingMax()` / `GetDisplayNameTextByIndex()` metadata helpers match same-run native parity | AngelscriptEnumMetadataBindingsTests.cpp |
+| Bindings.WidgetLayoutValueCompat | `FMargin` 的构造、字段读写、`opAdd`/`opSub`/`opMul`、`GetTopLeft`/`GetDesiredSize`/水平垂直总空间，`FAnchors` 的构造、字段读写与 stretch 语义，以及 `FGeometry` 的 `GetLocalSize`/`GetAbsoluteSize`/`LocalToAbsolute`/`AbsoluteToLocal`/`MakeChild` | AngelscriptWidgetBindingsTests.cpp |
+| Bindings.WidgetGeometryAndPaletteCompat | `UUserWidget` 的 `GetPaletteCategory`/`SetPaletteCategory` 文本往返与 `AddToViewport` 脚本编译入口兼容 | AngelscriptWidgetBindingsTests.cpp |
+| Bindings.GASCoreValueCompat | script-generated GAS fixture class 验证 `FGameplayAttribute` 的空值/查找语义、`FGameplayEffectSpec` 两个构造路径与 `SetByCaller*Magnitudes`、以及 `FGameplayAbilitySpec` 的 class/object 构造字段回读 | AngelscriptGASCoreBindingsTests.cpp |
+| Bindings.GASCoreTypeCompileCompat | script-generated `UAngelscriptGASAbility` / `UAngelscriptAttributeSet` fixture 保持 `UAngelscriptAbilitySystemComponent`、`UAngelscriptAttributeSet`、`UAngelscriptGASAbility` 与 gameplay-attribute lookup 在 annotated module 中可声明、可编译、可执行 | AngelscriptGASCoreBindingsTests.cpp |
+| Bindings.GASActorTypeCompileCompat | `AAngelscriptGASActor` / `AAngelscriptGASPawn` / `AAngelscriptGASCharacter` 在脚本侧保持可声明、可继承，并允许子类编译期访问 `AbilitySystem` 及其 `GetOwner()` / `HasBegunPlay()` 组件表面 | AngelscriptGASActorBindingsTests.cpp |
+| Bindings.GASActorSpawnedASCCompat | 在 world 中 spawn 的 script-generated GAS actor/pawn/character 子类可于 `BeginPlay` 直接观测非空 `AbilitySystem`，并验证该组件 owner 指回脚本 actor 且已进入 begun-play 生命周期 | AngelscriptGASActorBindingsTests.cpp |
+| Bindings.WorldAndSubsystem.WorldStateCompat | `UWorld` 的 `GetTimeSeconds`/`GetUnpausedTimeSeconds`/`GetRealTimeSeconds`/`GetAudioTimeSeconds`/`GetDeltaSeconds`、`IsGameWorld`/`IsEditorWorld`/`IsPreviewWorld`/`IsStartingUp`/`IsTearingDown`，以及 `ULevel` 的 `GetLevelScriptActor`/`IsVisible`/`IsBeingRemoved` | AngelscriptWorldAndSubsystemBindingsTests.cpp |
+| Bindings.WorldAndSubsystem.SubsystemGetCompat | `UReplaySubsystem::Get()`、`UViewportStatsSubsystem::Get()` 与 `UEnhancedInputLocalPlayerSubsystem::Get(ULocalPlayer)` 的 `Type::Get()` 绑定兼容性 | AngelscriptWorldAndSubsystemBindingsTests.cpp |
+| Bindings.FunctionLibrary.SubsystemWorldContextCompileCompat | `Subsystem::GetGameInstanceSubsystem()` / `GetWorldSubsystem()` 在脚本侧保持可编译 | AngelscriptFunctionLibraryBindingsTests.cpp |
+| Bindings.FunctionLibrary.SubsystemLocalPlayerCompileCompat | `Subsystem::GetLocalPlayerSubsystem()` / `GetLocalPlayerSubsystemFromLocalPlayer()` / `GetLocalPlayerSubsystemFromPlayerController()` 在脚本侧保持可编译 | AngelscriptFunctionLibraryBindingsTests.cpp |
+
+| Bindings.SubsystemAccessor.EngineSubsystemGetCompat | `UInputDeviceSubsystem::Get()` direct `Type::Get()` 与 `Subsystem::GetEngineSubsystem()` 在脚本侧返回同一个 native engine subsystem | AngelscriptSubsystemAccessorBindingsTests.cpp |
+| Bindings.SubsystemAccessor.LocalPlayerControllerGetCompat | `UEnhancedInputLocalPlayerSubsystem::Get(ULocalPlayer)` 与 `Get(APlayerController)` 返回同一个 local-player subsystem | AngelscriptSubsystemAccessorBindingsTests.cpp |
 
 ### 全局变量与控制台
 
@@ -335,6 +375,8 @@
 | 测试名 | 验证内容 | 源文件 |
 |--------|----------|--------|
 | Bindings.OptionalCompat | `TOptional<int>`：`IsSet`/`Get`/`Set`/`GetValue`/`Reset`；`TOptional<FName>` | AngelscriptContainerBindingsTests.cpp |
+| Bindings.Optional.MethodMutationCompat | `TOptional<int>` 的可变 `GetValue()` 写回、`Reset()` 后 `Get(DefaultValue)` 回退，以及重新 `Set()` 后的读回 | AngelscriptOptionalMethodTraitBindingsTests.cpp |
+| Bindings.Optional.MethodTraits | `TOptional<int>` 的 `IsSet()`、两个 `GetValue()` 重载与 `Get(DefaultValue)` 在脚本类型系统中的声明与 `no_discard` trait | AngelscriptOptionalMethodTraitBindingsTests.cpp |
 | Bindings.SetCompat | `TSet<int>`：去重 `Add`/`Contains`/拷贝/`Remove`/`Reset`；`TSet<FName>` | AngelscriptContainerBindingsTests.cpp |
 | Bindings.MapCompat | `TMap<FName,int>`：`Add` 覆盖/`Find`/`FindOrAdd`/复制/`Remove`/`Reset` | AngelscriptContainerBindingsTests.cpp |
 | Bindings.ArrayForeach | `TArray` 的 `foreach (值, 索引)` 累加元素和与索引和 | AngelscriptContainerBindingsTests.cpp |
@@ -373,6 +415,9 @@
 | 测试名 | 验证内容 | 源文件 |
 |--------|----------|--------|
 | Bindings.ObjectPtrCompat | `TObjectPtr<UTexture2D>`：空/构造/赋值/比较/`Get`/与裸指针转换 | AngelscriptObjectBindingsTests.cpp |
+| Bindings.WeakObjectPtrCompat | `TWeakObjectPtr<UTexture2D>`：空/显式空/赋值/复制/比较/`Get`/`IsValid`/`IsStale`/`IsExplicitlyNull` | AngelscriptObjectBindingsTests.cpp |
+| Bindings.ObjectProperty.TObjectPtrReflection | script-declared `UPROPERTY() TObjectPtr<UTexture2D>`：生成 `FObjectProperty`、保留 `PropertyClass`，并支持反射写入后由脚本 getter 读回、以及脚本 setter 写回后由 C++ 反射读回 | AngelscriptObjectPropertyBindingsTests.cpp |
+| Bindings.ObjectProperty.TWeakObjectPtrReflection | script-declared `UPROPERTY() TWeakObjectPtr<UTexture2D>`：生成 `FWeakObjectProperty`、保留 `PropertyClass`，并支持反射写入后由脚本 getter 读回、以及脚本 setter 写回后由 C++ 反射读回 | AngelscriptObjectPropertyBindingsTests.cpp |
 | Bindings.SoftObjectPtrCompat | `TSoftObjectPtr<UTexture2D>`：空/有效/`==`/`Get`/`ToSoftObjectPath`/路径构造/`Reset` | AngelscriptObjectBindingsTests.cpp |
 
 ### 兼容性（Cast/DateTime/Timespan）
@@ -389,8 +434,20 @@
 | 测试名 | 验证内容 | 源文件 |
 |--------|----------|--------|
 | Bindings.MathExtendedCompat | `Math::` 扩展：`RandHelper`/`IsPowerOfTwo`/`VRand`/`ClampAngle`/`Clamp`/插值系列/三次插值，以及 `FVector2f::ToDirectionAndLength`、`Math::LinePlaneIntersection(FPlane)`、`int64 Abs/Sign/Min/Max/Square` 等低风险 parity 闭环 | AngelscriptMathAndPlatformBindingsTests.cpp |
+| Bindings.MathInterpolationCompat | `Bind_FMath.cpp`：`Math::QInterpTo(...)` / `QInterpConstantTo(...)`、`VInterpNormalRotationTo(...)`、`Vector2DInterpTo(...)` / `Vector2DInterpConstantTo(...)`、`CInterpTo(...)` 在 `FQuat` / `FQuat4f` / `FVector` / `FVector2D` / `FLinearColor` 上与同轮 native baseline 对齐 | AngelscriptMathInterpolationBindingsTests.cpp |
+| Bindings.MathEasingOverloadsCompat | `Bind_FMath.cpp`：`Math::EaseIn(...)` / `EaseOut(...)` / `EaseInOut(...)`、`Sinusoidal*`、`Expo*`、`Circular*` 的 `float64`、`float32`、`FVector` easing overload 与同轮 native baseline 对齐 | AngelscriptMathEasingBindingsTests.cpp |
+| Bindings.MathCubicDerivativeCompat | `Bind_FMath.cpp`：`Math::CubicInterpDerivative(...)` 的 `FVector` / `FRotator` / `FVector3f` / `FRotator3f` 重载与同轮 native baseline 对齐 | AngelscriptMathCubicDerivativeBindingsTests.cpp |
+| Bindings.MathIntegerDivisionCompat | `Math::IntegerDivisionTrunc(...)`：`int32`/`int64`/`uint32`/`uint64` 的向零截断语义，以及四个整数重载在除数为 0 时统一抛出 `Division by zero` 运行时异常 | AngelscriptMathIntegerDivisionBindingsTests.cpp |
 | Bindings.PlatformProcessCompat | `FPlatformProcess`：用户目录/设置/临时/可执行路径/计算机名/用户名/`CanLaunchURL` | AngelscriptMathAndPlatformBindingsTests.cpp |
+| Bindings.PlatformProcessExactCompat | `FPlatformProcess` 的 `UserDir()` / `UserSettingsDir()` / `UserTempDir()` / `ApplicationSettingsDir()` / `ExecutablePath()` / `ExecutableName()` / `CurrentWorkingDirectory()` / `ComputerName()` / `UserName()` / `GameBundleId()` 与 `CanLaunchURL(...)` 在脚本侧保持同轮 native 精确对齐 | AngelscriptPlatformProcessExactBindingsTests.cpp |
+| Bindings.PlatformMisc.EnvironmentCompat | `FPlatformMisc::GetEnvironmentVariable(...)` 对 `PATH` 的脚本返回值与同轮 native 值精确一致，且缺失变量保持空字符串语义 | AngelscriptPlatformMiscEnvironmentBindingsTests.cpp |
+| Bindings.GenericPlatformMisc.RequestExitCompileSurface | `Bind_FGenericPlatformMisc.cpp`：`FGenericPlatformMisc::RequestExit(bool)` 在脚本侧保持 compile-surface helper 可编译且可解析，只执行安全 `Entry()` 路径而不触发真实进程退出 | AngelscriptGenericPlatformMiscBindingsTests.cpp |
+| Bindings.PlatformApplicationMiscClipboardCompat | `FPlatformApplicationMisc::ClipboardCopy(...)` / `ClipboardPaste(...)` 在脚本侧保持与 native clipboard 的双向往返一致性，并在回归结束后恢复原始剪贴板内容 | AngelscriptPlatformApplicationMiscBindingsTests.cpp |
 | Bindings.Logging | `Log`/`LogDisplay`/`Warning`/`Error` 可执行；`AddExpectedError` 捕获 Error 输出 | AngelscriptMathAndPlatformBindingsTests.cpp |
+| Bindings.Logging.ConditionalAndCategoryCompat | `Bind_Logging.cpp` 的 `LogIf` / `LogInfoIf` / `LogDisplayIf` / `WarningIf` / `ErrorIf` 与带 `FName` category 的 `Log` / `LogInfo` / `LogDisplay` / `Warning` / `Error` overload 在脚本侧保持可编译、可执行 | AngelscriptLoggingBindingsTests.cpp |
+| Bindings.Logging.ThrowIfExceptionCompat | `ThrowIf(false, ...)` 在脚本侧不抛出异常，`ThrowIf(true, ...)` 抛出可捕获的 script exception 并保留消息内容 | AngelscriptLoggingBindingsTests.cpp |
+| Bindings.Debugging.EnsureDeduplicatesAndResetCompat | `Bind_Debugging.cpp` 的 `ensure(...)` 在脚本侧保持返回值语义，同一脚本位置的重复 `ensure(false, ...)` 在单次运行内只记录一次，`AngelscriptForgetSeenEnsures()` 后可再次记录 | AngelscriptDebugEnsureBindingsTests.cpp |
+| Bindings.Debugging.EnsureAlwaysLogsEveryInvocationCompat | `Bind_Debugging.cpp` 的 `ensureAlways(...)` 在脚本侧保持返回值语义，同一脚本位置的重复 `ensureAlways(false, ...)` 每次调用都会记录 | AngelscriptDebugEnsureBindingsTests.cpp |
 
 ### 杂项工具
 
@@ -398,9 +455,19 @@
 |--------|----------|--------|
 | Bindings.HashCompat | `Hash::CityHash32/64`、带种子哈希的确定性与区分 | AngelscriptUtilityBindingsTests.cpp |
 | Bindings.UtilityCompat | `FCommandLine::Get` 非空/`Parse` 与 C++ 一致/`FApp::GetProjectName` 一致 | AngelscriptUtilityBindingsTests.cpp |
+| Bindings.AppCompat | `Bind_FApp.cpp` keeps script-visible `FApp::CanEverRender()` and exact `FApp::GetProjectName()` aligned with same-run native app state | AngelscriptAppBindingsTests.cpp |
+| Bindings.CoreGlobalsCompat | `Bind_CoreGlobals.cpp` exposes `IsRunningCommandlet()` / `IsRunningCookCommandlet()` / `IsRunningDLCCookCommandlet()` / `GetRunningCommandletClass()` with same-run native process-state parity | AngelscriptCoreGlobalsBindingsTests.cpp |
+| Bindings.BodyInstanceCompat | `Bind_FBodyInstance.cpp` keeps script-visible `FBodyInstance::GetBodySetup()` and `SetUseCCD(...)` aligned with same-run native body-instance state | AngelscriptBodyInstanceBindingsTests.cpp |
+| Bindings.JsonFieldMutationCompat | `Bind_Json.cpp` keeps script-visible `FJsonObject::LoadFromString()` / `TryGetObjectField()` / `TryGetArrayField()` / `RemoveField()` / `RemoveAllFields()` and iterator-derived `FJsonValue` typed extraction semantics aligned on deterministic in-memory JSON data | AngelscriptJsonFieldMutationBindingsTests.cpp |
+| Bindings.JsonCopyAndArrayCompat | `Bind_Json.cpp` keeps script-visible `FJsonArray::Empty()` and `FJsonObject(FJsonObject)` copy-constructor alias semantics stable on deterministic in-memory JSON data | AngelscriptJsonFieldMutationBindingsTests.cpp |
 | Bindings.ParseCompat | `FParse::Value` 解析 int/float/FString，`FParse::Bool` 解析 bool | AngelscriptUtilityBindingsTests.cpp |
+| Bindings.CommandLineParse.QuotedCompat | 预置 `Tokens`/`Switches` 后，`FCommandLine::Parse` 对带引号 token 与多 switch 输入保持与原生相同的追加顺序和分词结果 | AngelscriptCommandLineAndParseEdgeBindingsTests.cpp |
+| Bindings.CommandLineParse.MissingKeyGuards | `FParse::Value` / `FParse::Bool` 在命中和 miss 两条路径上都与原生一致，并在缺失键时保持输出 sentinel 不变 | AngelscriptCommandLineAndParseEdgeBindingsTests.cpp |
 | Bindings.RandomStreamCompat | `FRandomStream`：种子/`RandRange` 可重复/`GetFraction`/双精度范围/拷贝/`GenerateNewSeed`/`ToString` | AngelscriptUtilityBindingsTests.cpp |
 | Bindings.StringRemoveAtCompat | `FString::RemoveAt` 删除子串后内容正确 | AngelscriptUtilityBindingsTests.cpp |
+| Bindings.String.FormatHelpersCompat | `FString::Join(...)`, 1-arg and 5-arg `FString::Format(...)`, and representative `FString::ApplyFormat(...)` overloads preserve script-visible formatting output | AngelscriptStringFormattingBindingsTests.cpp |
+| Bindings.String.ParseIntoArrayCompat | `FString::ParseIntoArray(...)` preserves single-delimiter empty-token handling, cull-empty behavior, and multi-delimiter parsing | AngelscriptStringFormattingBindingsTests.cpp |
+| Bindings.String.ParseIntoArrayDelimiterLimit | `FString::ParseIntoArray(...)` with more than 16 delimiters raises the current script exception guard instead of silently truncating or reading past the fixed delimiter buffer | AngelscriptStringFormattingBindingsTests.cpp |
 
 ### GUID 与路径
 
@@ -408,6 +475,7 @@
 |--------|----------|--------|
 | Bindings.GuidCompat | `FGuid`：构造/`ToString`/`Parse`/`ParseExact`/`Invalidate`/`NewGuid`/`GetTypeHash` | AngelscriptCoreMiscBindingsTests.cpp |
 | Bindings.PathsCompat | `FPaths`：`ProjectDir`/`CombinePaths`/`IsRelative`/`GetExtension`/`DirectoryExists`/`FileExists` | AngelscriptCoreMiscBindingsTests.cpp |
+| Bindings.PathsMutationCompat | `FPaths`：`GetPathLeaf`/`ChangeExtension`/`SetExtension`/`Split`/`NormalizeFilename`/`NormalizeDirectoryName`/`CollapseRelativeDirectories`/`RemoveDuplicateSlashes`/`MakeStandardFilename`/`MakePlatformFilename` 与 native 结果对齐 | AngelscriptCoreMiscBindingsTests.cpp |
 | Bindings.NumberFormattingOptionsCompat | `FNumberFormattingOptions` 链式 Set、`IsIdentical`、`GetTypeHash`；默认预设 | AngelscriptCoreMiscBindingsTests.cpp |
 
 ### GameplayTag
@@ -417,15 +485,21 @@
 | Bindings.GameplayTagCompat | `RequestGameplayTag`/空 Tag/`RequestGameplayTag(NAME_None,false)` | AngelscriptGameplayTagBindingsTests.cpp |
 | Bindings.GameplayTagContainerCompat | `FGameplayTagContainer`：空/增删/`HasTag`/`HasAny`/`HasAll`/`AppendTags`/`Reset` | AngelscriptGameplayTagBindingsTests.cpp |
 | Bindings.GameplayTagQueryCompat | `FGameplayTagQuery`：`MakeQuery_MatchAny/All/No/Exact`、与 Container 匹配逻辑 | AngelscriptGameplayTagBindingsTests.cpp |
+| Bindings.GameplayTagExtended.MixinCompileCompat | `FGameplayTagQuery::Matches()` / `GetDescription()` 在脚本侧保持可编译，覆盖 GameplayTag query mixin library 的扩展 compat 面 | AngelscriptGameplayTagExtendedBindingsTests.cpp |
+| Bindings.GameplayTagExtended.PropertyMapApplyCompat | `FGameplayTagBlueprintPropertyMap.Initialize(valid, valid)` / `ApplyCurrentTags()` 可驱动映射 bool/int 属性与 ASC tag count 对齐 | AngelscriptGameplayTagExtendedBindingsTests.cpp |
 
 ### 委托与文件
 
 | 测试名 | 验证内容 | 源文件 |
 |--------|----------|--------|
 | Bindings.ScriptDelegateCompat | `delegate`/`event`：`BindUFunction`/`AddUFunction`/`Unbind`/`Clear`/`IsBound` | AngelscriptFileAndDelegateBindingsTests.cpp |
+| Bindings.ScriptDelegateSignatureCompat | `__DelegateSignature(?& Delegate)` 应返回 script-declared delegate 的 generated `UDelegateFunction`，且 generated wrapper 可通过 `_Inner` 走 `_FScriptDelegate` / `_FMulticastScriptDelegate` 的 signature-aware ctor、`BindUFunction` 与 `AddUFunction` 路径 | AngelscriptDelegateSignatureBindingsTests.cpp |
+| Bindings.ScriptDelegateSignatureMismatchCompat | signature-aware `_Inner.BindUFunction` / `_Inner.AddUFunction` 传入不兼容 delegate signature 时应抛出兼容性异常，并保留可断言的 script exception 文本与行号 | AngelscriptDelegateSignatureBindingsTests.cpp |
 | Bindings.SoftPathCompat | `FSoftObjectPath`/`FSoftClassPath` 有效性/资源名/包名/`IsSubobject`/相等 | AngelscriptFileAndDelegateBindingsTests.cpp |
 | Bindings.SourceMetadataCompat | 磁盘 `.as` 编译后：`UClass`/`UFunction` 源路径/模块名/脚本声明/行号 | AngelscriptFileAndDelegateBindingsTests.cpp |
 | Bindings.FileHelperCompat | `FFileHelper::SaveStringToFile` / `LoadFileToString` 读写一致 | AngelscriptFileAndDelegateBindingsTests.cpp |
+| Bindings.FileHelper.AppendUtf8WithoutBom | `FFileHelper::SaveStringToFile(... ForceUTF8WithoutBOM)` 与 `EFileWrite::Append` 在脚本侧保持与原生写后结果一致，并确认追加路径不写入 UTF-8 BOM | AngelscriptFileHelperFlagBindingsTests.cpp |
+| Bindings.FileHelper.NoReplaceExisting | `FFileHelper::SaveStringToFile(... EFileWrite::NoReplaceExisting)` 在脚本侧保持与当前 UE 5.7 原生基线一致，返回值与写后文件内容对齐 | AngelscriptFileHelperFlagBindingsTests.cpp |
 
 ### 原生引擎方法
 
@@ -527,6 +601,7 @@
 |--------|----------|
 | Internals.DataType.Primitives | 内部原始类型表示 |
 | Internals.DataType.Comparisons | 类型比较/相等语义 |
+| Internals.DataType.TemplateSubtypeMatrix | `asCDataType` 的 `MakeArray(...)`、`TArray<int>` / `TMap<FName, int>` 模板子类型枚举，以及外层 `const` / `&` 限定不应污染子类型身份 |
 | Internals.DataType.ObjectHandles | 对象句柄类型 |
 | Internals.DataType.SizeAndAlignment | 大小与对齐 |
 
@@ -711,6 +786,23 @@
 | `Angelscript.TestModule.Debugger.Smoke.*` | `Debugger/AngelscriptDebuggerSmokeTests.cpp` | 调试会话握手、server version 返回与基础连接链路 |
 | `Angelscript.TestModule.Debugger.Breakpoint.*` | `Debugger/AngelscriptDebuggerBreakpointTests.cpp` | 断点下发、命中行号、分支忽略与继续执行行为 |
 | `Angelscript.TestModule.Debugger.Stepping.*` | `Debugger/AngelscriptDebuggerSteppingTests.cpp` | `StepIn` / `StepOver` / `StepOut` 的停止行为与调用栈变化 |
+
+---
+
+## 11.6 StaticJIT — 静态 JIT
+
+> 源文件：`AngelscriptRuntime/Tests/AngelscriptStaticJITTests.cpp`、`AngelscriptRuntime/Tests/AngelscriptStaticJITDatabaseTests.cpp`、`AngelscriptRuntime/Tests/AngelscriptPrecompiledDataTests.cpp`、`AngelscriptRuntime/Tests/AngelscriptPrecompiledRoundtripTests.cpp`、`AngelscriptRuntime/Tests/AngelscriptPrecompiledFunctionImportRoundtripTests.cpp`、`AngelscriptRuntime/Tests/AngelscriptPrecompiledAllocatorTests.cpp`
+
+| 测试前缀 | 代表源文件 | 验证内容 |
+|--------|----------|----------|
+| `Angelscript.CppTests.StaticJIT.CompileFunction.*` | `AngelscriptStaticJITTests.cpp` | generate-mode `FAngelscriptStaticJIT::CompileFunction()` 会把脚本函数排入待生成队列，且 `ReleaseJITFunction()` 保持 no-op 语义 |
+| `Angelscript.CppTests.StaticJIT.GenerateSourceText.*` | `AngelscriptStaticJITTests.cpp` | `GenerateStaticJITSourceTextForTesting()` 对 null module 给出显式失败信息，并在 debug metadata 开关切换时生成不同的源码输出 |
+| `Angelscript.CppTests.StaticJIT.Database.*` | `AngelscriptStaticJITDatabaseTests.cpp` | `FJITDatabase` registrars 会写入精确的 function/lookup/pointer state，`Get()` 保持单例稳定，`Clear()` 清空全部容器，且 scoped snapshot 可恢复先前数据库状态 |
+| `Angelscript.CppTests.StaticJIT.PrecompiledData.*` | `AngelscriptPrecompiledDataTests.cpp` | precompiled class 的高位 editor-only flag roundtrip 与 module diff 对高位 private flag 的结构变更判断 |
+| `Angelscript.CppTests.StaticJIT.PrecompiledData.EmptyDataRoundtrip` | `AngelscriptPrecompiledRoundtripTests.cpp` | 空 precompiled data 的 Save/Load 往返保留 `DataGuid`、`BuildIdentifier`、`StaticNames`，且空容器保持为空 |
+| `Angelscript.CppTests.StaticJIT.PrecompiledData.ModuleDataRoundtrip` | `AngelscriptPrecompiledRoundtripTests.cpp` | 最小 module 样例的 Save/Load 往返保留 `CodeHash`、`ImportedModules`、`PostInitFunctions`、script relative filename，以及 class/function/enum/global metadata 与 reference maps |
+| `Angelscript.CppTests.StaticJIT.PrecompiledData.FunctionImport.*` | `AngelscriptPrecompiledFunctionImportRoundtripTests.cpp` | imported function 的 precompiled signature / source-module metadata 往返，并能重建为 `asCModule` import entry |
+| `Angelscript.CppTests.StaticJIT.PrecompiledAllocator.*` | `AngelscriptPrecompiledAllocatorTests.cpp` | precompiled allocator 的 resize/move、对齐保持与数据保留语义 |
 
 ---
 
@@ -1064,6 +1156,23 @@
 
 ---
 
+### 12.16 Network 网络与 RPC
+
+> 源文件：`Network/AngelscriptNetworkReplicationTests.cpp`
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| Network.Replication.ActorSurfaceBuildsReplicatedPropsAndRpcFlags | 脚本 Actor 的 `UPROPERTY(Replicated/ReplicatedUsing)`、`UASClass::GetLifetimeScriptReplicationList()` 以及 `UFUNCTION(Server/Client/NetMulticast)` 的反射 flags / `_Validate` 缓存保持一致 |
+
+## 11.7 Commandlet - 命令行入口与 Smoke
+
+> 源文件：`AngelscriptRuntime/Tests/AngelscriptCommandletSmokeTests.cpp`
+
+| 测试前缀 | 代表源文件 | 验证内容 |
+|--------|----------|----------|
+| `Angelscript.CppTests.Commandlet.TestCommandlet.*` | `AngelscriptCommandletSmokeTests.cpp` | `UAngelscriptTestCommandlet` 可实例化，空 `Main()` 在 `bDidInitialCompileSucceed=true` 时返回 0，并在 compile gate 关闭时稳定返回 1 |
+| `Angelscript.CppTests.Commandlet.AllScriptRoots.*` | `AngelscriptCommandletSmokeTests.cpp` | `UAngelscriptAllScriptRootsCommandlet` 可实例化，并在可发现 script roots 的前提下空 `Main()` 稳定返回 0 |
+
 ## 16. Dump — 状态导出
 
 > 源文件：`Dump/AngelscriptDumpCommand.cpp`、`Dump/AngelscriptDumpTests.cpp`
@@ -1076,3 +1185,88 @@
 | Dump.CSVWriter.SpecialCharacters | `FCSVWriter` 对逗号、双引号与换行字段做正确 CSV 转义 |
 | Dump.DumpAll.EndToEnd | `FAngelscriptStateDump::DumpAll()` 会生成 Phase 1-7 约定的全部 CSV 文件 |
 | Dump.DumpAll.Summary | `DumpSummary.csv` 会为每张表写出状态与行数；当前 `ToStringTypes` / `HotReloadState` / `CodeCoverage` 的 `NotAvailable` / `PartialExport` / `Skipped` 属于受 public API 与编译开关约束的预期结果 |
+> Recent Additions
+>
+> | Test Name | Coverage | Source File |
+> | --- | --- | --- |
+> | `Bindings.MathQuat4fAndTransform3fOrientation` | `AngelscriptMathLibrary.h` keeps script-visible `FQuat4f::MakeFromX/Y/Z/XY/XZ/YX/YZ/ZX/ZY(...)` plus `FTransform3f::TransformRotation(...)`, `InverseTransformRotation(...)`, `MakeFromXY/XZ/YX/YZ/ZX/ZY(...)`, and the current `SetRotation(FQuat4f)` script contract aligned with same-run native `FRotationMatrix44f` and `FTransform3f` baselines | `AngelscriptMathQuat4fAndTransform3fFunctionLibraryTests.cpp` |
+> | `Bindings.ProjectileMovementHomingTargetCompat` | `Bind_UProjectileMovementComponent.cpp` keeps script-visible `GetHomingTargetComponent()` / `SetHomingTargetComponent(...)` aligned with native homing-target weak-pointer reads and setter round-trips across distinct `USceneComponent` fixtures | `AngelscriptProjectileMovementBindingsTests.cpp` |
+> | `Bindings.WidgetCreateCompat` | `Bind_UUserWidget.cpp` keeps script-visible `WidgetBlueprint::CreateWidget` aligned with ambient world-context resolution, scripted `UUserWidget` instantiation, and owning-player propagation on the native return object | `AngelscriptWidgetBindingsTests.cpp` |
+> | `Bindings.WorldContextScope.PushPop` | script-visible `FAngelscriptGameThreadScopeWorldContext` should install an actor-backed ambient world context inside scope, make `GetCurrentWorld()` resolve through that actor, and clear the context after destruction | `AngelscriptWorldContextScopeBindingsTests.cpp` |
+> | `Bindings.WorldContextScope.RestoreOuterAmbient` | nested script-visible `FAngelscriptGameThreadScopeWorldContext` scopes should restore the previous outer ambient actor context after inner and outer destruction | `AngelscriptWorldContextScopeBindingsTests.cpp` |
+> | `Bindings.InstancedStruct.TypeMetadataCompat` | `FInstancedStruct` script-visible type metadata via `GetScriptStruct()`, `Contains(UScriptStruct)`, and `InitializeAs(UScriptStruct)` | `AngelscriptInstancedStructBindingsTests.cpp` |
+> | `Bindings.InstancedStruct.MismatchedExtractGuards` | mismatched `FInstancedStruct::Get(out)` should raise a script exception that names both the requested and stored struct types | `AngelscriptInstancedStructBindingsTests.cpp` |
+> | `Bindings.CpuProfilerTraceScopedCompat` | `FCpuProfilerTraceScoped` stays script-visible and supports nested `FName`-based scope construction through the bind seam without relying on profiler backend state | `AngelscriptCpuProfilerTraceBindingsTests.cpp` |
+> | `Bindings.ConfigEnumAliases` | `Bind_ConfigEnums.cpp` exposes the stable built-in `ETraceTypeQuery::Visibility/Camera` and `EObjectTypeQuery::WorldStatic/WorldDynamic/PhysicsBody` aliases with values matching the native `UCollisionProfile` baseline | `AngelscriptConfigEnumBindingsTests.cpp` |
+> | `Bindings.ConfigEnumAliasRoundTrips` | config-enum aliases remain compatible with `UCollisionProfile::ConvertToCollisionChannel` round trips for the built-in trace and object channels | `AngelscriptConfigEnumBindingsTests.cpp` |
+> | `Bindings.SystemTimers.PauseResumeOneShotHandle` | `Bind_SystemTimers.cpp` keeps `System::SetTimer`, `PauseTimerHandle`, `UnPauseTimerHandle`, and `IsTimerPausedHandle` aligned with native timer-manager paused/active state and remaining-time freeze semantics for a one-shot actor timer | `AngelscriptSystemTimersBindingsTests.cpp` |
+> | `Bindings.SystemTimers.ClearInvalidateLoopingHandle` | `Bind_SystemTimers.cpp` keeps `ClearAndInvalidateTimerHandle` aligned with native timer-manager deregistration and script-visible `FTimerHandle` invalidation for a looping actor timer | `AngelscriptSystemTimersBindingsTests.cpp` |
+> | `Bindings.SceneComponentChildQueryCompat` | `Bind_USceneComponent.cpp` keeps script-visible `GetChildComponentByClass(...)` and `GetChildrenComponentsByClass(...)` aligned with native direct-child lookup, recursive descendant filtering, and typed `TArray<USceneComponent>` / `TArray<USphereComponent>` output semantics across a registered component hierarchy | `AngelscriptSceneComponentChildBindingsTests.cpp` |
+> | `Bindings.SceneComponentChildQueryErrorPaths` | `Bind_USceneComponent.cpp` rejects non-scene-component out arrays and mismatched query-class vs. out-array subtype pairs for `GetChildrenComponentsByClass(...)`, preserving the expected script exception text on both guard paths | `AngelscriptSceneComponentChildBindingsTests.cpp` |
+> | `Bindings.SceneComponentTransformStateCompat` | `Bind_USceneComponent.cpp` keeps script-visible unregistered `GetComponentTransform()` parent composition, `SetRelativeLocation(...)` world-update parity, and `SetComponentVelocity(...)` aligned with a native parent/child scene-component fixture that never registers into the world | `AngelscriptSceneComponentTransformStateBindingsTests.cpp` |
+> | `Bindings.SceneComponentScopedMovementCompat` | `Bind_USceneComponent.cpp` keeps script-visible `FScopedMovementUpdate` construction/destruction compatible with registered `USceneComponent` movement, preserving relative location, component velocity, and final world translation across a scoped move | `AngelscriptSceneComponentTransformStateBindingsTests.cpp` |
+> | `Bindings.ActorComponentQueryCompat` | `Bind_AActor.cpp` keeps both `GetComponentsByClass(...)` overloads aligned with native actor-owned component enumeration, typed `TArray<UActorComponent>` / `TArray<USceneComponent>` collection, and explicit `USceneComponent` / `USphereComponent` class filtering across a spawned actor fixture | `AngelscriptActorComponentQueryBindingsTests.cpp` |
+> | `Bindings.ActorComponentQueryErrorPaths` | `Bind_AActor.cpp` rejects non-component out arrays and mismatched query-class vs. out-array subtype pairs for `GetComponentsByClass(...)`, preserving the expected script exception text on both guard paths | `AngelscriptActorComponentQueryBindingsTests.cpp` |
+> | `Bindings.ActorGlobalQueryCompat` | `Bind_AActor.cpp` keeps `GetAllActorsOfClass(...)`, `GetAllActorsOfClass(UClass, ...)`, and `GetAllActorsOfClassWithTag(...)` aligned with native typed actor/pawn collection, explicit class filtering, and tag queries across spawned script-generated probe actors carrying reflected `QueryId` markers | `AngelscriptActorGlobalQueryBindingsTests.cpp` |
+> | `Bindings.ActorGlobalQueryErrorPaths` | `Bind_AActor.cpp` rejects non-actor out arrays, null explicit query classes, and mismatched query-class vs. out-array subtype pairs for global actor queries while preserving the expected script exception text on all three reachable guard paths | `AngelscriptActorGlobalQueryBindingsTests.cpp` |
+> | `Bindings.ActorStateCompat` | `Bind_AActor.cpp` keeps script-visible `IsActorInitialized()`, `HasActorBegunPlay()`, `IsHidden()`, `GetActorLocation()`, `GetActorRotation()`, `GetActorNameOrLabel()`, `GetGameInstance()`, `SetActorScale3D(...)`, and `SetActorTickInterval(...)` aligned with same-run native state on a spawned actor fixture backed by an explicit transient scene root | `AngelscriptActorStateBindingsTests.cpp` |
+> | `Bindings.ObjectLifecycleCompat` | `Bind_UObject.cpp` keeps script-visible `AddToRoot()` / `RemoveFromRoot()` / `GetIsRooted()` / `IsTransient()` / `SetTransactional(true)` and `GetTypedOuter(...)` aligned with native transient flags plus outer/package state on transient `UTexture2D` fixtures, including the null-outer `NewObject(...)` fallback path | `AngelscriptObjectLifecycleBindingsTests.cpp` |
+> | `CppTests.Networking.FakeNetDriver.Defaults` | `UFakeNetDriver` keeps the expected `UNetDriver` inheritance metadata, `Engine` config bucket, and mirrors `bIsServer` through `IsServer()` | `AngelscriptFakeNetDriverTests.cpp` |
+> | `CppTests.Networking.FakeNetDriver.GarbageCollection` | transient `UFakeNetDriver` instances are reclaimed once the final strong reference is released, locking the runtime networking seam's GC baseline | `AngelscriptFakeNetDriverTests.cpp` |
+> | `Bindings.Stats.TypeExposure` | `Bind_Stats.cpp` keeps `FStatID` and `FScopeCycleCounter` script-visible and supports `FStatID(FName)` plus stat-backed scope construction through the bind seam without depending on runtime stat capture output | `AngelscriptStatsBindingsTests.cpp` |
+> | `Bindings.Stats.ObjectScopeCompat` | `Bind_Stats.cpp` keeps `FScopeCycleCounter` compatible with script-visible `UObject` sources such as `GetTransientPackage()` and `UObject::StaticClass().GetDefaultObject()` | `AngelscriptStatsBindingsTests.cpp` |
+> | `Bindings.HitResult.TraceConstructorCompat` | `Bind_FHitResult.cpp` keeps the direct `FHitResult(FVector, FVector)` constructor aligned with native trace-start/trace-end initialization while preserving script-visible `Distance`/`Time`/`PenetrationDepth` and vector/name field round-trips | `AngelscriptHitResultBindingsTests.cpp` |
+> | `Bindings.HitResult.ActorComponentConstructorCompat` | `Bind_FHitResult.cpp` keeps the direct `FHitResult(AActor, UPrimitiveComponent, FVector, FVector)` constructor aligned with native actor/component handle storage and hit-location/normal initialization while preserving the remaining direct script-visible fields | `AngelscriptHitResultBindingsTests.cpp` |
+> | `Bindings.MathIntegerDivisionCompat` | `Bind_FMath.cpp` keeps `Math::IntegerDivisionTrunc(...)` aligned with native integer truncation semantics across `int32`/`int64`/`uint32`/`uint64`, and preserves the script-visible `Division by zero` exception contract for all four divide-by-zero overloads | `AngelscriptMathIntegerDivisionBindingsTests.cpp` |
+> | `Bindings.MathInterpolationCompat` | `Bind_FMath.cpp` keeps `Math::QInterpTo(...)`, `QInterpConstantTo(...)`, `VInterpNormalRotationTo(...)`, `Vector2DInterpTo(...)`, `Vector2DInterpConstantTo(...)`, and `CInterpTo(...)` aligned with same-run native `FQuat` / `FQuat4f` / `FVector` / `FVector2D` / `FLinearColor` baselines on a pure interpolation seam | `AngelscriptMathInterpolationBindingsTests.cpp` |
+> | `Bindings.MathEasingOverloadsCompat` | `Bind_FMath.cpp` keeps script-visible `Math::EaseIn(...)`, `EaseOut(...)`, `EaseInOut(...)`, `Sinusoidal*`, `Expo*`, and `Circular*` easing overloads aligned with same-run native `float64`, `float32`, and `FVector` baselines | `AngelscriptMathEasingBindingsTests.cpp` |
+> | `Bindings.MathCubicDerivativeCompat` | `Bind_FMath.cpp` keeps `Math::CubicInterpDerivative(...)` aligned with same-run native `FVector`, `FRotator`, `FVector3f`, and `FRotator3f` baselines across the remaining vector and rotator overload seam | `AngelscriptMathCubicDerivativeBindingsTests.cpp` |
+> | `Bindings.MathRangePredicateCompat` | `Bind_FMath.cpp` keeps `SmoothStep(...)`, `FastAsin(...)`, `IsWithin(...)`, and `IsWithinInclusive(...)` aligned with same-run native baselines across `float32` / `float64` / `int32`, including exclusive and inclusive boundary semantics on the script-visible predicate seam | `AngelscriptMathRangePredicateBindingsTests.cpp` |
+> | `Bindings.MathRayAndCone.RayLineSphereCompat` | `Bind_FMath.cpp` keeps `RayPlaneIntersection(...)`, the `FVector3f` `LinePlaneIntersection(...)` overload, and `LineSphereIntersection(...)` aligned with same-run native baselines across `FVector` / `FVector3f` and `float64` / `float32` geometry-query seams | `AngelscriptMathRayAndConeBindingsTests.cpp` |
+> | `Bindings.MathRayAndCone.ConeBoundsCompat` | `Bind_FMath.cpp` keeps `ComputeBoundingSphereForCone(...)` aligned with same-run native `FSphere` / `FSphere3f` center-and-radius baselines across the double and float overloads | `AngelscriptMathRayAndConeBindingsTests.cpp` |
+> | `Bindings.MathSpatialHelpers` | `Bind_FMath.cpp` keeps `SegmentIntersection2D(...)`, `FindNearestPointsOnLineSegments(...)`, `NormalizeToRange(...)`, `GridSnap(...)`, and fixed-input `PerlinNoise*` aligned with deterministic same-run native baselines on a pure-math script seam | `AngelscriptMathAndPlatformBindingsTests.cpp` |
+> | `Bindings.PlatformProcessExactCompat` | `Bind_FPlatformProcess.cpp` keeps the path and identity getters plus `CanLaunchURL("https://example.com")` aligned with the same-run native baselines, and locks the current Windows `GameBundleId()` empty-string parity even though the platform logs that the API is not implemented | `AngelscriptPlatformProcessExactBindingsTests.cpp` |
+> | `Bindings.GenericPlatformMisc.RequestExitCompileSurface` | `Bind_FGenericPlatformMisc.cpp` keeps the script-visible `FGenericPlatformMisc::RequestExit(bool)` seam compileable by resolving a dedicated compile-only helper while executing only a safe `Entry()` path that never triggers process exit | `AngelscriptGenericPlatformMiscBindingsTests.cpp` |
+> | `Bindings.PlatformApplicationMiscClipboardCompat` | `Bind_FPlatformApplicationMisc.cpp` keeps `ClipboardPaste(...)` aligned with a native-seeded clipboard value and keeps `ClipboardCopy(...)` observable from native code after the script writes a second GUID-tagged payload | `AngelscriptPlatformApplicationMiscBindingsTests.cpp` |
+> | `Bindings.CommandLineParse.QuotedCompat` | `Bind_FCommandLine.cpp` keeps `FCommandLine::Parse(...)` aligned with native quoted-token and multi-switch parsing, including the current append semantics when `OutTokens` / `OutSwitches` are pre-seeded before the call | `AngelscriptCommandLineAndParseEdgeBindingsTests.cpp` |
+> | `Bindings.CommandLineParse.MissingKeyGuards` | `Bind_FParse.cpp` keeps `FParse::Value(...)` / `Bool(...)` aligned with native hit and miss semantics across `int` / `float32` / `FString` / `bool`, preserving the current contract that missing keys return false without mutating the caller's sentinel output values | `AngelscriptCommandLineAndParseEdgeBindingsTests.cpp` |
+> | `Bindings.Logging.ConditionalAndCategoryCompat` | `Bind_Logging.cpp` keeps script-visible conditional log gates plus `FName` category overloads compileable and executable without requiring world-context print helpers | `AngelscriptLoggingBindingsTests.cpp` |
+> | `Bindings.Logging.ThrowIfExceptionCompat` | `Bind_Logging.cpp` keeps `ThrowIf(false, ...)` as a no-op and `ThrowIf(true, ...)` as a script exception that preserves the requested message and exception function metadata | `AngelscriptLoggingBindingsTests.cpp` |
+> | `Bindings.Debugging.EnsureDeduplicatesAndResetCompat` | `Bind_Debugging.cpp` keeps script-visible `ensure(...)` aligned on bool return semantics, single-source-location deduplicated failure logging within one execution, and cache reset via `AngelscriptForgetSeenEnsures()` | `AngelscriptDebugEnsureBindingsTests.cpp` |
+> | `Bindings.Debugging.EnsureAlwaysLogsEveryInvocationCompat` | `Bind_Debugging.cpp` keeps script-visible `ensureAlways(...)` aligned on bool return semantics while logging every repeated failure at the same script source location | `AngelscriptDebugEnsureBindingsTests.cpp` |
+> | `Bindings.FXSystemDeactivateImmediateCompat` | `Bind_UFXSystemComponent.cpp` keeps script-visible `UFXSystemComponent::DeactivateImmediate()` aligned with native active-state teardown on a live `UParticleSystemComponent` fixture resolved from script as `UFXSystemComponent` | `AngelscriptFXSystemBindingsTests.cpp` |
+> | `Bindings.VolumeCompat` | `Bind_AVolume.cpp` keeps script-visible `AVolume::GetBounds()`, both `EncompassesPoint(...)` overloads, and `SetBrushColor(...)` aligned with native state on a spawned `ABlockingVolume` fixture | `AngelscriptVolumeBindingsTests.cpp` |
+> | `Bindings.AppCompat` | `Bind_FApp.cpp` keeps script-visible `FApp::CanEverRender()` and `FApp::GetProjectName()` aligned with same-run native app state | `AngelscriptAppBindingsTests.cpp` |
+> | `Bindings.CoreGlobalsCompat` | `Bind_CoreGlobals.cpp` keeps script-visible commandlet-state globals and `GetRunningCommandletClass()` aligned with same-run native process state | `AngelscriptCoreGlobalsBindingsTests.cpp` |
+> | `Bindings.BodyInstanceCompat` | `Bind_FBodyInstance.cpp` keeps script-visible `FBodyInstance::GetBodySetup()` and `SetUseCCD(...)` aligned with same-run native body-instance state | `AngelscriptBodyInstanceBindingsTests.cpp` |
+> | `Bindings.MeshComponentCompat` | `Bind_USkinnedMeshComponent.cpp`, `Bind_USkeletalMeshComponent.cpp`, and `Bind_UPoseableMeshComponent.cpp` keep `UpdateLODStatus()`, `InvalidateCachedBounds()`, `GetLinkedAnimInstances()`, `AllocateTransformData()`, and `RefreshBoneTransforms()` executable through script on transient no-asset component fixtures | `AngelscriptMeshComponentBindingsTests.cpp` |
+> | `Network.Metadata.ReplicationConditionsFlowIntoLifetimeList` | `AngelscriptNetworkMetadataTests.cpp` keeps `ReplicationCondition=OwnerOnly/SkipOwner/InitialOnly` aligned across generated `FProperty` metadata and `UASClass::GetLifetimeScriptReplicationList()`, including the current stock-plugin `REPNOTIFY_OnChanged` / non-push-based lifetime entry baseline for the rep-notify property | `AngelscriptNetworkMetadataTests.cpp` |
+> | `Network.Metadata.BlueprintAuthorityOnlyFlagsMaterialize` | `AngelscriptNetworkMetadataTests.cpp` keeps `UFUNCTION(BlueprintAuthorityOnly)` and `UFUNCTION(Server, BlueprintAuthorityOnly)` aligned with the expected `FUNC_BlueprintAuthorityOnly` reflection flags while ensuring the flag does not leak onto plain local functions | `AngelscriptNetworkMetadataTests.cpp` |
+> | `Network.Metadata.ReplicationPushModelSpecifierRejected` | `AngelscriptNetworkMetadataTests.cpp` keeps the current stock-plugin boundary explicit by rejecting `UPROPERTY(..., ReplicationPushModel)`, surfacing the expected unsupported-specifier diagnostic, and leaving no generated class behind after the failed compile path | `AngelscriptNetworkMetadataTests.cpp` |
+> | `Internals.Context.StateAndUserData` | `AngelscriptContextTests.cpp` keeps the dedicated `asCContext` seam aligned on `Uninitialized -> Prepared -> Finished -> Uninitialized` lifecycle transitions, per-slot `SetUserData(...)` replacement semantics, and isolated multi-slot `GetUserData(...)` reads across repeated reuse of the same context | `AngelscriptContextTests.cpp` |
+> | `Internals.Context.ExceptionMetadata` | `AngelscriptContextTests.cpp` keeps `asCContext` exception snapshots aligned on `GetExceptionFunction()` / `GetExceptionLineNumber()` / `GetCallstackSize()` plus local-variable metadata and address visibility after a nested script throw | `AngelscriptContextTests.cpp` |
+> | `Internals.Context.PushPopState` | `AngelscriptContextPushPopStateTests.cpp` keeps `asCContext::PushState()` / `PopState()` aligned on active-only nesting, nested-frame count tracking, nested prepare/execute result preservation, and restoration back to the outer active execution before the final finished/unprepared guard checks | `AngelscriptContextPushPopStateTests.cpp` |
+> | `Internals.Context.ExecutionControl` | `AngelscriptContextExecutionControlTests.cpp` keeps the current branch's dedicated `asCContext` execution-control seam explicit by rejecting `Abort()` / `Suspend()` with `asERROR` across `Uninitialized`, `Prepared`, active callback, `Finished`, and post-`Unprepare()` states without mutating the active lifecycle state machine | `AngelscriptContextExecutionControlTests.cpp` |
+> | `Internals.Context.ThisVisibility` | `AngelscriptContextThisVisibilityTests.cpp` keeps `asCContext::GetThisTypeId()` / `GetThisPointer()` aligned on a generated `UObject` script-method frame reached through `ProcessEvent`, while also preserving `IsVarInScope()` and `GetAddressOfVar()` visibility for the method-local `LocalValue` on the active frame | `AngelscriptContextThisVisibilityTests.cpp` |
+> | `Internals.ScriptFunction.SignatureMetadata` | `AngelscriptScriptFunctionTests.cpp` keeps `asCScriptFunction` declaration/default-argument strings, plain-value return typing, parameter metadata, script-section naming, bytecode exposure, and mixed parameter-plus-local variable debug metadata aligned on a stable dedicated seam | `AngelscriptScriptFunctionTests.cpp` |
+> | `Internals.ScriptFunction.DebugMetadata` | `AngelscriptScriptFunctionTests.cpp` keeps `asCScriptFunction::FindNextLineWithCode()` aligned on the branch's current declaration-line and executable-line semantics, while preserving parameter-plus-local variable debug declarations for branch and tail locals | `AngelscriptScriptFunctionTests.cpp` |
+> | `Internals.Module.NamespaceAndEnumeration` | `AngelscriptModuleTests.cpp` keeps `asCModule` default-namespace switching, const global lookup metadata, namespaced type lookup, and function/type enumeration aligned with the current branch, including the extra synthesized globals/functions produced by this compilation path | `AngelscriptModuleTests.cpp` |
+> | `Internals.Module.ImportBindingLifecycle` | `AngelscriptModuleTests.cpp` keeps declared import metadata plus manual `BindImportedFunction()` / `UnbindImportedFunction()` / `UnbindAllImportedFunctions()` lifecycle aligned, while locking the current wrapper-managed branch behavior where stock `BindAllImportedFunctions()` reports `asCANT_BIND_ALL_FUNCTIONS` and unbound calls emit `Unbound function called` diagnostics | `AngelscriptModuleTests.cpp` |
+> | `Internals.ObjectType.InheritanceAndProperties` | `AngelscriptObjectTypeTests.cpp` keeps the dedicated `asCObjectType` seam aligned on base/derived inheritance metadata, reference-type flags, type ids, inherited-property enumeration, declaration text, and property-offset ordering for script classes on the current branch | `AngelscriptObjectTypeTests.cpp` |
+> | `Internals.ObjectType.MethodsFactoriesAndBehaviours` | `AngelscriptObjectTypeTests.cpp` keeps `asCObjectType` method lookup/enumeration, factory declaration round-trip, constructor-behaviour exposure, and the current no-implicit-`ADDREF`/`RELEASE` script-class behaviour model aligned for base and derived script types | `AngelscriptObjectTypeTests.cpp` |
+> | `Internals.Builder.DeclarationParsing.FunctionMetadata` | `AngelscriptBuilderDeclarationParsingTests.cpp` keeps `asCBuilder::ParseFunctionDeclaration()` aligned on namespaced declaration parsing, script-function value-type normalization to read-only references, primitive read-only parameter metadata, default-argument text retention, and `no_discard` trait parsing | `AngelscriptBuilderDeclarationParsingTests.cpp` |
+> | `Internals.Builder.DeclarationParsing.VariableAndPropertyValidation` | `AngelscriptBuilderDeclarationParsingTests.cpp` keeps `asCBuilder::ParseVariableDeclaration()` / `VerifyProperty()` aligned on explicit and implicit namespace resolution for declarations, plain value-property parsing, and the current rule that funcdef properties must be declared as handles | `AngelscriptBuilderDeclarationParsingTests.cpp` |
+
+### Delegate Signature Guards
+
+| Test | Coverage | Source |
+|--------|----------|--------|
+| Bindings.ScriptDelegateSignatureGuardCompat | signature-aware `_Inner.BindUFunction` / `_Inner.AddUFunction` accepts `nullptr` object or `nullptr` `UDelegateFunction` only to raise the explicit script-exception guard with assertable text and line info | AngelscriptDelegateSignatureGuardBindingsTests.cpp |
+| Bindings.ScriptDelegateSignatureConstructorCompat | `_FScriptDelegate(UObject, FName, UDelegateFunction)` keeps the explicit-signature happy path aligned with `_Inner.BindUFunction`, and `nullptr` object / `nullptr` signature should raise the same guard exceptions | AngelscriptDelegateSignatureGuardBindingsTests.cpp |
+
+### Delegate Traits
+
+| Test | Coverage | Source |
+|--------|----------|--------|
+| Bindings.Delegate.ConstructorDeclarations | script-declared concrete single-cast delegate types should expose default, copy, and `UObject`/`FName` constructor behaviours on their type metadata | AngelscriptDelegateTraitBindingsTests.cpp |
+| Bindings.Delegate.ConstructorTraits | the same concrete single-cast delegate constructors should stay marked `no_discard` and not `allow_discard` on their script-visible constructor behaviours | AngelscriptDelegateTraitBindingsTests.cpp |

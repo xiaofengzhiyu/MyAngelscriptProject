@@ -24,8 +24,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptPathsMutationBindingsTest,
+	"Angelscript.TestModule.Bindings.PathsMutationCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptNumberFormattingOptionsBindingsTest,
 	"Angelscript.TestModule.Bindings.NumberFormattingOptionsCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptNumberFormattingOptionsFormattingBindingsTest,
+	"Angelscript.TestModule.Bindings.NumberFormattingOptionsFormattingCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptGuidBindingsTest::RunTest(const FString& Parameters)
@@ -305,6 +315,177 @@ int Entry()
 	return true;
 }
 
+bool FAngelscriptPathsMutationBindingsTest::RunTest(const FString& Parameters)
+{
+	auto EscapeScriptString = [](const FString& Value) -> FString
+	{
+		FString Escaped = Value;
+		Escaped.ReplaceInline(TEXT("\\"), TEXT("\\\\"));
+		Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
+		Escaped.ReplaceInline(TEXT("\r"), TEXT("\\r"));
+		Escaped.ReplaceInline(TEXT("\n"), TEXT("\\n"));
+		return Escaped;
+	};
+
+	const FString PathLeafInput = TEXT("Script\\Automation//Nested");
+	const FString PathWithExtension = TEXT("Script\\Automation//Nested/Test.data");
+	const FString PathWithoutExtension = TEXT("Script\\Automation//Nested/Test");
+	const FString NormalizeFilenameInput = TEXT("Script\\\\Automation//Nested\\\\Test.as");
+	const FString NormalizeDirectoryInput = TEXT("Script\\\\Automation//Nested\\\\");
+	const FString CollapseInputOriginal = TEXT("Script/Automation/../Bindings/Test.as");
+	const FString DuplicateSlashesInputOriginal = TEXT("Script////Automation\\\\\\\\Bindings//Test.as");
+	const FString StandardFilenameInputOriginal = TEXT(".\\Script\\Automation\\..\\Bindings\\Test.as");
+	const FString PlatformFilenameInputOriginal = TEXT("Script/Automation/Bindings/Test.as");
+
+	const FString ExpectedPathLeaf = FPaths::GetPathLeaf(PathLeafInput);
+	const FString ExpectedChangedExtension = FPaths::ChangeExtension(PathWithExtension, TEXT("log"));
+	const FString ExpectedSetExtension = FPaths::SetExtension(PathWithoutExtension, TEXT("json"));
+
+	FString ExpectedSplitPath;
+	FString ExpectedSplitFilename;
+	FString ExpectedSplitExtension;
+	FPaths::Split(PathWithExtension, ExpectedSplitPath, ExpectedSplitFilename, ExpectedSplitExtension);
+
+	FString ExpectedNormalizedFilename = NormalizeFilenameInput;
+	FPaths::NormalizeFilename(ExpectedNormalizedFilename);
+
+	FString ExpectedNormalizedDirectory = NormalizeDirectoryInput;
+	FPaths::NormalizeDirectoryName(ExpectedNormalizedDirectory);
+
+	FString ExpectedCollapsedPath = CollapseInputOriginal;
+	const bool bExpectedCollapseSucceeded = FPaths::CollapseRelativeDirectories(ExpectedCollapsedPath);
+
+	FString ExpectedDeduplicatedPath = DuplicateSlashesInputOriginal;
+	FPaths::RemoveDuplicateSlashes(ExpectedDeduplicatedPath);
+
+	FString ExpectedStandardFilename = StandardFilenameInputOriginal;
+	FPaths::MakeStandardFilename(ExpectedStandardFilename);
+
+	FString ExpectedPlatformFilename = PlatformFilenameInputOriginal;
+	FPaths::MakePlatformFilename(ExpectedPlatformFilename);
+
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	FString Script = TEXT(R"(
+int Entry()
+{
+	const FString PathLeafInput = "__PATH_LEAF_INPUT__";
+	const FString PathWithExtension = "__PATH_WITH_EXTENSION__";
+	const FString PathWithoutExtension = "__PATH_WITHOUT_EXTENSION__";
+	const FString NormalizeFilenameInput = "__NORMALIZE_FILENAME_INPUT__";
+	const FString NormalizeDirectoryInput = "__NORMALIZE_DIRECTORY_INPUT__";
+	const FString CollapseInput = "__COLLAPSE_INPUT__";
+	const FString DuplicateSlashesInput = "__DUPLICATE_SLASHES_INPUT__";
+	const FString StandardFilenameInput = "__STANDARD_FILENAME_INPUT__";
+	const FString PlatformFilenameInput = "__PLATFORM_FILENAME_INPUT__";
+
+	if (!(FPaths::GetPathLeaf(PathLeafInput) == "__EXPECTED_PATH_LEAF__"))
+		return 10;
+
+	if (!(FPaths::ChangeExtension(PathWithExtension, "log") == "__EXPECTED_CHANGED_EXTENSION__"))
+		return 20;
+
+	if (!(FPaths::SetExtension(PathWithoutExtension, "json") == "__EXPECTED_SET_EXTENSION__"))
+		return 30;
+
+	FString SplitPath;
+	FString SplitFilename;
+	FString SplitExtension;
+	FPaths::Split(PathWithExtension, SplitPath, SplitFilename, SplitExtension);
+	if (!(SplitPath == "__EXPECTED_SPLIT_PATH__"))
+		return 40;
+	if (!(SplitFilename == "__EXPECTED_SPLIT_FILENAME__"))
+		return 50;
+	if (!(SplitExtension == "__EXPECTED_SPLIT_EXTENSION__"))
+		return 60;
+
+	FString NormalizedFilename = NormalizeFilenameInput;
+	FPaths::NormalizeFilename(NormalizedFilename);
+	if (!(NormalizedFilename == "__EXPECTED_NORMALIZED_FILENAME__"))
+		return 70;
+
+	FString NormalizedDirectory = NormalizeDirectoryInput;
+	FPaths::NormalizeDirectoryName(NormalizedDirectory);
+	if (!(NormalizedDirectory == "__EXPECTED_NORMALIZED_DIRECTORY__"))
+		return 80;
+
+	FString CollapsedPath = CollapseInput;
+	if (FPaths::CollapseRelativeDirectories(CollapsedPath) != __EXPECTED_COLLAPSE_SUCCEEDED__)
+		return 90;
+	if (!(CollapsedPath == "__EXPECTED_COLLAPSED_PATH__"))
+		return 100;
+
+	FString DeduplicatedPath = DuplicateSlashesInput;
+	FPaths::RemoveDuplicateSlashes(DeduplicatedPath);
+	if (!(DeduplicatedPath == "__EXPECTED_DEDUPLICATED_PATH__"))
+		return 110;
+
+	FString StandardFilename = StandardFilenameInput;
+	FPaths::MakeStandardFilename(StandardFilename);
+	if (!(StandardFilename == "__EXPECTED_STANDARD_FILENAME__"))
+		return 120;
+
+	FString PlatformFilename = PlatformFilenameInput;
+	FPaths::MakePlatformFilename(PlatformFilename);
+	if (!(PlatformFilename == "__EXPECTED_PLATFORM_FILENAME__"))
+		return 130;
+
+	return 1;
+}
+)");
+
+	Script.ReplaceInline(TEXT("__PATH_LEAF_INPUT__"), *EscapeScriptString(PathLeafInput), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__PATH_WITH_EXTENSION__"), *EscapeScriptString(PathWithExtension), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__PATH_WITHOUT_EXTENSION__"), *EscapeScriptString(PathWithoutExtension), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__NORMALIZE_FILENAME_INPUT__"), *EscapeScriptString(NormalizeFilenameInput), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__NORMALIZE_DIRECTORY_INPUT__"), *EscapeScriptString(NormalizeDirectoryInput), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__COLLAPSE_INPUT__"), *EscapeScriptString(CollapseInputOriginal), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__DUPLICATE_SLASHES_INPUT__"), *EscapeScriptString(DuplicateSlashesInputOriginal), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__STANDARD_FILENAME_INPUT__"), *EscapeScriptString(StandardFilenameInputOriginal), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__PLATFORM_FILENAME_INPUT__"), *EscapeScriptString(PlatformFilenameInputOriginal), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_PATH_LEAF__"), *EscapeScriptString(ExpectedPathLeaf), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_CHANGED_EXTENSION__"), *EscapeScriptString(ExpectedChangedExtension), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_SET_EXTENSION__"), *EscapeScriptString(ExpectedSetExtension), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_SPLIT_PATH__"), *EscapeScriptString(ExpectedSplitPath), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_SPLIT_FILENAME__"), *EscapeScriptString(ExpectedSplitFilename), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_SPLIT_EXTENSION__"), *EscapeScriptString(ExpectedSplitExtension), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_NORMALIZED_FILENAME__"), *EscapeScriptString(ExpectedNormalizedFilename), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_NORMALIZED_DIRECTORY__"), *EscapeScriptString(ExpectedNormalizedDirectory), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_COLLAPSE_SUCCEEDED__"), bExpectedCollapseSucceeded ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_COLLAPSED_PATH__"), *EscapeScriptString(ExpectedCollapsedPath), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_DEDUPLICATED_PATH__"), *EscapeScriptString(ExpectedDeduplicatedPath), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_STANDARD_FILENAME__"), *EscapeScriptString(ExpectedStandardFilename), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_PLATFORM_FILENAME__"), *EscapeScriptString(ExpectedPlatformFilename), ESearchCase::CaseSensitive);
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASPathsMutationCompat",
+		Script);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Paths mutation compat operations should match native FPaths results"), Result, 1);
+	ASTEST_END_SHARE_CLEAN
+
+	return true;
+}
+
 bool FAngelscriptNumberFormattingOptionsBindingsTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -357,6 +538,123 @@ int Entry()
 
 	TestEqual(TEXT("NumberFormattingOptions compat operations should behave as expected"), Result, 1);
 	ASTEST_END_SHARE
+
+	return true;
+}
+
+bool FAngelscriptNumberFormattingOptionsFormattingBindingsTest::RunTest(const FString& Parameters)
+{
+	auto EscapeScriptString = [](const FString& Value) -> FString
+	{
+		FString Escaped = Value;
+		Escaped.ReplaceInline(TEXT("\\"), TEXT("\\\\"));
+		Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
+		Escaped.ReplaceInline(TEXT("\r"), TEXT("\\r"));
+		Escaped.ReplaceInline(TEXT("\n"), TEXT("\\n"));
+		return Escaped;
+	};
+
+	constexpr double Sample = 1234.5;
+
+	FNumberFormattingOptions UngroupedOptions;
+	UngroupedOptions
+		.SetAlwaysSign(true)
+		.SetUseGrouping(false)
+		.SetMinimumIntegralDigits(2)
+		.SetMaximumIntegralDigits(4)
+		.SetMinimumFractionalDigits(1)
+		.SetMaximumFractionalDigits(3);
+
+	FNumberFormattingOptions GroupedOptions;
+	GroupedOptions
+		.SetAlwaysSign(false)
+		.SetUseGrouping(true)
+		.SetMinimumIntegralDigits(2)
+		.SetMaximumIntegralDigits(4)
+		.SetMinimumFractionalDigits(1)
+		.SetMaximumFractionalDigits(3);
+
+	const FString ExpectedUngrouped = FText::AsNumber(Sample, &UngroupedOptions).ToString();
+	const FString ExpectedGrouped = FText::AsNumber(Sample, &GroupedOptions).ToString();
+
+	if (!TestFalse(
+			TEXT("NumberFormattingOptions formatting baseline should produce distinct grouped and ungrouped outputs"),
+			ExpectedUngrouped == ExpectedGrouped))
+	{
+		return false;
+	}
+
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	ASTEST_BEGIN_SHARE_CLEAN
+
+	FString Script = TEXT(R"(
+int Entry()
+{
+	const float64 Sample = 1234.5;
+
+	FNumberFormattingOptions UngroupedOptions;
+	UngroupedOptions
+		.SetAlwaysSign(true)
+		.SetUseGrouping(false)
+		.SetMinimumIntegralDigits(2)
+		.SetMaximumIntegralDigits(4)
+		.SetMinimumFractionalDigits(1)
+		.SetMaximumFractionalDigits(3);
+
+	FNumberFormattingOptions GroupedOptions;
+	GroupedOptions
+		.SetAlwaysSign(false)
+		.SetUseGrouping(true)
+		.SetMinimumIntegralDigits(2)
+		.SetMaximumIntegralDigits(4)
+		.SetMinimumFractionalDigits(1)
+		.SetMaximumFractionalDigits(3);
+
+	FString UngroupedResult = FText::AsNumber(Sample, UngroupedOptions).ToString();
+	if (!(UngroupedResult == "__EXPECTED_UNGROUPED__"))
+		return 10;
+
+	FString GroupedResult = FText::AsNumber(Sample, GroupedOptions).ToString();
+	if (!(GroupedResult == "__EXPECTED_GROUPED__"))
+		return 20;
+
+	if (UngroupedOptions.IsIdentical(GroupedOptions))
+		return 30;
+
+	if (UngroupedResult == GroupedResult)
+		return 40;
+
+	return 1;
+}
+)");
+
+	Script.ReplaceInline(TEXT("__EXPECTED_UNGROUPED__"), *EscapeScriptString(ExpectedUngrouped), ESearchCase::CaseSensitive);
+	Script.ReplaceInline(TEXT("__EXPECTED_GROUPED__"), *EscapeScriptString(ExpectedGrouped), ESearchCase::CaseSensitive);
+
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASNumberFormattingOptionsFormattingCompat",
+		Script);
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("NumberFormattingOptions formatting compat should match native FText::AsNumber output"), Result, 1);
+	ASTEST_END_SHARE_CLEAN
 
 	return true;
 }

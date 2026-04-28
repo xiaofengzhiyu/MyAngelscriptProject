@@ -179,6 +179,7 @@ namespace AngelscriptTestSupport
 	enum class ESingleClientDebuggerCommand : uint8
 	{
 		Continue,
+		StopDebugging,
 		StepIn,
 		StepOver,
 		StepOut

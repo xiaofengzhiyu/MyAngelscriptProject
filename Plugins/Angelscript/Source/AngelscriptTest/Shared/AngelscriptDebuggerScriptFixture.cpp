@@ -151,7 +151,7 @@ namespace AngelscriptTestSupport
 	/*MARK:PauseReadyLine*/ int Total = 1;
 	for (int Outer = 0; Outer < 50; ++Outer)
 	{
-		for (int Inner = 0; Inner < 100; ++Inner)
+		/*MARK:PauseLoopHeaderLine*/ for (int Inner = 0; Inner < 100; ++Inner)
 		{
 			/*MARK:PauseLoopLine*/ Total += 1;
 		}
@@ -244,6 +244,12 @@ class UDebuggerBindingFixture : UObject
 	FString FormatCurrentCallstack()
 	{
 		/*MARK:BindingCallstackLine*/ return FormatAngelscriptCallstack();
+	}
+
+	UFUNCTION()
+	FString TriggerFormattedCallstack()
+	{
+		return FormatCurrentCallstack();
 	}
 }
 )AS"),

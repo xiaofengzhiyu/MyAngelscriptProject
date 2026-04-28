@@ -37,6 +37,10 @@ namespace UnrealBuildTool.Rules
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{
 				"AIModule",
+				"ApplicationCore",
+				"EnhancedInput",
+				"InputCore",
+				"SlateCore",
 				"UMG",
 			});
 

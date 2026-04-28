@@ -59,7 +59,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptASClassIsFunctionImplementedInScriptTurnsFalseAfterDiscardTest,
 	"Angelscript.TestModule.ClassGenerator.ASClass.IsFunctionImplementedInScriptTurnsFalseAfterDiscard",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#ue57-behavior): IsFunctionImplementedInScript returns true after DiscardModule+GC on UE 5.7; investigate UFunction lifecycle change
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptASClassIsDeveloperOnlyRecognizesNestedEditorModuleNamesTest::RunTest(const FString& Parameters)
 {

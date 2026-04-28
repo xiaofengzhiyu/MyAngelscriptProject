@@ -31,6 +31,9 @@ bool FAngelscriptPreprocessorCommentFormattingTooltipNormalizationTest::RunTest(
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	ASTEST_BEGIN_SHARE_CLEAN
 
+	const FString PureCjkComment = TEXT("// \u7EAF\u4E2D\u6587\u63D0\u793A");
+	const FString PureCjkTooltip = TEXT("\u7EAF\u4E2D\u6587\u63D0\u793A");
+
 	bPassed &= TestTrue(
 		TEXT("IsAllSameChar should accept uniform dash separators"),
 		IsAllSameChar(TEXT("----"), TEXT('-')));
@@ -52,9 +55,21 @@ bool FAngelscriptPreprocessorCommentFormattingTooltipNormalizationTest::RunTest(
 
 	bPassed &= ExpectFormattedComment(
 		*this,
+		TEXT("C-style comments should strip block markers while preserving line structure"),
+		TEXT("/* Summary line\nDetail line */"),
+		TEXT("Summary line\nDetail line"));
+
+	bPassed &= ExpectFormattedComment(
+		*this,
 		TEXT("Cpp comments should drop //~ ignored lines before tooltip normalization"),
 		TEXT("// Summary line\n//~ Hidden line\n// Followup line"),
 		TEXT("Summary line\nFollowup line"));
+
+	bPassed &= ExpectFormattedComment(
+		*this,
+		TEXT("Ignored /*~ */ blocks should be removed before tooltip normalization"),
+		TEXT("/*~ Hidden block */\nVisible line"),
+		TEXT("Visible line"));
 
 	bPassed &= ExpectFormattedComment(
 		*this,
@@ -65,8 +80,8 @@ bool FAngelscriptPreprocessorCommentFormattingTooltipNormalizationTest::RunTest(
 	bPassed &= ExpectFormattedComment(
 		*this,
 		TEXT("Pure CJK tooltip comments should not be treated as empty"),
-		TEXT("// 纯中文提示"),
-		TEXT("纯中文提示"));
+		PureCjkComment,
+		PureCjkTooltip);
 
 	bPassed &= ExpectFormattedComment(
 		*this,

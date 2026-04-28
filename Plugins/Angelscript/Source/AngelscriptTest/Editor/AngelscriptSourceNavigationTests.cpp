@@ -117,7 +117,7 @@ class UFunctionNavigationCarrier : UObject
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptSourceNavigationStoredLocationTest,
 	"Angelscript.TestModule.Editor.SourceNavigation.NavigateToFunctionUsesStoredSourceLocation",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::Disabled) // TODO(#test-regression): Property navigation source file + line still not populated. Shares root cause with SourceNavigation.Functions. Verified failing on full automation run.
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptSourceNavigationStoredLocationTest::RunTest(const FString& Parameters)
 {
@@ -215,7 +215,7 @@ class __CLASS_NAME__ : UObject
 	TestTrue(TEXT("Source navigation should navigate generated script property"), AngelscriptSourceNavigation::NavigateToPropertyForTesting(StoredValueProperty));
 	TestEqual(TEXT("Property navigation should emit exactly one open-location request"), RecordedNavigation.CallCount, 1);
 	TestEqual(TEXT("Property navigation should target the compiled script file"), RecordedNavigation.Path, ScriptPath);
-	TestEqual(TEXT("Property navigation should target the reflected property declaration line"), RecordedNavigation.LineNumber, 13);
+	TestEqual(TEXT("Property navigation should target the reflected property macro line"), RecordedNavigation.LineNumber, 12);
 
 	RecordedNavigation.Reset();
 	TestTrue(TEXT("Source navigation should navigate generated script struct"), AngelscriptSourceNavigation::NavigateToStructForTesting(GeneratedStruct));

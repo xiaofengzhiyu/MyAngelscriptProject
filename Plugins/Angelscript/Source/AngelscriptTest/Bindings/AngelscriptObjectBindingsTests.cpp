@@ -15,6 +15,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Bindings.SoftObjectPtrCompat",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptWeakObjectPtrBindingsTest,
+	"Angelscript.TestModule.Bindings.WeakObjectPtrCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptObjectPtrBindingsTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
@@ -76,6 +81,99 @@ int Entry()
 	}
 
 	TestEqual(TEXT("TObjectPtr compat operations should behave as expected"), Result, 1);
+	ASTEST_END_SHARE
+
+	return true;
+}
+
+bool FAngelscriptWeakObjectPtrBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+	asIScriptModule* Module = BuildModule(
+		*this,
+		Engine,
+		"ASWeakObjectPtrCompat",
+		TEXT(R"(
+int Entry()
+{
+	TWeakObjectPtr<UTexture2D> Empty;
+	if (!(Empty.Get() == null))
+		return 10;
+	if (Empty.IsValid())
+		return 20;
+	if (Empty.IsStale())
+		return 30;
+	if (!Empty.IsExplicitlyNull())
+		return 35;
+
+	UTexture2D Texture = Cast<UTexture2D>(NewObject(GetTransientPackage(), UTexture2D::StaticClass()));
+	if (!IsValid(Texture))
+		return 40;
+
+	TWeakObjectPtr<UTexture2D> Constructed(Texture);
+	if (!(Constructed == Texture))
+		return 50;
+	if (!(Constructed.Get() == Texture))
+		return 60;
+	if (!Constructed.IsValid())
+		return 70;
+	if (Constructed.IsStale())
+		return 80;
+	if (Constructed.IsExplicitlyNull())
+		return 90;
+
+	TWeakObjectPtr<UTexture2D> Assigned;
+	Assigned = Texture;
+	if (!(Assigned == Texture))
+		return 100;
+	if (!(Assigned.Get() == Texture))
+		return 110;
+
+	TWeakObjectPtr<UTexture2D> Reassigned;
+	Reassigned = Assigned;
+	if (!(Reassigned == Assigned))
+		return 120;
+
+	UTexture2D Converted = Reassigned;
+	if (!(Converted == Texture))
+		return 130;
+
+	TWeakObjectPtr<UTexture2D> Copy = Reassigned;
+	if (!(Copy == Reassigned))
+		return 140;
+
+	Reassigned = Empty;
+	if (!(Reassigned.Get() == null))
+		return 150;
+	if (Reassigned.IsValid())
+		return 160;
+	if (Reassigned.IsStale())
+		return 170;
+	if (!Reassigned.IsExplicitlyNull())
+		return 180;
+
+	return 1;
+}
+)"));
+	if (Module == nullptr)
+	{
+		return false;
+	}
+
+	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
+	if (Function == nullptr)
+	{
+		return false;
+	}
+
+	int32 Result = 0;
+	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("TWeakObjectPtr compat operations should behave as expected"), Result, 1);
 	ASTEST_END_SHARE
 
 	return true;
