@@ -24,6 +24,12 @@ class UGameplayTagContainerMixinLibrary : public UObject
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintCallable)
+	static void AppendTags(FGameplayTagContainer& GameplayTagContainer, const FGameplayTagContainer& TagsToAdd)
+	{
+		GameplayTagContainer.AppendTags(TagsToAdd);
+	}
+
+	UFUNCTION(BlueprintCallable)
 	static void AddTag(FGameplayTagContainer& GameplayTagContainer, const FGameplayTag& TagToAdd)
 	{
 		GameplayTagContainer.AddTag(TagToAdd);
