@@ -379,7 +379,7 @@ bool FAngelscriptRuntimeModuleStartupRegistersFallbackTickerTest::RunTest(const 
 
 	RuntimeModule.StartupModule();
 	TestTrue(TEXT("Runtime module startup test should register the fallback ticker"), FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
-	TestNotNull(TEXT("Runtime module startup test should initialize the global engine in editor automation"), FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine());
+	TestNull(TEXT("Runtime module startup test should leave initialization to the loader module"), FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine());
 
 	RuntimeModule.ShutdownModule();
 	return TestFalse(TEXT("Runtime module shutdown should clear the fallback ticker handle"), FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));

@@ -16,32 +16,31 @@ FAngelscriptEngine* FAngelscriptRuntimeModule::InitializedOverrideEngineForTesti
 void FAngelscriptRuntimeModule::StartupModule()
 {
 	bool bIsEditor = GIsEditor;
-	bool bIsRunningCommandlet = IsRunningCommandlet();
 	#if WITH_DEV_AUTOMATION_TESTS
 	if (StartupIsEditorOverrideForTesting.IsSet())
 	{
 		bIsEditor = StartupIsEditorOverrideForTesting.GetValue();
 	}
-	if (StartupIsRunningCommandletOverrideForTesting.IsSet())
-	{
-		bIsRunningCommandlet = StartupIsRunningCommandletOverrideForTesting.GetValue();
-	}
 	#endif
 
-	if (bIsEditor || bIsRunningCommandlet)
-	{
-		InitializeAngelscript();
-	}
+	UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] StartupModule editor=%s commandlet=%s"),
+		bIsEditor ? TEXT("true") : TEXT("false"),
+		IsRunningCommandlet() ? TEXT("true") : TEXT("false"));
 
 	if (bIsEditor)
 	{
 		FallbackTickHandle = FTSTicker::GetCoreTicker().AddTicker(
 			FTickerDelegate::CreateRaw(this, &FAngelscriptRuntimeModule::TickFallbackPrimaryEngine));
+		UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] Registered fallback primary-engine ticker."));
 	}
 }
 
 void FAngelscriptRuntimeModule::ShutdownModule()
 {
+	UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] ShutdownModule fallbackTicker=%s ownedEngine=%s"),
+		FallbackTickHandle.IsValid() ? TEXT("true") : TEXT("false"),
+		OwnedPrimaryEngine.IsValid() ? TEXT("true") : TEXT("false"));
+
 	if (FallbackTickHandle.IsValid())
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(FallbackTickHandle);
@@ -154,9 +153,13 @@ FAngelscriptEditorGetCreateBlueprintDefaultAssetPath& FAngelscriptRuntimeModule:
 void FAngelscriptRuntimeModule::InitializeAngelscript()
 {
 	if (bInitializeAngelscriptCalled)
+	{
+		UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] InitializeAngelscript skipped because initialization already ran."));
 		return;
+	}
 
 	bInitializeAngelscriptCalled = true;
+	UE_LOG(Angelscript, Display, TEXT("[RuntimeStartup] InitializeAngelscript begin."));
 	#if WITH_DEV_AUTOMATION_TESTS
 	if (InitializeOverrideForTesting)
 	{
@@ -165,6 +168,7 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 		{
 			FAngelscriptEngineContextStack::Push(OverrideEngine);
 			InitializedOverrideEngineForTesting = OverrideEngine;
+			UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] InitializeAngelscript used automation override engine=%p."), OverrideEngine);
 		}
 		return;
 	}
@@ -176,13 +180,19 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 		// Adopt an already-initialized ambient engine instead of re-running full initialization.
 		if (CurrentEngine->GetScriptEngine() == nullptr)
 		{
+			UE_LOG(Angelscript, Display, TEXT("[RuntimeStartup] Initializing existing ambient engine=%p."), CurrentEngine);
 			CurrentEngine->Initialize();
+		}
+		else
+		{
+			UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] Adopted initialized ambient engine=%p."), CurrentEngine);
 		}
 	}
 	else
 	{
 		OwnedPrimaryEngine = MakeUnique<FAngelscriptEngine>();
 		FAngelscriptEngineContextStack::Push(OwnedPrimaryEngine.Get());
+		UE_LOG(Angelscript, Display, TEXT("[RuntimeStartup] Created owned primary engine=%p."), OwnedPrimaryEngine.Get());
 		OwnedPrimaryEngine->Initialize();
 	}
 }

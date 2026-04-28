@@ -51,6 +51,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Editor.SourceNavigation.Functions",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptSourceNavigationVSCodeParametersTest,
+	"Angelscript.TestModule.Editor.SourceNavigation.BuildVSCodeParameters",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 bool FAngelscriptFunctionSourceNavigationTest::RunTest(const FString& Parameters)
 {
 	FResolvedProductionLikeEngine ResolvedEngine;
@@ -117,6 +122,29 @@ class UFunctionNavigationCarrier : UObject
 	TestNotNull(TEXT("Source navigation should recognize generated script function as UASFunction"), Cast<UASFunction>(RuntimeFunction));
 
 	return true;
+}
+
+bool FAngelscriptSourceNavigationVSCodeParametersTest::RunTest(const FString& Parameters)
+{
+	const FString TargetParams = TEXT("--goto \"C:/Project/Script/Test.as:12\"");
+	const FString ScriptRootDirectory = TEXT("C:/Project/Script");
+	const FString WorkspaceRelativePath = TEXT("Tools/Angelscript.code-workspace");
+
+	bool bPassed = true;
+	bPassed &= TestEqual(
+		TEXT("Source navigation should prepend the Script folder when folder opening is enabled"),
+		AngelscriptSourceNavigation::BuildVSCodeOpenParametersForTesting(TargetParams, FString(), true, ScriptRootDirectory),
+		FString::Printf(TEXT("\"%s\" %s"), *ScriptRootDirectory, *TargetParams));
+	bPassed &= TestEqual(
+		TEXT("Source navigation should leave parameters unchanged when workspace and folder opening are disabled"),
+		AngelscriptSourceNavigation::BuildVSCodeOpenParametersForTesting(TargetParams, FString(), false, ScriptRootDirectory),
+		TargetParams);
+	bPassed &= TestEqual(
+		TEXT("Source navigation should prefer configured VS Code workspace over Script folder opening"),
+		AngelscriptSourceNavigation::BuildVSCodeOpenParametersForTesting(TargetParams, WorkspaceRelativePath, true, ScriptRootDirectory),
+		FString::Printf(TEXT("\"%s\" %s"), *FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), WorkspaceRelativePath), *TargetParams));
+
+	return bPassed;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

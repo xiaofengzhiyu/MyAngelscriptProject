@@ -1,5 +1,6 @@
 #include "AngelscriptEngine.h"
 #include "AngelscriptGameInstanceSubsystem.h"
+#include "AngelscriptLoaderModule.h"
 #include "AngelscriptRuntimeModule.h"
 #include "Angelscript/AngelscriptTestSupport.h"
 
@@ -112,6 +113,19 @@ struct FAngelscriptTickBehaviorTestAccess
 	}
 };
 
+struct FAngelscriptLoaderModuleTestAccess
+{
+	static void SetStartupEnvironmentOverride(const TOptional<bool>& bIsEditorOverride, const TOptional<bool>& bIsRunningCommandletOverride)
+	{
+		FAngelscriptLoaderModule::SetStartupEnvironmentOverrideForTesting(bIsEditorOverride, bIsRunningCommandletOverride);
+	}
+
+	static void ClearStartupEnvironmentOverride()
+	{
+		FAngelscriptLoaderModule::ClearStartupEnvironmentOverrideForTesting();
+	}
+};
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptRuntimeModuleInitializeOverrideLifecycleTest,
 	"Angelscript.TestModule.Engine.RuntimeModule.InitializeOverrideIsIdempotentAndRestorable",
@@ -135,6 +149,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptRuntimeModuleInitializeAdoptsAmbientEngineWithoutOwningItTest,
 	"Angelscript.TestModule.Engine.RuntimeModule.InitializeAdoptsAmbientEngineWithoutOwningIt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptLoaderModuleStartupModuleHonorsEditorAndCommandletGatesTest,
+	"Angelscript.TestModule.Engine.LoaderModule.StartupModuleHonorsEditorAndCommandletGates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptRuntimeModuleInitializeOverrideLifecycleTest::RunTest(const FString& Parameters)
@@ -357,8 +376,8 @@ bool FAngelscriptRuntimeModuleStartupModuleHonorsEditorAndCommandletGatesTest::R
 	};
 
 	const TArray<FStartupTestCase> TestCases = {
-		{ TEXT("EditorStartup"), true, false, 1, true },
-		{ TEXT("CommandletStartup"), false, true, 1, false },
+		{ TEXT("EditorStartup"), true, false, 0, true },
+		{ TEXT("CommandletStartup"), false, true, 0, false },
 		{ TEXT("PlainRuntimeStartup"), false, false, 0, false },
 	};
 
@@ -413,6 +432,105 @@ bool FAngelscriptRuntimeModuleStartupModuleHonorsEditorAndCommandletGatesTest::R
 			FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
 
 		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
+		bPassed &= TestNull(
+			FString::Printf(TEXT("%s should leave no current engine after reset"), TestCase.Label),
+			FAngelscriptEngine::TryGetCurrentEngine());
+
+		const TArray<FAngelscriptEngine*> StackAfterTestCase = FAngelscriptEngineContextStack::SnapshotAndClear();
+		bPassed &= TestEqual(
+			FString::Printf(TEXT("%s should leave the context stack empty after teardown"), TestCase.Label),
+			StackAfterTestCase.Num(),
+			0);
+	}
+
+	return bPassed;
+}
+
+bool FAngelscriptLoaderModuleStartupModuleHonorsEditorAndCommandletGatesTest::RunTest(const FString& Parameters)
+{
+	FRuntimeModuleContextStackGuard ContextGuard;
+	AngelscriptTestSupport::DestroySharedTestEngine();
+	if (FAngelscriptEngine::IsInitialized())
+	{
+		AngelscriptTestSupport::FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
+	}
+	ContextGuard.DiscardSavedStack();
+
+	ON_SCOPE_EXIT
+	{
+		FAngelscriptLoaderModuleTestAccess::ClearStartupEnvironmentOverride();
+		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
+		FAngelscriptEngineContextStack::SnapshotAndClear();
+		if (FAngelscriptEngine::IsInitialized())
+		{
+			AngelscriptTestSupport::FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
+		}
+		AngelscriptTestSupport::DestroySharedTestEngine();
+	};
+
+	TUniquePtr<FAngelscriptEngine> OverrideEngine = AngelscriptTestSupport::CreateFullTestEngine();
+	if (!TestNotNull(TEXT("LoaderModule startup gate test should create an isolated override engine"), OverrideEngine.Get()))
+	{
+		return false;
+	}
+
+	struct FStartupTestCase
+	{
+		const TCHAR* Label;
+		bool bIsEditor = false;
+		bool bIsRunningCommandlet = false;
+		int32 ExpectedInitializeCalls = 0;
+	};
+
+	const TArray<FStartupTestCase> TestCases = {
+		{ TEXT("EditorStartup"), true, false, 1 },
+		{ TEXT("CommandletStartup"), false, true, 1 },
+		{ TEXT("PlainRuntimeStartup"), false, false, 0 },
+	};
+
+	bool bPassed = true;
+	for (const FStartupTestCase& TestCase : TestCases)
+	{
+		int32 InitializeCalls = 0;
+		FAngelscriptLoaderModuleTestAccess::ClearStartupEnvironmentOverride();
+		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
+
+		if (!TestNull(FString::Printf(TEXT("%s should start without a current engine"), TestCase.Label), FAngelscriptEngine::TryGetCurrentEngine()))
+		{
+			return false;
+		}
+
+		FAngelscriptLoaderModuleTestAccess::SetStartupEnvironmentOverride(TestCase.bIsEditor, TestCase.bIsRunningCommandlet);
+		FAngelscriptRuntimeModuleTickTestAccess::SetInitializeOverride([&OverrideEngine, &InitializeCalls]()
+		{
+			++InitializeCalls;
+			return OverrideEngine.Get();
+		});
+
+		FAngelscriptLoaderModule LoaderModule;
+		LoaderModule.StartupModule();
+
+		bPassed &= TestEqual(
+			FString::Printf(TEXT("%s should trigger the expected number of Loader initialize calls"), TestCase.Label),
+			InitializeCalls,
+			TestCase.ExpectedInitializeCalls);
+
+		if (TestCase.ExpectedInitializeCalls > 0)
+		{
+			bPassed &= TestTrue(
+				FString::Printf(TEXT("%s should push the override engine when Loader initialization runs"), TestCase.Label),
+				FAngelscriptEngine::TryGetCurrentEngine() == OverrideEngine.Get());
+		}
+		else
+		{
+			bPassed &= TestNull(
+				FString::Printf(TEXT("%s should keep the context stack empty when Loader initialization is gated off"), TestCase.Label),
+				FAngelscriptEngine::TryGetCurrentEngine());
+		}
+
+		LoaderModule.ShutdownModule();
+		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
+		FAngelscriptLoaderModuleTestAccess::ClearStartupEnvironmentOverride();
 		bPassed &= TestNull(
 			FString::Printf(TEXT("%s should leave no current engine after reset"), TestCase.Label),
 			FAngelscriptEngine::TryGetCurrentEngine());

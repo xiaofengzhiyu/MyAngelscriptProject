@@ -9,7 +9,7 @@
 ## Current Project Phase
 
 - The plugin is **no longer in prototype or foundation-building phase**. It has entered a maturity stage where the core runtime, editor integration, and test infrastructure are established, but external delivery entry points and several key capability closures still need attention.
-- Current baseline: `AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptTest` three-module structure is stable, with `124` `Bind_*.cpp` files, `27+` CSV state export tables, `417+` automation test definitions across `429` test `.cpp` files (387 Test + 32 Editor + 10 Runtime), `DebugServer V2` protocol, `CodeCoverage`, `StaticJIT`, and `BlueprintImpact Commandlet` all landed. Only `2` tests remain Disabled (both `#ue57-headless` known limitations).
+- Current baseline: `AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptLoader` / `AngelscriptTest` four-module structure is stable, with `124` `Bind_*.cpp` files, `27+` CSV state export tables, `417+` automation test definitions across `429` test `.cpp` files (387 Test + 32 Editor + 10 Runtime), `DebugServer V2` protocol, `CodeCoverage`, `StaticJIT`, and `BlueprintImpact Commandlet` all landed. Only `2` tests remain Disabled (both `#ue57-headless` known limitations).
 - AngelScript base version is `2.33 + selective 2.38 compatibility`; the fork has diverged too far for a wholesale upgrade — the strategy is to selectively absorb improvements from higher versions. See `Documents/Guides/AngelscriptForkStrategy.md`.
 - Current priority order: **known blockers & delivery baseline → onboarding assets & workflow entry points → feature parity & validation closure → AS 2.38 selective migration & long-term architecture**. See `Documents/Plans/Plan_StatusPriorityRoadmap.md` for details.
 
@@ -29,13 +29,16 @@ AngelscriptRuntime  (Runtime module, no intra-plugin dependencies)
        │
        ├──► AngelscriptEditor  (Editor module, public dependency on Runtime)
        │
+       ├──► AngelscriptLoader  (Runtime loader module, public dependency on Runtime;
+       │                        owns editor/commandlet startup initialization)
+       │
        └──► AngelscriptTest    (Editor module, public dependency on Runtime,
-                                private dependency on Editor when bBuildEditor)
+                                private dependency on Editor/Loader when bBuildEditor)
 
 AngelscriptUHTTool  (C# UBT plugin, independent — hooks into Unreal Header Tool pipeline)
 ```
 
-All three UE modules load at `PostDefault` phase. The host project module `AngelscriptProject` is intentionally minimal — it exists only to give UE a valid target; all real logic belongs in the plugin.
+All four UE modules load at `PostDefault` phase. `AngelscriptLoader` calls `FAngelscriptRuntimeModule::InitializeAngelscript()` for editor and commandlet startup; `AngelscriptRuntime` keeps the core runtime APIs and fallback ticker but no longer owns initial editor startup compilation. The host project module `AngelscriptProject` is intentionally minimal — it exists only to give UE a valid target; all real logic belongs in the plugin.
 
 ### Core Subsystems (AngelscriptRuntime)
 
@@ -94,6 +97,7 @@ Angelscript `.as` example scripts demonstrating core patterns (actor lifecycle, 
   - `FunctionLibraries/`: 21+ script helper function libraries.
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Dump/`: Runtime CSV state dump/export infrastructure. Keep dump logic here as a pure external observer over existing runtime/public APIs.
 - `Plugins/Angelscript/Source/AngelscriptEditor/`: Editor-related support (menu extensions, hot-reload UI, BlueprintImpact Commandlet).
+- `Plugins/Angelscript/Source/AngelscriptLoader/`: Loader module that owns editor/commandlet startup initialization after Runtime and Editor modules are available.
 - `Plugins/Angelscript/Source/AngelscriptTest/`: Plugin tests and validation (organized by theme: Actor/Bindings/Blueprint/Component/Debugger/HotReload/Subsystem etc.).
 - `Plugins/Angelscript/Source/AngelscriptTest/Dump/`: Test-module console command and automation coverage for dump flows.
 - `Plugins/Angelscript/Source/AngelscriptUHTTool/`: UHT code generation toolchain.
