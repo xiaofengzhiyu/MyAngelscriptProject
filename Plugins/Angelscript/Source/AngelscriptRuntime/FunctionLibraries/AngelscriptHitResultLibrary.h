@@ -2,6 +2,7 @@
 #include "Engine/EngineTypes.h"
 #include "GameFramework/Actor.h"
 #include "Components/PrimitiveComponent.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 #include "AngelscriptEngine.h"
 #include "AngelscriptHitResultLibrary.generated.h"
 
@@ -42,6 +43,20 @@ public:
 		return HitResult.GetActor();
 	}
 
+	/**
+	 * Physical material that was hit.
+	 * @note Must set bReturnPhysicalMaterial on the swept PrimitiveComponent or in the query params for this to be returned.
+	 */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial))
+	static void SetPhysMaterial(FHitResult& HitResult, UPhysicalMaterial* PhysMaterial)
+	{
+		HitResult.PhysMaterial = PhysMaterial;
+	}
+
+	/**
+	 * Physical material that was hit.
+	 * @note Must set bReturnPhysicalMaterial on the swept PrimitiveComponent or in the query params for this to be returned.
+	 */
 	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial))
 	static UPhysicalMaterial* GetPhysMaterial(const FHitResult& HitResult)
 	{
