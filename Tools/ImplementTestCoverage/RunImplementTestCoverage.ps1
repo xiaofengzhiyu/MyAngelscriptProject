@@ -26,7 +26,7 @@ if (-not $env:CODEX_HOME) {
         }
     }
     if (-not $env:CODEX_HOME) {
-        $env:CODEX_HOME = 'C:\Users\scottmei\.codex_test_nopro'
+        $env:CODEX_HOME = 'C:\Users\scottmei\.codex'
     }
 }
 
@@ -51,6 +51,12 @@ $prompt = @'
 ## 实现目标
 
 从以下 8 个测试缺口文档中选取 NewTest 条目并实际编写 C++ 测试代码。跨全部模块统一选取，每轮只实现一个条目，按优先级 P0 > P1 > P2 > P3 选取。
+
+注意：`NewTest-<编号>` 只是各自 gap 文档内的局部展示标签，**不是全局唯一 ID**。跨模块选题、去重、恢复时必须使用稳定复合键 `GapKey`：
+- 优先使用 `<模块>|<建议测试名>`
+- 如果建议测试名缺失、重复或无法可靠提取，则使用 `<模块>|<NewTest 标题原文>`
+
+严禁仅用 `NewTest` 编号判断“是否已处理”或作为跨模块同优先级 tie-break。
 
 ## 测试缺口文档（全部只读）
 
@@ -91,15 +97,20 @@ Documents/ImplementTestCoverage/ImplementHistory.md
 ### 第二步：选择新测试并记录目标
 
 1. 依次读取上表中全部 8 个缺口文档。
-2. 收集所有 `NewTest-<编号>` 条目，跳过已在 `ImplementHistory.md` 中出现的（无论 `[x]` 还是 `[~]`）。
-3. 按优先级 P0 > P1 > P2 > P3 跨模块统一排序，选择优先级最高的一个。同优先级时优先选择条目编号较小的。
-4. **先写入 `Documents/ImplementTestCoverage/ImplementHistory.md`**，格式：
+2. 对每个 `NewTest` 条目同时提取：模块、缺口文档路径、`NewTest` 标题原文、建议测试名、优先级，并为其计算稳定 `GapKey`。
+3. 检查 `Documents/ImplementTestCoverage/ImplementHistory.md`：
+   - 如果历史条目已经显式包含相同 `GapKey`，则视为已处理（无论 `[x]` 还是 `[~]`）。
+   - 对旧格式历史条目（没有 `GapKey`）做兼容：仅当“模块相同且测试名相同”时，才视为已处理。
+   - **绝对不要**只按 `NewTest-<编号>` 去重。
+4. 按优先级 P0 > P1 > P2 > P3 跨模块统一排序，选择优先级最高的一个。
+5. 同优先级时，优先选择在 `ImplementHistory.md` 中“已完成 + 已跳过 + 进行中”总数更少的模块，以保持跨模块选题均衡；如果仍然相同，则按上表模块顺序，再按该条目在对应 gap 文档中的出现顺序选择。
+6. **先写入 `Documents/ImplementTestCoverage/ImplementHistory.md`**，格式：
 
 ```markdown
-- [ ] **NewTest-<编号>** (<模块名>) `<测试名>` — <一句话描述> (开始时间: YYYY-MM-DD HH:MM)
+- [ ] **NewTest-<编号>** (<模块名>) [GapKey: <模块>|<建议测试名或标题>] `<测试名>` — <一句话描述> (开始时间: YYYY-MM-DD HH:MM)
 ```
 
-5. 写入后才开始实现。
+7. 写入后才开始实现。
 
 ### 第三步：实现测试
 
@@ -165,7 +176,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Test
 1. 构建通过且测试通过后，将 `ImplementHistory.md` 中对应条目从 `- [ ]` 改为 `- [x]`，并追加完成时间：
 
 ```markdown
-- [x] **NewTest-<编号>** (<模块名>) `<测试名>` — <一句话描述> (开始: YYYY-MM-DD HH:MM, 完成: YYYY-MM-DD HH:MM)
+- [x] **NewTest-<编号>** (<模块名>) [GapKey: <模块>|<建议测试名或标题>] `<测试名>` — <一句话描述> (开始: YYYY-MM-DD HH:MM, 完成: YYYY-MM-DD HH:MM)
   - 文件: `<实际创建/修改的文件路径>`
   - 用例数: <N>
   - 备注: <简短说明实现中的决策或注意点>
@@ -174,7 +185,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Test
 2. 如果实现过程中发现 `NewTest` 条目的描述有误或不可行，标记为：
 
 ```markdown
-- [~] **NewTest-<编号>** (<模块名>) `<测试名>` — 跳过: <原因> (YYYY-MM-DD HH:MM)
+- [~] **NewTest-<编号>** (<模块名>) [GapKey: <模块>|<建议测试名或标题>] `<测试名>` — 跳过: <原因> (YYYY-MM-DD HH:MM)
 ```
 
 然后回到第二步选择下一个。
