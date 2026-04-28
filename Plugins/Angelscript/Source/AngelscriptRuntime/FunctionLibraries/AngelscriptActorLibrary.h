@@ -76,4 +76,32 @@ public:
 		Actor->RerunConstructionScripts();
 	}
 #endif
+
+	/** Find all Actors which are attached directly to a component in this actor */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, NotAngelscriptProperty))
+	static TArray<AActor*> GetAttachedActors(const AActor* Actor, bool bRecursivelyIncludeAttachedActors = false)
+	{
+		TArray<AActor*> OutActors;
+		Actor->GetAttachedActors(OutActors, false, bRecursivelyIncludeAttachedActors);
+		return OutActors;
+	}
+
+	/** Find all Actors of a particular class which are attached directly to a component in this actor */
+	UFUNCTION(BlueprintCallable, Meta = (ScriptTrivial, DeterminesOutputType = "ActorClass", NotAngelscriptProperty))
+	static TArray<AActor*> GetAttachedActorsOfClass(const AActor* Actor, const TSubclassOf<AActor> ActorClass, bool bRecursivelyIncludeAttachedActors = false)
+	{
+		TArray<AActor*> OutActors;
+		Actor->GetAttachedActors(OutActors, false, bRecursivelyIncludeAttachedActors);
+
+		if (ActorClass != nullptr)
+		{
+			for (int i = OutActors.Num() - 1; i >= 0; --i)
+			{
+				if (OutActors[i] == nullptr || !OutActors[i]->IsA(ActorClass))
+					OutActors.RemoveAt(i, EAllowShrinking::No);
+			}
+		}
+
+		return OutActors;
+	}
 };
