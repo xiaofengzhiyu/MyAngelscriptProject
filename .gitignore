@@ -109,6 +109,9 @@ DerivedDataCache/*
 # Windows artifact
 /nul
 
+# Knowledge temp drafts
+Documents/Knowledges/Temp/
+
 # Angelscript cache files
 Script/Binds.Cache
 Script/Binds.Cache.Headers
