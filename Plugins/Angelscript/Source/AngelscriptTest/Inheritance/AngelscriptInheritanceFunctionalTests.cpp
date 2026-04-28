@@ -207,12 +207,12 @@ class ATestInheritanceIsABase : AActor
 }
 
 UCLASS()
-class ATestInheritanceIsADerived : AScenarioInheritanceIsABase
+class ATestInheritanceIsADerived : ATestInheritanceIsABase
 {
 	UFUNCTION()
 	int VerifyBaseCast()
 	{
-		AScenarioInheritanceIsABase BaseRef = Cast<AScenarioInheritanceIsABase>(this);
+		ATestInheritanceIsABase BaseRef = Cast<ATestInheritanceIsABase>(this);
 		return BaseRef == null ? 0 : 1;
 	}
 }
