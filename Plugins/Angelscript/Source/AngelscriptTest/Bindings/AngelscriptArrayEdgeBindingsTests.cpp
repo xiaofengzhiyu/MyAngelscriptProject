@@ -1,3 +1,4 @@
+#include "../Shared/AngelscriptGlobalFunctionInvoker.h"
 #include "../Shared/AngelscriptTestUtilities.h"
 #include "../Shared/AngelscriptTestMacros.h"
 
@@ -6,6 +7,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptReflectiveAccess;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptArrayMutationEdgeCasesBindingsTest,
@@ -16,14 +18,48 @@ namespace AngelscriptTest_Bindings_AngelscriptArrayEdgeBindingsTests_Private
 {
 	static constexpr ANSICHAR ArrayMutationEdgeCasesModuleName[] = "ASArrayMutationEdgeCases";
 
+	bool ExpectGlobalInt(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		asIScriptModule& Module,
+		const TCHAR* FunctionDecl,
+		const TCHAR* ContextLabel,
+		int32 ExpectedValue)
+	{
+		FASGlobalFunctionInvoker Invoker(Test, Engine, Module, FunctionDecl);
+		const int32 ActualValue = Invoker.CallAndReturn<int32>(INDEX_NONE);
+		Test.AddInfo(FString::Printf(TEXT("%s returned %d"), ContextLabel, ActualValue));
+		return Test.TestEqual(
+			*FString::Printf(TEXT("%s should return the expected script-visible value"), ContextLabel),
+			ActualValue,
+			ExpectedValue);
+	}
+
+	bool ExpectGlobalIntAtLeast(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		asIScriptModule& Module,
+		const TCHAR* FunctionDecl,
+		const TCHAR* ContextLabel,
+		int32 MinimumValue)
+	{
+		FASGlobalFunctionInvoker Invoker(Test, Engine, Module, FunctionDecl);
+		const int32 ActualValue = Invoker.CallAndReturn<int32>(INDEX_NONE);
+		Test.AddInfo(FString::Printf(TEXT("%s returned %d"), ContextLabel, ActualValue));
+		return Test.TestTrue(
+			*FString::Printf(TEXT("%s should be at least %d"), ContextLabel, MinimumValue),
+			ActualValue >= MinimumValue);
+	}
+
 	bool ExecuteFunctionExpectingScriptException(
 		FAutomationTestBase& Test,
 		FAngelscriptEngine& Engine,
 		asIScriptModule& Module,
 		const FString& FunctionDecl,
+		const FString& ExpectedExceptionText,
 		const TCHAR* ContextLabel)
 	{
-		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
+		asIScriptFunction* Function = ResolveFunctionByDecl(Test, Module, FunctionDecl);
 		if (Function == nullptr)
 		{
 			return false;
@@ -58,11 +94,19 @@ namespace AngelscriptTest_Bindings_AngelscriptArrayEdgeBindingsTests_Private
 		const bool bHasMessage = Test.TestFalse(
 			*FString::Printf(TEXT("%s should provide a non-empty exception string"), ContextLabel),
 			ExceptionString.IsEmpty());
+		const bool bHasExpectedMessage = Test.TestTrue(
+			*FString::Printf(TEXT("%s should report the expected exception text"), ContextLabel),
+			ExceptionString.Contains(ExpectedExceptionText));
 		const bool bHasLine = Test.TestTrue(
 			*FString::Printf(TEXT("%s should report a positive exception line"), ContextLabel),
 			ExceptionLine > 0);
+		Test.AddInfo(FString::Printf(
+			TEXT("%s raised script exception at line %d: %s"),
+			ContextLabel,
+			ExceptionLine,
+			*ExceptionString));
 
-		return bPrepared && bThrew && bHasMessage && bHasLine;
+		return bPrepared && bThrew && bHasMessage && bHasExpectedMessage && bHasLine;
 	}
 }
 
@@ -76,6 +120,7 @@ bool FAngelscriptArrayMutationEdgeCasesBindingsTest::RunTest(const FString& Para
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(TEXT("ASArrayMutationEdgeCases"));
+		ResetSharedCloneEngine(Engine);
 	};
 
 	asIScriptModule* Module = BuildModule(
@@ -89,40 +134,112 @@ bool HasRemainingValues(const int[] Values)
 		&& ((Values[0] == 2 && Values[1] == 3) || (Values[0] == 3 && Values[1] == 2));
 }
 
-int Entry()
+int ReserveCount()
 {
 	int[] Reserved;
 	Reserved.Add(4);
 	Reserved.Add(5);
 	Reserved.Reserve(16);
-	if (Reserved.Num() != 2)
-		return 10;
-	if (Reserved[0] != 4 || Reserved[1] != 5)
-		return 20;
-	if (Reserved.Max() < 16)
-		return 30;
+	return Reserved.Num();
+}
 
+int ReserveFirstValue()
+{
+	int[] Reserved;
+	Reserved.Add(4);
+	Reserved.Add(5);
+	Reserved.Reserve(16);
+	return Reserved[0];
+}
+
+int ReserveSecondValue()
+{
+	int[] Reserved;
+	Reserved.Add(4);
+	Reserved.Add(5);
+	Reserved.Reserve(16);
+	return Reserved[1];
+}
+
+int ReserveMaxAfterReserve()
+{
+	int[] Reserved;
+	Reserved.Add(4);
+	Reserved.Add(5);
+	Reserved.Reserve(16);
+	return Reserved.Max();
+}
+
+int SetNumCount()
+{
 	int[] ZeroExtended;
 	ZeroExtended.Add(9);
 	ZeroExtended.SetNum(4);
-	if (ZeroExtended.Num() != 4)
-		return 40;
-	if (ZeroExtended[0] != 9)
-		return 50;
-	if (ZeroExtended[1] != 0 || ZeroExtended[2] != 0 || ZeroExtended[3] != 0)
-		return 60;
+	return ZeroExtended.Num();
+}
 
+int SetNumExistingValue()
+{
+	int[] ZeroExtended;
+	ZeroExtended.Add(9);
+	ZeroExtended.SetNum(4);
+	return ZeroExtended[0];
+}
+
+int SetNumNewSlotSum()
+{
+	int[] ZeroExtended;
+	ZeroExtended.Add(9);
+	ZeroExtended.SetNum(4);
+	return ZeroExtended[1] + ZeroExtended[2] + ZeroExtended[3];
+}
+
+int RemoveSwapRemovedCount()
+{
 	int[] Values;
 	Values.Add(1);
 	Values.Add(2);
 	Values.Add(1);
 	Values.Add(3);
-	if (Values.RemoveSwap(1) != 2)
-		return 70;
-	if (!HasRemainingValues(Values))
-		return 80;
+	return Values.RemoveSwap(1);
+}
 
+int RemoveSwapCountAfterRemove()
+{
+	int[] Values;
+	Values.Add(1);
+	Values.Add(2);
+	Values.Add(1);
+	Values.Add(3);
+	Values.RemoveSwap(1);
+	return Values.Num();
+}
+
+int RemoveSwapNoRemovedValueLeft()
+{
+	int[] Values;
+	Values.Add(1);
+	Values.Add(2);
+	Values.Add(1);
+	Values.Add(3);
+	Values.RemoveSwap(1);
+	for (int Index = 0; Index < Values.Num(); ++Index)
+	{
+		if (Values[Index] == 1)
+			return 0;
+	}
 	return 1;
+}
+
+int RemoveSwapHasExpectedSurvivors()
+{
+	int[] Values;
+	Values.Add(1);
+	Values.Add(2);
+	Values.Add(1);
+	Values.Add(3);
+	Values.RemoveSwap(1);
+	return HasRemainingValues(Values) ? 1 : 0;
 }
 
 void TriggerSelfAliasAdd()
@@ -146,22 +263,18 @@ void TriggerSelfAliasInsert()
 		return false;
 	}
 
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	const bool bHappyPathPassed = TestEqual(
-		TEXT("TArray reserve, SetNum, and RemoveSwap edge cases should preserve the expected script-visible results"),
-		Result,
-		1);
+	bool bHappyPathPassed = true;
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int ReserveCount()"), TEXT("Reserve should preserve Num"), 2);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int ReserveFirstValue()"), TEXT("Reserve should preserve first value"), 4);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int ReserveSecondValue()"), TEXT("Reserve should preserve second value"), 5);
+	bHappyPathPassed &= ExpectGlobalIntAtLeast(*this, Engine, *Module, TEXT("int ReserveMaxAfterReserve()"), TEXT("Reserve should grow Max"), 16);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int SetNumCount()"), TEXT("SetNum should extend Num"), 4);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int SetNumExistingValue()"), TEXT("SetNum should preserve existing values"), 9);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int SetNumNewSlotSum()"), TEXT("SetNum should zero-initialize new slots"), 0);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int RemoveSwapRemovedCount()"), TEXT("RemoveSwap should remove all matching values"), 2);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int RemoveSwapCountAfterRemove()"), TEXT("RemoveSwap should shrink Num"), 2);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int RemoveSwapNoRemovedValueLeft()"), TEXT("RemoveSwap should leave no removed value"), 1);
+	bHappyPathPassed &= ExpectGlobalInt(*this, Engine, *Module, TEXT("int RemoveSwapHasExpectedSurvivors()"), TEXT("RemoveSwap should preserve survivor set"), 1);
 	AddExpectedError(TEXT("Cannot Add an element from the same array by reference. Copy it to a temporary first."), EAutomationExpectedErrorFlags::Contains, 1);
 	AddExpectedError(TEXT("Cannot Insert an element from the same array by reference. Copy it to a temporary first."), EAutomationExpectedErrorFlags::Contains, 1);
 	AddExpectedError(TEXT("ASArrayMutationEdgeCases"), EAutomationExpectedErrorFlags::Contains, 2);
@@ -171,12 +284,14 @@ void TriggerSelfAliasInsert()
 		Engine,
 		*Module,
 		TEXT("void TriggerSelfAliasAdd()"),
+		TEXT("Cannot Add an element from the same array by reference. Copy it to a temporary first."),
 		TEXT("TArray.Add self-alias"));
 	const bool bSelfAliasInsertPassed = ExecuteFunctionExpectingScriptException(
 		*this,
 		Engine,
 		*Module,
 		TEXT("void TriggerSelfAliasInsert()"),
+		TEXT("Cannot Insert an element from the same array by reference. Copy it to a temporary first."),
 		TEXT("TArray.Insert self-alias"));
 
 	bPassed = bHappyPathPassed && bSelfAliasAddPassed && bSelfAliasInsertPassed;
