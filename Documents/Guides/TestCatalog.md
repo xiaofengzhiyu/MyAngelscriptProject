@@ -315,7 +315,7 @@
 |--------|----------|--------|
 | Bindings.ValueTypes | `int32`/`double`/`FString`/`FName`/`FVector`/`FRotator`/`FTransform`/`FText` 运算与比较 | AngelscriptEngineBindingsTests.cpp |
 | Bindings.FNameArrayCompat | `FName[]` 与 `TArray<FName>` 别名/显式、`Add`、索引、`Contains` | AngelscriptEngineBindingsTests.cpp |
-| Bindings.ArraySyntaxCompat | `T[]`/`int[]` 兼容入口复用 `Bindings.TArray` 同一套覆盖；值类型/结构体走简写语法，UObject/Actor 容器按当前语法边界保留显式 `TArray<T>` | AngelscriptArraySyntaxCompatBindingsTests.cpp |
+| Bindings.TArraySyntaxCompat | 独立覆盖 `T[]`/`int[]` 默认数组语法：`int[]` 全接口、值类型/结构体/`TSubclassOf<AActor>[]`、返回值、运行时负向异常、嵌套容器与 UObject/Actor 简写编译边界 | AngelscriptTArraySyntaxCompatBindingsTests.cpp |
 | Bindings.ForeachCompat | `int[]`/`TArray` 的 `for (x : arr)` 与 `const FVector&` 范围 for | AngelscriptEngineBindingsTests.cpp |
 
 ### 全局变量与控制台
