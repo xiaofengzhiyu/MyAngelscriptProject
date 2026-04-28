@@ -175,6 +175,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptModuleCleanMacroValidationTest,
+	"Angelscript.TestModule.Validation.ModuleCleanMacro",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptLifecycleEndPlacementValidationTest,
 	"Angelscript.TestModule.Validation.LifecycleEndPlacement",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -270,6 +275,31 @@ int Entry()
 	bPassed = TestEqual(TEXT("Shared fresh lifecycle macro pair should compile and run"), Result, 23);
 	ASTEST_END_SHARE_FRESH
 	return bPassed;
+}
+
+bool FAngelscriptModuleCleanMacroValidationTest::RunTest(const FString& Parameters)
+{
+	bool bPassed = false;
+	int32 Result = 0;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
+	ASTEST_BEGIN_MODULE_CLEAN
+
+	ASTEST_COMPILE_RUN_INT(
+		Engine,
+		"ASModuleCleanMacroValidation",
+		TEXT(R"(
+int Entry()
+{
+	return 31;
+}
+		)"),
+		TEXT("int Entry()"),
+		Result);
+
+	bPassed = TestEqual(TEXT("Module clean lifecycle macro pair should compile and run"), Result, 31);
+	ASTEST_END_MODULE_CLEAN
+
+	return bPassed && TestEqual(TEXT("Module clean lifecycle should discard its module delta"), Engine.GetActiveModules().Num(), 0);
 }
 
 bool FAngelscriptLifecycleEndPlacementValidationTest::RunTest(const FString& Parameters)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AngelscriptTestUtilities.h"
+#include "AngelscriptTestEnginePool.h"
 #include "AngelscriptTestEngineHelper.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
@@ -50,6 +51,11 @@
 
 #define ASTEST_CREATE_ENGINE_SHARE_FRESH() \
 	AngelscriptTestSupport::AcquireFreshSharedCloneEngine()
+
+// MODULE_CLEAN - Reuses the module-level source engine and cleans only modules
+// introduced inside the matching ASTEST_BEGIN/END_MODULE_CLEAN scope.
+#define ASTEST_CREATE_ENGINE_MODULE_CLEAN() \
+	AngelscriptTestSupport::AcquireModuleCleanSharedEngine()
 
 // CLONE - Lightweight isolation, shares source engine read-only state.
 // Use for: tests needing isolation without Full engine creation cost.
@@ -125,6 +131,17 @@
 		FAngelscriptEngineScope _AutoEngineScope(Engine);
 
 #define ASTEST_END_SHARE_FRESH \
+	}
+
+// ---------- MODULE_CLEAN lifecycle ----------
+// Establishes the current-engine scope and removes only the module/class delta
+// created inside this block. GC is batched by the test engine pool.
+#define ASTEST_BEGIN_MODULE_CLEAN \
+	{ \
+		FAngelscriptEngineScope _AutoEngineScope(Engine); \
+		AngelscriptTestSupport::FScopedModuleCleanEngine _AutoModuleClean(Engine);
+
+#define ASTEST_END_MODULE_CLEAN \
 	}
 
 // ---------- CLONE lifecycle ----------
