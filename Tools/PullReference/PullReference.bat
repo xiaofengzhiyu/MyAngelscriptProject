@@ -59,6 +59,15 @@ if /I "%REFERENCE_KEY%"=="sluaunreal" (
     goto :ValidateGit
 )
 
+if /I "%REFERENCE_KEY%"=="hazelightdocs" (
+    set "REPO_NAME=Docs-UnrealEngine-Angelscript"
+    set "REPO_SSH=git@github.com:Hazelight/Docs-UnrealEngine-Angelscript.git"
+    set "REPO_HTTPS=https://github.com/Hazelight/Docs-UnrealEngine-Angelscript.git"
+    set "REPO_BRANCH=master"
+    if "%TARGET_DIR%"=="" set "TARGET_DIR=%PROJECT_ROOT%\Reference\Docs-UnrealEngine-Angelscript"
+    goto :ValidateGit
+)
+
 if /I "%REFERENCE_KEY%"=="hazelight" goto :Hazelight
 
 echo Unknown reference key: %REFERENCE_KEY%
@@ -72,6 +81,7 @@ echo   unrealcsharp      - Pull UnrealCSharp into Reference\UnrealCSharp
 echo   unlua             - Pull Tencent UnLua into Reference\UnLua
 echo   puerts            - Pull Tencent puerts into Reference\puerts
 echo   sluaunreal        - Pull Tencent sluaunreal into Reference\sluaunreal
+echo   hazelightdocs     - Pull Hazelight public docs into Reference\Docs-UnrealEngine-Angelscript
 echo   hazelight         - Local config only, read AgentConfig.ini
 exit /b 0
 
@@ -79,6 +89,7 @@ exit /b 0
 echo Reference key 'hazelight' is not pullable by this tool.
 echo Read the local path from AgentConfig.ini:
 echo   [References] HazelightAngelscriptEngineRoot
+echo Use 'hazelightdocs' to pull the public documentation repository.
 exit /b 1
 
 :Usage
@@ -86,13 +97,14 @@ echo Usage:
 echo   Tools\PullReference\PullReference.bat ^<reference-key^> [target-dir]
 echo.
 echo Examples:
-echo   Tools\PullReference.bat angelscript
-echo   Tools\PullReference.bat unrealcsharp
-echo   Tools\PullReference.bat unlua
-echo   Tools\PullReference.bat puerts
-echo   Tools\PullReference.bat sluaunreal
-echo   Tools\PullReference.bat angelscript "J:\UnrealEngine\AngelscriptProject\Reference\angelscript-v2.38.0"
-echo   Tools\PullReference.bat list
+echo   Tools\PullReference\PullReference.bat angelscript
+echo   Tools\PullReference\PullReference.bat unrealcsharp
+echo   Tools\PullReference\PullReference.bat unlua
+echo   Tools\PullReference\PullReference.bat puerts
+echo   Tools\PullReference\PullReference.bat sluaunreal
+echo   Tools\PullReference\PullReference.bat hazelightdocs
+echo   Tools\PullReference\PullReference.bat angelscript "J:\UnrealEngine\AngelscriptProject\Reference\angelscript-v2.38.0"
+echo   Tools\PullReference\PullReference.bat list
 exit /b 1
 
 :ValidateGit
