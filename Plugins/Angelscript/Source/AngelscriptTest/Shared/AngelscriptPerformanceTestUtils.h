@@ -13,6 +13,8 @@ namespace AngelscriptTestSupport
 		FString Name;
 		TArray<double> Samples;
 		double Median = 0.0;
+		FString Unit;
+		FString Source;
 	};
 
 	inline double ComputeMedian(TArray<double> Samples)
@@ -53,6 +55,14 @@ namespace AngelscriptTestSupport
 			TSharedRef<FJsonObject> MetricObject = MakeShared<FJsonObject>();
 			MetricObject->SetStringField(TEXT("name"), Metric.Name);
 			MetricObject->SetNumberField(TEXT("median"), Metric.Median);
+			if (!Metric.Unit.IsEmpty())
+			{
+				MetricObject->SetStringField(TEXT("unit"), Metric.Unit);
+			}
+			if (!Metric.Source.IsEmpty())
+			{
+				MetricObject->SetStringField(TEXT("source"), Metric.Source);
+			}
 
 			TArray<TSharedPtr<FJsonValue>> SampleValues;
 			for (const double Sample : Metric.Samples)

@@ -2,7 +2,7 @@
 
 ## 目标
 
-本文档定义启动 bind 与热重载验证的最小性能记录方案，先保证“能采、能落盘、能比较”，再考虑是否升级成强预算断言。
+本文档定义启动 bind、编译、热重载和运行期关键路径的性能记录方案，先保证“能采、能落盘、能比较”，再考虑是否升级成强预算断言。
 
 ## 产物分层
 
@@ -66,8 +66,8 @@
     "measurement_runs": 3
   },
   "metrics": [
-    { "name": "startup.total_seconds", "samples": [0.0], "median": 0.0 },
-    { "name": "startup.bind_script_types_seconds", "samples": [0.0], "median": 0.0 }
+    { "name": "startup.total_seconds", "samples": [0.0], "median": 0.0, "unit": "seconds", "source": "RuntimeInstrumentation" },
+    { "name": "startup.bind_script_types_seconds", "samples": [0.0], "median": 0.0, "unit": "seconds", "source": "RuntimeInstrumentation" }
   ],
   "notes": [
     "Rename baseline is modeled as remove+add within deletion delay window."
@@ -75,7 +75,7 @@
 }
 ```
 
-首批不要求完全一致的字段顺序，但要求至少能表达 `run_id`、测试组、运行环境、样本集合、聚合值和备注。
+首批不要求完全一致的字段顺序，但要求至少能表达 `run_id`、测试组、运行环境、样本集合、聚合值和备注。`metrics.json` 中的单项指标可以补充 `unit` 与 `source`，用于区分秒、毫秒、计数，以及手写采样、UE runtime instrumentation 或外部后处理来源。
 
 ## 采样策略
 
@@ -83,10 +83,18 @@
 - 首轮只记录中位数、最小值、最大值和样本列表，不直接写死细粒度毫秒预算。
 - 若存在首次初始化、文件缓存或并行运行噪声，应在摘要中明确注明，不把单次异常值直接升级成失败断言。
 
+## UE 原生插桩入口
+
+- `TRACE_CPUPROFILER_EVENT_SCOPE_STR`：进入 Unreal Insights 的 CPU timeline，用稳定低基数字符串命名，例如 `Angelscript.Compile.Modules`。
+- `DECLARE_STATS_GROUP` / `DECLARE_CYCLE_STAT_EXTERN` / `SCOPE_CYCLE_COUNTER`：进入 `stat Angelscript`，用于本地编辑器或命令行观察。
+- `CSV_DEFINE_CATEGORY_MODULE` / `CSV_SCOPED_TIMING_STAT`：进入 CSV profiler 的 `Angelscript` category，用于长跑或自动化后处理。
+- 插桩集中在 `Core/AngelscriptPerformanceStats.h` / `.cpp`，新增阶段时先补 scope catalog，再接入具体调用点。
+
 ## 首批 telemetry 决策
 
-- 默认方案：`FPlatformTime::Seconds()` + 统一格式日志行 + `-ReportExportPath` / `-ABSLOG` 产物留痕。
-- 可选增强：若后续验证表明当前 UE 版本能稳定从自动化测试写入 telemetry，再增量接入 `AddTestTelemetryData` 或 CSV profiler，不作为首批落地前置条件。
+- 默认方案：保留 `FPlatformTime::Seconds()` + 统一格式日志行 + `-ReportExportPath` / `-ABSLOG` 产物留痕，作为自动化 artifact 的稳定基础。
+- Runtime instrumentation：启动 bind、CallBinds、initial compile、CompileModules、hot reload、class generator、BPVM JIT 调用、参数 context fallback、StaticJIT precompiled data、DebugServer tick、DumpAll、BlueprintImpact commandlet 已接入 UE 原生插桩。
+- 可选增强：若后续验证表明当前 UE 版本能稳定从自动化测试写入 telemetry，再增量接入 `AddTestTelemetryData`；CSV profiler 已作为 runtime 侧插桩路径接入，不再作为首批前置风险。
 - `UAutomationPerformanceHelper` 和重量级 Functional Test 依赖不作为首批必选项，避免在建立基线前先把执行入口复杂化。
 
 ## 推荐命令模板
@@ -111,6 +119,7 @@ Tools\RunTests.ps1 -Group AngelscriptPerformance \
 - `Angelscript.TestModule.HotReload.Performance.RenameWindowLatency`
 - `Angelscript.TestModule.HotReload.Performance.BurstChurnLatency`
 - `Angelscript.TestModule.Core.Performance.ArtifactGeneration`
+- `Angelscript.TestModule.Core.Performance.InstrumentationScopeCatalog`
 
 ### 推荐运行波次
 

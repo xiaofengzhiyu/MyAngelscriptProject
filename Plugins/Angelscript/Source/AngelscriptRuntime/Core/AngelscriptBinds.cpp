@@ -1,6 +1,7 @@
 #include "AngelscriptBinds.h"
 
 #include "AngelscriptEngine.h"
+#include "AngelscriptPerformanceStats.h"
 #include "AngelscriptSettings.h"
 #include "Testing/AngelscriptBindExecutionObservation.h"
 
@@ -269,6 +270,8 @@ void FAngelscriptBinds::CallBinds()
 
 void FAngelscriptBinds::CallBinds(const TSet<FName>& DisabledBindNames)
 {
+	AS_PERF_SCOPE_BINDS_CALL_BINDS();
+
 	#if WITH_DEV_AUTOMATION_TESTS
 	FAngelscriptBindExecutionObservation::BeginObservationPass(DisabledBindNames);
 	#endif

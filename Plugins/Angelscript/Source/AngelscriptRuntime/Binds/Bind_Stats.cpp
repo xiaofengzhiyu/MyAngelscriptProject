@@ -1,7 +1,6 @@
 #include "AngelscriptBinds.h"
 #include "AngelscriptEngine.h"
-
-DECLARE_STATS_GROUP(TEXT("Angelscript"), STATGROUP_Angelscript, STATCAT_Advanced);
+#include "AngelscriptPerformanceStats.h"
 
 struct FScriptStatID
 {

@@ -5,6 +5,7 @@
 #include "Core/AngelscriptBinds.h"
 #include "Core/AngelscriptDocs.h"
 #include "Core/AngelscriptEngine.h"
+#include "Core/AngelscriptPerformanceStats.h"
 #include "Core/AngelscriptSettings.h"
 #include "Core/AngelscriptType.h"
 
@@ -149,6 +150,8 @@ FAngelscriptStateDump::FDumpExtensionsDelegate FAngelscriptStateDump::OnDumpExte
 
 FString FAngelscriptStateDump::DumpAll(FAngelscriptEngine& Engine, const FString& OutputDir)
 {
+	AS_PERF_SCOPE_DUMP_ALL();
+
 	const FString ResolvedOutputDir = ResolveOutputDir(OutputDir);
 	if (!EnsureOutputDir(ResolvedOutputDir))
 	{

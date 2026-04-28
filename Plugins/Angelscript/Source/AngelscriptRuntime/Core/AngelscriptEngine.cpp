@@ -1,6 +1,7 @@
 #include "AngelscriptEngine.h"
 #include "AngelscriptBinds.h"
 #include "AngelscriptBindDatabase.h"
+#include "AngelscriptPerformanceStats.h"
 #include "Binds/Helper_ToString.h"
 #include "Preprocessor/AngelscriptPreprocessor.h"
 #include "ClassGenerator/AngelscriptClassGenerator.h"
@@ -1496,6 +1497,7 @@ void FAngelscriptEngine::Initialize_AnyThread()
 
 #if AS_USE_BIND_DB
 	{
+		AS_PERF_SCOPE_STARTUP_BIND_DATABASE();
 		FAngelscriptScopeTimer Timer(TEXT("load bind database"));
 		FAngelscriptBindDatabase::Get().Load(GetScriptRootDirectory() / TEXT("Binds.Cache"), bGeneratePrecompiledData);
 	}
@@ -1945,6 +1947,8 @@ FAngelscriptContextPool::~FAngelscriptContextPool()
 
 void FAngelscriptEngine::BindScriptTypes()
 {
+	AS_PERF_SCOPE_STARTUP_BIND_SCRIPT_TYPES();
+
 	#if WITH_DEV_AUTOMATION_TESTS
 	FAngelscriptBindExecutionObservation::BeginBindScriptTypesTiming();
 	#endif
@@ -2070,6 +2074,8 @@ void FAngelscriptEngine::ReplaceScriptAssetContent(FString AssetName, TArray<FSt
 
 void FAngelscriptEngine::InitialCompile()
 {
+	AS_PERF_SCOPE_COMPILE_INITIAL();
+
 	bool bSuccess = true;
 	TArray<TSharedRef<FAngelscriptModuleDesc>> ModulesToCompile;
 	TArray<FFilenamePair> Filenames;
@@ -2285,6 +2291,8 @@ void FAngelscriptEngine::DiscoverTests()
 
 bool FAngelscriptEngine::PerformHotReload(ECompileType CompileType, const TArray<FFilenamePair>& InReloadFiles)
 {
+	AS_PERF_SCOPE_RELOAD_HOT_RELOAD();
+
 	TGuardValue<bool> ScopeHotReloading(bIsHotReloading, true);
 	FAngelscriptScopeTimer Timer(TEXT("==script reload total =="));
 
@@ -3093,6 +3101,8 @@ TSharedPtr<struct FAngelscriptModuleDesc> FAngelscriptEngine::GetModuleByFilenam
 
 ECompileResult FAngelscriptEngine::CompileModules(ECompileType CompileType, const TArray<TSharedRef<struct FAngelscriptModuleDesc>>& InModules, TArray<TSharedRef<FAngelscriptModuleDesc>>& OutCompiledModules)
 {
+	AS_PERF_SCOPE_COMPILE_MODULES();
+
 	// We allocate from the memstack in the script compiler, so use a MemMark to deallocate everything at the end
 	FMemMark MemoryMark(FMemStack::Get());
 

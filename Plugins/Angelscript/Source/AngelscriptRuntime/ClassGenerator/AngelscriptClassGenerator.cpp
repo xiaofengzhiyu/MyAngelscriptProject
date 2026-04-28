@@ -29,6 +29,7 @@
 #include "AngelscriptType.h"
 #include "AngelscriptDebugValue.h"
 #include "AngelscriptInclude.h"
+#include "AngelscriptPerformanceStats.h"
 #include "AngelscriptSettings.h"
 #include "Binds/BlueprintCallableReflectiveFallback.h"
 #include "Binds/Helper_FunctionSignature.h"
@@ -1991,6 +1992,7 @@ void FAngelscriptClassGenerator::Analyze(FModuleData& ModuleData)
 
 FAngelscriptClassGenerator::EReloadRequirement FAngelscriptClassGenerator::Setup()
 {
+	AS_PERF_SCOPE_CLASS_GENERATOR_SETUP();
 	FAngelscriptScopeTimer Timer(TEXT("class generator analysis"));
 
 	// Create data structures for each module we're generating for to use during analysis
@@ -2243,6 +2245,8 @@ void FAngelscriptClassGenerator::PerformSoftReload()
 
 void FAngelscriptClassGenerator::PerformReload(bool bFullReload)
 {
+	AS_PERF_SCOPE_CLASS_GENERATOR_RELOAD();
+
 	// Create progress indicator
 	FScopedSlowTask SlowTask(1.8f);
 	if (bFullReload && FAngelscriptEngine::Get().bIsInitialCompileFinished)

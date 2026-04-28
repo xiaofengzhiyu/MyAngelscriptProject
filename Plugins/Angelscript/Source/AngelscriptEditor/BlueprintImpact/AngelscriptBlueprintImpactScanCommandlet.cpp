@@ -4,6 +4,7 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Core/AngelscriptEngine.h"
+#include "Core/AngelscriptPerformanceStats.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 
@@ -129,6 +130,8 @@ namespace
 
 int32 UAngelscriptBlueprintImpactScanCommandlet::Main(const FString& Params)
 {
+	AS_PERF_SCOPE_COMMANDLET_BLUEPRINT_IMPACT();
+
 	if (!FAngelscriptEngine::Get().bDidInitialCompileSucceed)
 	{
 		UE_LOG(Angelscript, Error, TEXT("Blueprint impact commandlet requires a successfully initialized Angelscript engine."));

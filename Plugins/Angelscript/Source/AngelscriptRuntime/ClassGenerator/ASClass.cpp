@@ -1,6 +1,7 @@
 #include "ClassGenerator/ASClass.h"
 
 #include "AngelscriptEngine.h"
+#include "AngelscriptPerformanceStats.h"
 
 #include "UObject/Package.h"
 #include "UObject/ScriptMacros.h"
@@ -175,6 +176,8 @@ static FORCEINLINE_DEBUGGABLE void AngelscriptCallFromBPVM(UASFunction* ASFuncti
 
 	if (!TThreadSafe && JitFunction != nullptr)
 	{
+		AS_PERF_SCOPE_RUNTIME_CALL_BPVM_JIT();
+
 		UObject* NewWorldContext = nullptr;
 		FScriptExecution Execution(FAngelscriptEngine::GameThreadTLD);
 
@@ -520,6 +523,7 @@ static FORCEINLINE_DEBUGGABLE void AngelscriptCallFromParms(UASFunction* ASFunct
 	}
 	else
 	{
+		AS_PERF_SCOPE_RUNTIME_CALL_PARMS_CONTEXT();
 
 		const bool bInGameThread = !TThreadSafe || IsInGameThread();
 		bool bChangedWorldContext = false;

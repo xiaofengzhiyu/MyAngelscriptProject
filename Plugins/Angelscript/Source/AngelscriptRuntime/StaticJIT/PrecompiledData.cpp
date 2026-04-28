@@ -6,6 +6,7 @@
 #include "Serialization/MemoryReader.h"
 
 #include "AngelscriptEngine.h"
+#include "AngelscriptPerformanceStats.h"
 #include "StaticJIT/StaticJITConfig.h"
 #include "StaticJIT/StaticJITHeader.h"
 
@@ -2752,6 +2753,7 @@ void FAngelscriptPrecompiledData::MapFunctionId(asIScriptFunction* Function, uin
 TArray<TSharedRef<FAngelscriptModuleDesc>> FAngelscriptPrecompiledData::GetModulesToCompile()
 {
 	AS_LLM_SCOPE
+	AS_PERF_SCOPE_STATIC_JIT_PRECOMPILED_DATA();
 
 	FAngelscriptScopeTotalTimer Timer(TIMER_GetModulesToCompile);
 

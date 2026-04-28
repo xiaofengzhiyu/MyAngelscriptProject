@@ -1,6 +1,7 @@
 #include "AngelscriptDebugServer.h"
 #include "AngelscriptEngine.h"
 #include "AngelscriptDocs.h"
+#include "AngelscriptPerformanceStats.h"
 
 #include "AngelscriptRuntimeModule.h"
 
@@ -679,6 +680,7 @@ FAngelscriptDebugServer::~FAngelscriptDebugServer()
 
 void FAngelscriptDebugServer::Tick()
 {
+	AS_PERF_SCOPE_DEBUG_SERVER_TICK();
 	ProcessMessages();
 }
 
