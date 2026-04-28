@@ -111,7 +111,7 @@ struct FScriptNativeConstructor : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeConstructor(FAngelscriptBinds& Binds, const ANSICHAR* Name, bool bTrivial, const ANSICHAR* CustomForm)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeConstructor(Name, bTrivial, CustomForm));
 }
@@ -155,7 +155,7 @@ struct FScriptNativeDestructor : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeDestructor(FAngelscriptBinds& Binds, const ANSICHAR* Name, bool bTrivial)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeDestructor(Name, bTrivial));
 }
@@ -198,7 +198,7 @@ struct FScriptNativeAssignment : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeAssignment(FAngelscriptBinds& Binds, const ANSICHAR* Name, bool bTrivial)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeAssignment(Name, bTrivial));
 }
@@ -329,7 +329,7 @@ struct FScriptNativeUObjectCast : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeUObjectCast(FAngelscriptBinds& Binds, const FString& TargetType, bool bGuaranteed)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeUObjectCast(TargetType, bGuaranteed));
 }
@@ -367,7 +367,7 @@ struct FScriptNativeMethod : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeMethod(FAngelscriptBinds& Binds, const ANSICHAR* Name, bool bTrivial)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeMethod(Name, bTrivial));
 }
@@ -400,7 +400,7 @@ struct FScriptNativeFunction : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeFunction(const ANSICHAR* Name, bool bTrivial)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeFunction(Name, bTrivial));
 }
@@ -438,7 +438,7 @@ struct FScriptNativeFunctionHeader : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindNativeFunctionHeader(const ANSICHAR* Name, bool bTrivial, const ANSICHAR* Header)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeFunctionHeader(Name, bTrivial, Header));
 }
@@ -529,7 +529,7 @@ struct FScriptNativeUFunction : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindUFunction(class UFunction* Function, const FString& Name, bool bTrivial)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeUFunction(Function, Name, bTrivial));
 }
@@ -591,7 +591,7 @@ struct FScriptNativeTArrayIteratorProceed : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindTArrayIteratorProceed(FAngelscriptBinds& Binds)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeTArrayIteratorProceed());
 }
@@ -702,7 +702,7 @@ struct FScriptNativeTemplateInstantiation : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindTemplateInstantiatedCall(FAngelscriptBinds& Binds, const ANSICHAR* Name, bool bTrivial, bool bNeedsCompare, bool bNeedsCopy)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeTemplateInstantiation(Name, bTrivial, bNeedsCompare, bNeedsCopy));
 }
@@ -776,7 +776,7 @@ struct FScriptNativeTArrayIteratorCreate : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindTArrayIteratorCreate(FAngelscriptBinds& Binds)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeTArrayIteratorCreate());
 }
@@ -859,14 +859,14 @@ struct FScriptNativeTArrayIndex : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindTArrayIndex(FAngelscriptBinds& Binds)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeTArrayIndex());
 }
 
 const ANSICHAR* FScriptFunctionNativeForm::AllocateAnsiTypeName(const FString& TypeName)
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return nullptr;
 
 	auto* Buffer = new TArray<ANSICHAR>();
@@ -900,7 +900,7 @@ struct FScriptNativePushArg : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindPushArg()
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativePushArg());
 }
@@ -930,7 +930,7 @@ struct FScriptNativePushArgRef : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindPushArgRef()
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativePushArgRef());
 }
@@ -960,7 +960,7 @@ struct FScriptNativeDelegateExecute : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindDelegateExecute()
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeDelegateExecute());
 }
@@ -990,7 +990,7 @@ struct FScriptNativeMulticastExecute : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindMulticastExecute()
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeMulticastExecute());
 }
@@ -1020,7 +1020,7 @@ struct FScriptNativeEventFunctionExecute : public FScriptFunctionNativeForm
 
 void FScriptFunctionNativeForm::BindEventFunctionExecute()
 {
-	if (!FAngelscriptEngine::bGeneratePrecompiledData)
+	if (!FAngelscriptEngine::IsGeneratingPrecompiledData())
 		return;
 	GScriptNativeForms.Add(FAngelscriptBinds::GetPreviousBind(), new FScriptNativeEventFunctionExecute());
 }

@@ -40,3 +40,16 @@
   - 目标：把 debug server 对 owner engine / world context 的访问从“直接读全局”收口到更显式的入口。
 - **暂不直接处理**：`ClassGenerator` / `Engine core` 大面调用点
   - 原因：这些路径是引擎核心生命周期实现，不适合作为本计划里的“低风险 containment”小步快跑项。
+
+## 6. DeGlobal V2 静态状态分类
+
+| 状态 | 分类 | 当前处理 |
+| --- | --- | --- |
+| `FAngelscriptEngine::bGeneratePrecompiledData` | Engine instance | 已迁移为 `FAngelscriptEngine::bGeneratePrecompiledData` 实例字段；StaticJIT 绑定通过 `IsGeneratingPrecompiledData()` 读取当前 scope |
+| Blueprint library namespace 配置 | Engine instance | 已迁移为 `FAngelscriptEngine` 实例字段；`Helper_FunctionSignature.h` 通过 current-context accessor 读取 |
+| Static FName literal 缓存 | Engine shared-state | 已迁移为 `FAngelscriptOwnedSharedState::StaticNames` / `StaticNamesByIndex`；Full 引擎隔离，Clone 引擎共享 |
+| `FAngelscriptEngine::bStaticJITTranspiledCodeLoaded` | Process state | 反映当前进程二进制是否加载 transpiled JIT code，暂保留为静态状态 |
+| `FAngelscriptEngine::GameThreadTLD` | Process/thread bridge | AngelScript VM 的 game-thread TLS 桥接点，暂保留为静态状态 |
+| `GAngelscriptRecompileAvoidance` / `GAngelscriptLineReentry` | Misc process state | 留给 DeGlobal V2 Phase 4 继续分类和收口 |
+
+本轮实现后的访问规则：运行时配置优先走当前 `FAngelscriptEngine`，需要与 Clone 共享的编译产物缓存走 `FAngelscriptOwnedSharedState`，没有当前引擎时仅保留明确的 legacy fallback。

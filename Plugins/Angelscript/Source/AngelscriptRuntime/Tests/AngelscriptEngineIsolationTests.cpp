@@ -858,20 +858,27 @@ bool FAngelscriptEngineLocalFlagsIsolationTest::RunTest(const FString& Parameter
 		return false;
 	}
 
+	EngineA->bGeneratePrecompiledData = true;
+	EngineB->bGeneratePrecompiledData = false;
+
 	TestTrue(TEXT("Engine A bSimulateCooked should be true"), EngineA->bSimulateCooked);
 	TestTrue(TEXT("Engine A bTestErrors should be true"), EngineA->bTestErrors);
 	TestFalse(TEXT("Engine B bSimulateCooked should be false"), EngineB->bSimulateCooked);
 	TestFalse(TEXT("Engine B bTestErrors should be false"), EngineB->bTestErrors);
+	TestTrue(TEXT("Engine A bGeneratePrecompiledData should be true"), EngineA->bGeneratePrecompiledData);
+	TestFalse(TEXT("Engine B bGeneratePrecompiledData should be false"), EngineB->bGeneratePrecompiledData);
 
 	{
 		FAngelscriptEngineScope ScopeA(*EngineA);
 		TestTrue(TEXT("IsSimulatingCookedForCurrentContext should reflect engine A"), FAngelscriptEngine::IsSimulatingCookedForCurrentContext());
 		TestTrue(TEXT("IsTestingErrorsForCurrentContext should reflect engine A"), FAngelscriptEngine::IsTestingErrorsForCurrentContext());
+		TestTrue(TEXT("IsGeneratingPrecompiledData should reflect engine A"), FAngelscriptEngine::IsGeneratingPrecompiledData());
 	}
 	{
 		FAngelscriptEngineScope ScopeB(*EngineB);
 		TestFalse(TEXT("IsSimulatingCookedForCurrentContext should reflect engine B"), FAngelscriptEngine::IsSimulatingCookedForCurrentContext());
 		TestFalse(TEXT("IsTestingErrorsForCurrentContext should reflect engine B"), FAngelscriptEngine::IsTestingErrorsForCurrentContext());
+		TestFalse(TEXT("IsGeneratingPrecompiledData should reflect engine B"), FAngelscriptEngine::IsGeneratingPrecompiledData());
 	}
 
 	return true;
@@ -914,6 +921,132 @@ bool FAngelscriptEngineLocalTypeDatabaseIsolationTest::RunTest(const FString& Pa
 	{
 		FAngelscriptEngineScope ScopeB(*EngineB);
 		TestTrue(TEXT("Engine B TypeDatabase should survive after engine A destruction"), FAngelscriptType::GetTypes().Num() > 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptEngineLocalBlueprintNamespaceSettingsIsolationTest,
+	"Angelscript.CppTests.Engine.Isolation.EngineLocal.BlueprintNamespaceSettingsAreInstanceScoped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptEngineLocalBlueprintNamespaceSettingsIsolationTest::RunTest(const FString& Parameters)
+{
+	FIsolationContextStackGuard ContextGuard;
+
+	const FAngelscriptEngineConfig Config;
+	const FAngelscriptEngineDependencies Deps = FAngelscriptEngineDependencies::CreateDefault();
+	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateTestingFullEngine(Config, Deps);
+	TUniquePtr<FAngelscriptEngine> EngineB = FAngelscriptEngine::CreateTestingFullEngine(Config, Deps);
+	if (!TestNotNull(TEXT("Namespace isolation should create engine A"), EngineA.Get())
+		|| !TestNotNull(TEXT("Namespace isolation should create engine B"), EngineB.Get()))
+	{
+		return false;
+	}
+
+	TArray<FString> EngineAPrefixes = { TEXT("LongBlueprintPrefix"), TEXT("BP") };
+	TArray<FString> EngineASuffixes = { TEXT("FunctionLibrary"), TEXT("Lib") };
+	TArray<FString> EngineBPrefixes = { TEXT("OtherPrefix") };
+	TArray<FString> EngineBSuffixes = { TEXT("OtherSuffix") };
+	EngineA->SetBlueprintLibraryNamespaceSettingsForTesting(true, MoveTemp(EngineAPrefixes), MoveTemp(EngineASuffixes));
+	EngineB->SetBlueprintLibraryNamespaceSettingsForTesting(false, MoveTemp(EngineBPrefixes), MoveTemp(EngineBSuffixes));
+
+	{
+		FAngelscriptEngineScope ScopeA(*EngineA);
+		const TArray<FString>& Prefixes = FAngelscriptEngine::GetBlueprintLibraryNamespacePrefixesToStripForCurrentContext();
+		const TArray<FString>& Suffixes = FAngelscriptEngine::GetBlueprintLibraryNamespaceSuffixesToStripForCurrentContext();
+		TestTrue(TEXT("Engine A should use ScriptName metadata for blueprint library namespaces"), FAngelscriptEngine::ShouldUseScriptNameForBlueprintLibraryNamespacesForCurrentContext());
+		if (!TestEqual(TEXT("Engine A should keep its own prefix count"), Prefixes.Num(), 2)
+			|| !TestEqual(TEXT("Engine A should keep its own suffix count"), Suffixes.Num(), 2))
+		{
+			return false;
+		}
+		TestEqual(TEXT("Engine A should sort longer prefixes first"), Prefixes[0], FString(TEXT("LongBlueprintPrefix")));
+		TestEqual(TEXT("Engine A should sort longer suffixes first"), Suffixes[0], FString(TEXT("FunctionLibrary")));
+	}
+
+	{
+		FAngelscriptEngineScope ScopeB(*EngineB);
+		const TArray<FString>& Prefixes = FAngelscriptEngine::GetBlueprintLibraryNamespacePrefixesToStripForCurrentContext();
+		const TArray<FString>& Suffixes = FAngelscriptEngine::GetBlueprintLibraryNamespaceSuffixesToStripForCurrentContext();
+		TestFalse(TEXT("Engine B should keep its own ScriptName namespace toggle"), FAngelscriptEngine::ShouldUseScriptNameForBlueprintLibraryNamespacesForCurrentContext());
+		if (!TestEqual(TEXT("Engine B should keep its own prefix count"), Prefixes.Num(), 1)
+			|| !TestEqual(TEXT("Engine B should keep its own suffix count"), Suffixes.Num(), 1))
+		{
+			return false;
+		}
+		TestEqual(TEXT("Engine B should not inherit engine A prefixes"), Prefixes[0], FString(TEXT("OtherPrefix")));
+		TestEqual(TEXT("Engine B should not inherit engine A suffixes"), Suffixes[0], FString(TEXT("OtherSuffix")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptEngineLocalStaticNamesIsolationTest,
+	"Angelscript.CppTests.Engine.Isolation.EngineLocal.StaticNamesAreSharedStateScoped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptEngineLocalStaticNamesIsolationTest::RunTest(const FString& Parameters)
+{
+	FIsolationContextStackGuard ContextGuard;
+
+	const FAngelscriptEngineConfig Config;
+	const FAngelscriptEngineDependencies Deps = FAngelscriptEngineDependencies::CreateDefault();
+	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateTestingFullEngine(Config, Deps);
+	TUniquePtr<FAngelscriptEngine> EngineB = FAngelscriptEngine::CreateTestingFullEngine(Config, Deps);
+	if (!TestNotNull(TEXT("Static-name isolation should create engine A"), EngineA.Get())
+		|| !TestNotNull(TEXT("Static-name isolation should create engine B"), EngineB.Get()))
+	{
+		return false;
+	}
+
+	const FName EngineAName(*MakeIsolationName(TEXT("StaticNameA")));
+	const FName CloneName(*MakeIsolationName(TEXT("StaticNameClone")));
+	int32 EngineANameIndex = INDEX_NONE;
+	int32 CloneNameIndex = INDEX_NONE;
+	int32 EngineABaselineCount = 0;
+
+	{
+		FAngelscriptEngineScope ScopeA(*EngineA);
+		EngineABaselineCount = FAngelscriptEngine::GetStaticNameCount();
+		EngineANameIndex = FAngelscriptEngine::GetOrAddStaticName(EngineAName);
+		TestEqual(TEXT("Engine A should append its own static name"), FAngelscriptEngine::GetStaticNameCount(), EngineABaselineCount + 1);
+
+		FName ResolvedName;
+		TestTrue(TEXT("Engine A should resolve its static name by index"), FAngelscriptEngine::TryGetStaticName(EngineANameIndex, ResolvedName));
+		TestEqual(TEXT("Engine A static-name index should resolve to the added name"), ResolvedName.ToString(), EngineAName.ToString());
+	}
+
+	{
+		FAngelscriptEngineScope ScopeB(*EngineB);
+		const int32 EngineBBaselineCount = FAngelscriptEngine::GetStaticNameCount();
+		FName ResolvedName;
+		const bool bEngineBSeesEngineAName = FAngelscriptEngine::TryGetStaticName(EngineANameIndex, ResolvedName) && ResolvedName == EngineAName;
+		TestFalse(TEXT("Engine B should not see static names added through engine A"), bEngineBSeesEngineAName);
+		TestEqual(TEXT("Engine B static-name count should stay isolated"), FAngelscriptEngine::GetStaticNameCount(), EngineBBaselineCount);
+	}
+
+	TUniquePtr<FAngelscriptEngine> CloneEngine = FAngelscriptEngine::CreateCloneFrom(*EngineA, Config);
+	if (!TestNotNull(TEXT("Static-name isolation should create a clone engine"), CloneEngine.Get()))
+	{
+		return false;
+	}
+
+	{
+		FAngelscriptEngineScope CloneScope(*CloneEngine);
+		FName ResolvedName;
+		TestTrue(TEXT("Clone engine should resolve static names from its source shared state"), FAngelscriptEngine::TryGetStaticName(EngineANameIndex, ResolvedName));
+		TestEqual(TEXT("Clone engine should see engine A static names"), ResolvedName.ToString(), EngineAName.ToString());
+		CloneNameIndex = FAngelscriptEngine::GetOrAddStaticName(CloneName);
+	}
+
+	{
+		FAngelscriptEngineScope ScopeA(*EngineA);
+		FName ResolvedName;
+		TestTrue(TEXT("Engine A should resolve static names added through its clone"), FAngelscriptEngine::TryGetStaticName(CloneNameIndex, ResolvedName));
+		TestEqual(TEXT("Engine A should share static names with its clone"), ResolvedName.ToString(), CloneName.ToString());
 	}
 
 	return true;

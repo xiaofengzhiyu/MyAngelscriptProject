@@ -2434,11 +2434,11 @@ void FAngelscriptPrecompiledData::PrepareToFinalizePrecompiledModules()
 		);
 	}
 
-	check(FAngelscriptEngine::StaticNames.Num() == 0);
-	FAngelscriptEngine::StaticNames.Reserve(StaticNames.Num());
+	check(FAngelscriptEngine::GetStaticNameCount() == 0);
+	FAngelscriptEngine::ReserveStaticNames(StaticNames.Num());
 	for (const FStringInArchive& StaticName : StaticNames)
 	{
-		FAngelscriptEngine::StaticNames.Add(FName(*StaticName.UnrealString()));
+		FAngelscriptEngine::AddStaticNameFromPrecompiled(FName(*StaticName.UnrealString()));
 	}
 
 #if AS_JIT_VERIFY_PROPERTY_OFFSETS
@@ -2660,7 +2660,7 @@ void FAngelscriptPrecompiledData::InitFromActiveScript()
 		Modules.FindOrAdd(ModuleName).InitFrom(*this, Module);
 	}
 
-	for (const FName& StaticName : FAngelscriptEngine::StaticNames)
+	for (const FName& StaticName : FAngelscriptEngine::GetStaticNames())
 		StaticNames.Add(StaticName.ToString());
 }
 

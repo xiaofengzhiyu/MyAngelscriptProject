@@ -1923,12 +1923,7 @@ FString FAngelscriptPreprocessor::MakeIdentifier(const FString& Str)
 FString FAngelscriptPreprocessor::GenerateStaticName(FFile& File, const FString& InName)
 {
 	FName Name = FName(*InName);
-	int32* FoundIndex = FAngelscriptEngine::StaticNamesByIndex.Find(Name);
-	if (FoundIndex != nullptr)
-		return FString::Printf(TEXT("__STATIC_NAME(%d)"), *FoundIndex);
-
-	int32 Index = FAngelscriptEngine::StaticNames.Emplace(Name);
-	FAngelscriptEngine::StaticNamesByIndex.Add(Name, Index);
+	const int32 Index = FAngelscriptEngine::GetOrAddStaticName(Name);
 	return FString::Printf(TEXT("__STATIC_NAME(%d)"), Index);
 }
 

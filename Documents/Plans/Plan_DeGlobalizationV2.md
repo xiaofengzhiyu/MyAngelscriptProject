@@ -8,12 +8,12 @@
 
 1. **技术债 Phase 5**（已归档于 `Archives/Plan_TechnicalDebt.md`）— 完成低风险 containment：DebugServer 收口为 owner engine 注入、测试 helper 统一 scoped wrapper。
 2. **`Plan_TestEngineIsolation.md` Phase 1**（已完成，2026-04-04）— `GAngelscriptEngine` 全局指针彻底移除、`FAngelscriptEngineContextStack` + `FAngelscriptEngineScope` RAII scope 落地、`FAngelscriptEngine` 转为 `USTRUCT()` + `UPROPERTY()` GC 追踪、测试统一使用 `FAngelscriptEngineScope`。
-3. **TypeDatabase / BindState / ToString / BindDatabase 按 isolation key 分桶**（已完成）— 显著降低测试互相污染，但仍不是最终的 engine-instance 本地化形态。
+3. **TypeDatabase / BindState / ToString / BindDatabase 迁入 engine shared-state**（已完成）— Full 引擎拥有独立状态，Clone 引擎共享 Source 的状态，已经不是进程级单例。
 
 对比 Hazelight 参考（`K:\UnrealEngine\UEAS\Engine\Plugins\Angelscript\`），当前项目在 `GAngelscriptEngine` 移除和 ContextStack 架构方面已**领先** Hazelight。但两边仍共有大量全局状态：
 
-- ~10 个 `FAngelscriptEngine` 类静态 `bool` 标志
-- 5 大核心单例（TypeDatabase / BindState / ToStringHelper / BindDatabase / CurrentWorldContext）
+- 少量 `FAngelscriptEngine` 类静态/文件静态标志仍需分类（例如 `GameThreadTLD`、`bStaticJITTranspiledCodeLoaded` 属于进程状态）
+- StaticJIT 预编译生成标志、Blueprint namespace 配置、Static FName 缓存已经按当前引擎/共享状态路由
 - 构造与蓝图事件全局状态（`GCurrentCall` / `GStoredCall` / `GConstructASObjectWithoutDefaults` / `CurrentObjectInitializers` 等）
 - `thread_local` 上下文保护（合理设计，不需消除）
 - 文档 / FName 缓存（实质只读，优先级最低）
@@ -22,9 +22,9 @@
 
 ### 目标
 
-1. 将 `FAngelscriptEngine` 的 ~10 个进程级静态标志迁移为引擎实例成员，使不同引擎实例拥有独立的运行时配置。
-2. 将 5 大核心单例从进程级静态存储迁移为引擎实例成员，使每个引擎拥有完整独立的类型/绑定/上下文空间。
-3. 移除单 Full Epoch 限制，允许多个 Full 引擎并存。
+1. 将剩余实例语义的 `FAngelscriptEngine` 静态配置迁移为引擎实例成员，使不同引擎实例拥有独立的运行时配置。
+2. 保持已落地的 TypeDatabase / BindState / ToString / BindDatabase / WorldContext engine-local 语义，并补齐遗留静态缓存的 shared-state 路由。
+3. 继续验证多个 Full 引擎并存和 Clone 共享状态语义。
 4. 清理构造/蓝图事件全局状态，收口为调用链上下文传递。
 5. 标准化测试框架入口，归档旧计划。
 
@@ -51,9 +51,9 @@
 |----------|------|--------|----------|
 | **已消除** | 1 | `GAngelscriptEngine` 全局指针 | Phase 1 已完成 |
 | **已收口** | ~25 处 | 测试 helper scope、DebugServer owner 注入 | 技术债 P5 已归档 |
-| **已分桶** | 4 | TypeDatabase / BindState / ToString / BindDatabase | isolation key 分桶，非最终形态 |
-| 静态 bool 标志 | ~10 | `bGeneratePrecompiledData`、`bIsHotReloading` 等 | `FAngelscriptEngine` 类静态成员 |
-| 核心单例 | 5 | TypeDatabase、BindState、ToStringHelper、BindDatabase、CurrentWorldContext | Meyers 单例 / static 成员 |
+| **已本地化** | 5 | TypeDatabase、BindState、ToStringHelper、BindDatabase、CurrentWorldContext | `FAngelscriptOwnedSharedState` / engine instance |
+| **本轮处理** | 3 | `bGeneratePrecompiledData`、Blueprint namespace 配置、Static FName 缓存 | engine instance / shared-state accessors |
+| 进程状态 | 2 | `GameThreadTLD`、`bStaticJITTranspiledCodeLoaded` | 合理保留为进程级状态 |
 | 构造/事件全局 | ~6 | `GCurrentCall`、`GStoredCall`、`GConstructASObjectWithoutDefaults`、`CurrentObjectInitializers`、`OverrideConstructingObject`、`GASDefaultConstructorOuter` | 文件作用域 static / extern |
 | 调试/杂项全局 | ~4 | `GDebugBreaksEnabled`、`GEndPlayMapCount`、`GAngelscriptNullObject`、`GAngelscriptRecompileAvoidance` | 文件作用域 static |
 | thread_local | ~7 | `GAngelscriptContextPool`、`GArraysBeingIterated` 等 | **非目标** |
@@ -69,40 +69,38 @@
 
 > 目标：将 `FAngelscriptEngine` 的 ~10 个 `static bool` / `static TArray` 标志迁移为引擎实例成员。这是全局状态中最简单、影响面最窄的一类，适合作为 engine-local 迁移的首批实践。
 
-- [ ] **P1.1** 审查并分类所有静态标志的读写点
-  - 当前 `FAngelscriptEngine` 头文件中约 10 个静态成员标志（`bGeneratePrecompiledData`、`bStaticJITTranspiledCodeLoaded`、`bUseScriptNameForBlueprintLibraryNamespaces`、`BlueprintLibraryNamespacePrefixesToStrip`、`BlueprintLibraryNamespaceSuffixesToStrip`、`StaticNames`、`StaticNamesByIndex`、`GameThreadTLD`），以及 `.cpp` 文件中的 `GAngelscriptRecompileAvoidance`、`GAngelscriptLineReentry`
-  - 逐一搜索每个标志在绑定层、编译器、JIT、测试代码中的所有读写点
-  - 对每个标志分类为 **实例标志**（应随引擎而异，如 `bGeneratePrecompiledData`、namespace 配置）或 **进程标志**（所有引擎共享，如 `bStaticJITTranspiledCodeLoaded`、`GameThreadTLD`）
-  - 产出分类清单文档，在 `Documents/Guides/GlobalStateContainmentMatrix.md` 中追加"静态标志分类"章节
-- [ ] **P1.1** 📦 Git 提交：`[Docs/DeGlobal] Docs: classify static flags into instance vs process scope`
+- [x] **P1.1** 审查并分类所有静态标志的读写点
+  - 已确认 `bGeneratePrecompiledData`、Blueprint namespace 配置、`StaticNames`/`StaticNamesByIndex` 是实例/共享状态语义
+  - 已确认 `GameThreadTLD`、`bStaticJITTranspiledCodeLoaded` 暂属进程状态，`GAngelscriptRecompileAvoidance` / `GAngelscriptLineReentry` 留给 Phase 4 继续分类
+  - 分类清单追加到 `Documents/Guides/GlobalStateContainmentMatrix.md`
+- [x] **P1.1** 📦 Git 提交：合并到本轮 DeGlobal V2 提交
 
-- [ ] **P1.2** 将实例标志移入 `FAngelscriptEngine` 实例
-  - 根据 P1.1 分类，将"实例标志"类 `static` 成员改为 `FAngelscriptEngine` 的普通成员变量
-  - 读写点通过 `FAngelscriptEngine::Get().MemberName` 或 `FAngelscriptEngineContextStack::Peek()->MemberName` 访问
-  - 绑定层中无法方便获取引擎实例的位置，通过 `FAngelscriptEngineContextStack::Peek()` 获取当前上下文引擎
-  - 保留旧 `static` 声明为 deprecated wrapper（转发到 `Peek()->Member`），在 Phase 5 统一移除
-- [ ] **P1.2** 📦 Git 提交：`[Runtime/DeGlobal] Refactor: migrate instance-scoped static flags to engine members`
+- [x] **P1.2** 将实例标志移入 `FAngelscriptEngine` 实例
+  - `bGeneratePrecompiledData` 改为引擎实例字段，StaticJIT 绑定通过 `IsGeneratingPrecompiledData()` 读取当前 scope
+  - Blueprint namespace 配置改为引擎实例字段，绑定签名 helper 通过当前上下文 accessor 读取
+  - `StaticNames` / `StaticNamesByIndex` 改为 `FAngelscriptOwnedSharedState` 字段，Full 引擎隔离，Clone 引擎共享
+- [x] **P1.2** 📦 Git 提交：合并到本轮 DeGlobal V2 提交
 
-- [ ] **P1.3** 静态标志迁移回归测试
-  - 在 `AngelscriptEngineIsolationTests.cpp` 中新增：两个引擎实例的实例标志互不影响、`FAngelscriptEngineScope` 切换后标志值跟随当前引擎、进程标志在所有引擎间仍共享
-  - 构建 + CppTests + 定向回归
-- [ ] **P1.3** 📦 Git 提交：`[Test/DeGlobal] Test: verify static flag migration with multi-engine scenarios`
+- [x] **P1.3** 静态标志迁移回归测试
+  - `AngelscriptEngineIsolationTests.cpp` 覆盖 precompiled flag、Blueprint namespace 配置、Static FName 缓存的 Full 隔离与 Clone 共享语义
+  - 构建与定向回归结果记录在本轮提交说明中
+- [x] **P1.3** 📦 Git 提交：合并到本轮 DeGlobal V2 提交
 
 ---
 
-### Phase 2：核心单例迁移
+### Phase 2：核心单例迁移（已完成）
 
-> 目标：将 `FAngelscriptTypeDatabase`、`FAngelscriptBinds` 状态、`FToStringHelper`、`FAngelscriptBindDatabase`、`CurrentWorldContext` 从进程级静态单例迁移为引擎实例成员。完成后每个引擎拥有独立的类型和绑定空间。这是去全局化的核心步骤，也是风险最高的阶段。
+> 目标：将 `FAngelscriptTypeDatabase`、`FAngelscriptBinds` 状态、`FToStringHelper`、`FAngelscriptBindDatabase`、`CurrentWorldContext` 从进程级静态单例迁移为引擎实例成员。当前代码已经通过 `FAngelscriptOwnedSharedState` / engine instance 完成该阶段，后续只保留 legacy fallback 审计。
 
-#### 待迁移单例清单
+#### 已迁移单例清单
 
 | 单例 | 引用规模 | 现有清理入口 |
 |------|----------|-------------|
-| `FAngelscriptTypeDatabase` | 70+ 文件 200+ 处间接访问 | `ResetTypeDatabase()` |
-| `FAngelscriptBinds` 静态状态（7 容器 + 2 索引） | 45+ 处直接访问 | `ResetBindState()` |
-| `FToStringHelper` 注册表 | 34 个 `Bind_*.cpp` 40+ 处 `Register()` | `FToStringHelper::Reset()` |
-| `FAngelscriptBindDatabase` | 15 处引用 | `Clear()` |
-| `CurrentWorldContext` (`GAmbientWorldContext`) | `AssignWorldContext` + `FAngelscriptGameThreadScopeWorldContext` | `SetGlobalEngine(nullptr)` 时清空 |
+| `FAngelscriptTypeDatabase` | 70+ 文件 200+ 处间接访问 | `FAngelscriptOwnedSharedState::TypeDatabase` |
+| `FAngelscriptBinds` 静态状态（7 容器 + 2 索引） | 45+ 处直接访问 | `FAngelscriptOwnedSharedState::BindState` |
+| `FToStringHelper` 注册表 | 34 个 `Bind_*.cpp` 40+ 处 `Register()` | `FAngelscriptOwnedSharedState::ToStringList` |
+| `FAngelscriptBindDatabase` | 15 处引用 | `FAngelscriptOwnedSharedState::BindDatabase` |
+| `CurrentWorldContext` (`GAmbientWorldContext` fallback) | `AssignWorldContext` + `FAngelscriptGameThreadScopeWorldContext` | `FAngelscriptEngine::WorldContextObject` |
 
 #### 迁移策略
 
@@ -114,42 +112,42 @@
 
 #### 执行任务
 
-- [ ] **P2.1** 迁移 `FAngelscriptTypeDatabase` 为引擎实例成员
+- [x] **P2.1** 迁移 `FAngelscriptTypeDatabase` 为引擎实例成员
   - `FAngelscriptTypeDatabase` 是 `AngelscriptType.cpp` 中的函数内静态单例，被 `FAngelscriptType::GetTypes()`、`Register()`、`GetByAngelscriptTypeName()`、`GetByClass()`、`GetByData()`、`GetByProperty()` 等间接访问（70+ 文件 200+ 处）
   - 在 `FAngelscriptEngine` 中新增 `FAngelscriptTypeDatabase TypeDatabase` 实例成员，在 `Initialize` / `InitializeForTesting` 中填充
   - `FAngelscriptType` 的静态方法内部改为双路径：`Peek()` 非空时用实例 TypeDatabase，否则 fallback 到旧静态单例
   - `ResetTypeDatabase()` 改为引擎实例方法 + 旧静态路径的兼容调用
   - 由于是引用面最广的单例，需特别注意 bootstrapping 路径（引擎创建期间 ContextStack 尚未 push）
-- [ ] **P2.1** 📦 Git 提交：`[Runtime/DeGlobal] Refactor: migrate FAngelscriptTypeDatabase to engine instance member`
+- [x] **P2.1** 📦 Git 提交：已由前置 DeGlobal 提交完成
 
-- [ ] **P2.2** 迁移 `FAngelscriptBinds` 静态状态为引擎实例成员
+- [x] **P2.2** 迁移 `FAngelscriptBinds` 静态状态为引擎实例成员
   - 7 个静态容器（`ClassFuncMaps`、`RuntimeClassDB`、`EditorClassDB`、`BindModuleNames`、`SkipBinds`、`SkipBindNames`、`SkipBindClasses`）+ 2 个静态索引（`PreviouslyBoundFunction`、`PreviouslyBoundGlobalProperty`）
   - 将 9 个静态数据聚合为 `FAngelscriptBindState` 结构，移入 `FAngelscriptEngine` 实例
   - `FAngelscriptBinds` 中的静态方法（`AddFunctionEntry`、`SkipFunctionEntry`、`CheckForSkip` 等）改为通过 ContextStack 路由
   - `ResetBindState()` 改为引擎实例方法
-- [ ] **P2.2** 📦 Git 提交：`[Runtime/DeGlobal] Refactor: migrate FAngelscriptBinds state to engine instance member`
+- [x] **P2.2** 📦 Git 提交：已由前置 DeGlobal 提交完成
 
-- [ ] **P2.3** 迁移 `FToStringHelper` 注册表为引擎实例成员
+- [x] **P2.3** 迁移 `FToStringHelper` 注册表为引擎实例成员
   - `GetToStringList()` 函数内的 `static TArray<FToStringType>` 被 34 个 `Bind_*.cpp` 中 40+ 处 `Register()` 在 `BindScriptTypes` 时填充
   - 将 `TArray<FToStringType>` 移入 `FAngelscriptEngine` 实例
   - `FToStringHelper::Register()` 和 `Generic_AppendToString()` 改为通过 ContextStack 路由
   - 注意 `Bind_FString.cpp` 中绑定阶段遍历 `GetToStringList()` 生成 `FString` 重载方法的路径
-- [ ] **P2.3** 📦 Git 提交：`[Runtime/DeGlobal] Refactor: migrate FToStringHelper to engine instance member`
+- [x] **P2.3** 📦 Git 提交：已由前置 DeGlobal 提交完成
 
-- [ ] **P2.4** 迁移 `FAngelscriptBindDatabase` 为引擎实例成员
+- [x] **P2.4** 迁移 `FAngelscriptBindDatabase` 为引擎实例成员
   - 类级 `static FAngelscriptBindDatabase Instance`，持有 cooked game 绑定缓存
   - 影响面最小（15 处引用），可与 P2.2 的 BindState 迁移协同或紧接完成
   - `Save()` / `Load()` / `Clear()` 改为操作引擎实例的 BindDatabase
-- [ ] **P2.4** 📦 Git 提交：`[Runtime/DeGlobal] Refactor: migrate FAngelscriptBindDatabase to engine instance member`
+- [x] **P2.4** 📦 Git 提交：已由前置 DeGlobal 提交完成
 
-- [ ] **P2.5** 迁移 `CurrentWorldContext` 为引擎实例成员
+- [x] **P2.5** 迁移 `CurrentWorldContext` 为引擎实例成员
   - `FAngelscriptEngine::CurrentWorldContext` 目前是 `static UObject*`（对应 `GAmbientWorldContext`），所有引擎共享一个 world context 指针
   - 改为 `FAngelscriptEngine` 普通成员变量，每个引擎有独立的 world context
   - `AssignWorldContext` / `FAngelscriptGameThreadScopeWorldContext` 改为操作当前上下文引擎的实例成员
   - Tick 末尾的 `CurrentWorldContext != nullptr` Fatal 检查改为检查实例成员
-- [ ] **P2.5** 📦 Git 提交：`[Runtime/DeGlobal] Refactor: migrate CurrentWorldContext to engine instance member`
+- [x] **P2.5** 📦 Git 提交：已由前置 DeGlobal 提交完成
 
-- [ ] **P2.6** 核心单例迁移回归测试
+- [x] **P2.6** 核心单例迁移回归测试
   - 在 `AngelscriptEngineIsolationTests.cpp` 中新增：
     - 两个独立 Full 引擎各自注册类型，TypeDatabase 互不可见
     - 两个引擎各自 `BindScriptTypes`，BindState 互不影响
@@ -157,7 +155,7 @@
     - 两个引擎各自持有不同的 CurrentWorldContext
     - Clone 引擎与 Source 引擎的 TypeDatabase 共享语义保持不变
   - 全量测试回归，确认无行为变化
-- [ ] **P2.6** 📦 Git 提交：`[Test/DeGlobal] Test: verify core singleton migration with multi-engine isolation`
+- [x] **P2.6** 📦 Git 提交：已由前置 DeGlobal 提交完成
 
 ---
 
@@ -242,7 +240,7 @@
   - 选择 3-5 个高频使用 scope 的测试文件进行迁移：
     - `AngelscriptEngineCoreTests.cpp`：引擎核心测试
     - `AngelscriptBindConfigTests.cpp`：配置测试
-    - `AngelscriptDelegateScenarioTests.cpp`：委托测试，涉及 WorldContext
+    - `AngelscriptDelegateTests.cpp`：委托测试，涉及 WorldContext
   - 迁移原则：用 `FAngelscriptTestFixture` 替换手动 scope 组合；不改变测试逻辑本身
   - 后续新增测试必须使用 `FAngelscriptTestFixture` 或 `FAngelscriptEngineScope`
 - [ ] **P5.3** 📦 Git 提交：`[Test/DeGlobal] Refactor: migrate first batch of tests to FAngelscriptTestFixture`

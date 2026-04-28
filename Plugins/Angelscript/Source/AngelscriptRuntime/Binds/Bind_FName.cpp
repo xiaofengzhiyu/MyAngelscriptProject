@@ -57,9 +57,10 @@ struct FNameType : TAngelscriptPODPropertyType<FNameProperty>
 			int32 Index = -1;
 			LexFromString(Index, *OutValue);
 
-			if (FAngelscriptEngine::StaticNames.IsValidIndex(Index))
+			FName StaticName;
+			if (FAngelscriptEngine::TryGetStaticName(Index, StaticName))
 			{
-				OutValue = FAngelscriptEngine::StaticNames[Index].ToString();
+				OutValue = StaticName.ToString();
 				return true;
 			}
 			else

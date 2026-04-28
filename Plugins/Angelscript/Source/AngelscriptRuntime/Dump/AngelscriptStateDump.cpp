@@ -351,7 +351,7 @@ FAngelscriptStateDump::FTableResult FAngelscriptStateDump::DumpEngineOverview(FA
 		BoolToString(Engine.bTestErrors),
 		BoolToString(Engine.bIsHotReloading),
 		BoolToString(Engine.bScriptDevelopmentMode),
-		BoolToString(FAngelscriptEngine::bGeneratePrecompiledData),
+		BoolToString(Engine.bGeneratePrecompiledData),
 		BoolToString(Engine.bUsePrecompiledData),
 		BoolToString(Engine.bCompletedAssetScan),
 		LexToString(ActiveModules.Num()),

@@ -67,18 +67,14 @@ static FName NAME_ReplicatedUsing("ReplicatedUsing");
 static FName NAME_BlueprintSetter("BlueprintSetter");
 static FName NAME_BlueprintGetter("BlueprintGetter");
 
-TArray<FName> FAngelscriptEngine::StaticNames;
-TMap<FName, int32> FAngelscriptEngine::StaticNamesByIndex;
 static TArray<FAngelscriptEngine*> GAngelscriptEngineContextStack;
+static TArray<FName> GLegacyStaticNames;
+static TMap<FName, int32> GLegacyStaticNamesByIndex;
 
 FAngelscriptEngine::FAngelscriptDebugStack* GAngelscriptStack = nullptr;
 // GAngelscriptEngine removed — engine resolution now uses FAngelscriptEngineContextStack
 static bool GAngelscriptLineReentry = false;
-bool FAngelscriptEngine::bGeneratePrecompiledData = true;
 bool FAngelscriptEngine::bStaticJITTranspiledCodeLoaded = false;
-bool FAngelscriptEngine::bUseScriptNameForBlueprintLibraryNamespaces = true;
-TArray<FString> FAngelscriptEngine::BlueprintLibraryNamespacePrefixesToStrip;
-TArray<FString> FAngelscriptEngine::BlueprintLibraryNamespaceSuffixesToStrip;
 
 static int32 GAngelscriptRecompileAvoidance = 1;
 static FAutoConsoleVariableRef CVar_AngelscriptRecompileAvoidance(TEXT("angelscript.UseRecompileAvoidance"), GAngelscriptRecompileAvoidance, TEXT(""));
@@ -86,6 +82,18 @@ static FAutoConsoleVariableRef CVar_AngelscriptRecompileAvoidance(TEXT("angelscr
 static UObject* GAmbientWorldContext = nullptr;
 class asCThreadLocalData* FAngelscriptEngine::GameThreadTLD = nullptr;
 thread_local FAngelscriptContextPool GAngelscriptContextPool;
+
+static void SortBlueprintLibraryNamespaceTrimList(TArray<FString>& Values)
+{
+	const auto SortByStringLength = [](const FString& LHS, const FString& RHS)
+	{
+		if (LHS.Len() == RHS.Len())
+			return LHS > RHS;
+		else
+			return LHS.Len() > RHS.Len();
+	};
+	Values.Sort(SortByStringLength);
+}
 
 bool PrepareAngelscriptContextWithLog(asIScriptContext* Context, asIScriptFunction* ScriptFunction, const TCHAR* Callsite)
 {
@@ -156,6 +164,8 @@ struct FAngelscriptOwnedSharedState
 	TUniquePtr<FAngelscriptBindState> BindState;
 	TUniquePtr<TArray<FToStringType>> ToStringList;
 	TUniquePtr<FAngelscriptBindDatabase> BindDatabase;
+	TArray<FName> StaticNames;
+	TMap<FName, int32> StaticNamesByIndex;
 
 	int32 ActiveParticipants = 0;
 	int32 ActiveCloneCount = 0;
@@ -375,6 +385,8 @@ static void ReleaseOwnedSharedStateResources(TSharedPtr<FAngelscriptOwnedSharedS
 	SharedState->BindState.Reset();
 	SharedState->ToStringList.Reset();
 	SharedState->BindDatabase.Reset();
+	SharedState->StaticNames.Reset();
+	SharedState->StaticNamesByIndex.Reset();
 	SyncAmbientWorldContextFromCurrentEngine();
 }
 
@@ -710,6 +722,38 @@ bool FAngelscriptEngine::ShouldUseAutomaticImportMethodForCurrentContext()
 	return false;
 }
 
+bool FAngelscriptEngine::ShouldUseScriptNameForBlueprintLibraryNamespacesForCurrentContext()
+{
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		return CurrentEngine->bUseScriptNameForBlueprintLibraryNamespaces;
+	}
+
+	return true;
+}
+
+const TArray<FString>& FAngelscriptEngine::GetBlueprintLibraryNamespacePrefixesToStripForCurrentContext()
+{
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		return CurrentEngine->BlueprintLibraryNamespacePrefixesToStrip;
+	}
+
+	static const TArray<FString> EmptyPrefixesToStrip;
+	return EmptyPrefixesToStrip;
+}
+
+const TArray<FString>& FAngelscriptEngine::GetBlueprintLibraryNamespaceSuffixesToStripForCurrentContext()
+{
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		return CurrentEngine->BlueprintLibraryNamespaceSuffixesToStrip;
+	}
+
+	static const TArray<FString> EmptySuffixesToStrip;
+	return EmptySuffixesToStrip;
+}
+
 bool FAngelscriptEngine::IsScriptDevelopmentModeForCurrentContext()
 {
 	if (FAngelscriptEngine* Eng = TryGetCurrentEngine()) return Eng->bScriptDevelopmentMode;
@@ -1029,7 +1073,123 @@ void FAngelscriptEngine::SetAutomaticImportMethodForTesting(bool bEnabled)
 {
 	bUseAutomaticImportMethod = bEnabled;
 }
+
+void FAngelscriptEngine::SetBlueprintLibraryNamespaceSettingsForTesting(bool bUseScriptName, TArray<FString> PrefixesToStrip, TArray<FString> SuffixesToStrip)
+{
+	bUseScriptNameForBlueprintLibraryNamespaces = bUseScriptName;
+	BlueprintLibraryNamespacePrefixesToStrip = MoveTemp(PrefixesToStrip);
+	BlueprintLibraryNamespaceSuffixesToStrip = MoveTemp(SuffixesToStrip);
+	SortBlueprintLibraryNamespaceTrimList(BlueprintLibraryNamespacePrefixesToStrip);
+	SortBlueprintLibraryNamespaceTrimList(BlueprintLibraryNamespaceSuffixesToStrip);
+}
 #endif
+
+const FName& FAngelscriptEngine::GetStaticName(int32 Index)
+{
+	return GetStaticNames()[Index];
+}
+
+bool FAngelscriptEngine::TryGetStaticName(int32 Index, FName& OutName)
+{
+	const TArray<FName>& Names = GetStaticNames();
+	if (!Names.IsValidIndex(Index))
+	{
+		return false;
+	}
+
+	OutName = Names[Index];
+	return true;
+}
+
+int32 FAngelscriptEngine::GetOrAddStaticName(FName Name)
+{
+	TArray<FName>* Names = &GLegacyStaticNames;
+	TMap<FName, int32>* NamesByIndex = &GLegacyStaticNamesByIndex;
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		if (CurrentEngine->SharedState.IsValid())
+		{
+			Names = &CurrentEngine->SharedState->StaticNames;
+			NamesByIndex = &CurrentEngine->SharedState->StaticNamesByIndex;
+		}
+	}
+
+	if (int32* FoundIndex = NamesByIndex->Find(Name))
+	{
+		return *FoundIndex;
+	}
+
+	const int32 Index = Names->Emplace(Name);
+	NamesByIndex->Add(Name, Index);
+	return Index;
+}
+
+int32 FAngelscriptEngine::GetStaticNameCount()
+{
+	return GetStaticNames().Num();
+}
+
+void FAngelscriptEngine::ReserveStaticNames(int32 Count)
+{
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		if (CurrentEngine->SharedState.IsValid())
+		{
+			CurrentEngine->SharedState->StaticNames.Reserve(Count);
+			CurrentEngine->SharedState->StaticNamesByIndex.Reserve(Count);
+			return;
+		}
+	}
+
+	GLegacyStaticNames.Reserve(Count);
+	GLegacyStaticNamesByIndex.Reserve(Count);
+}
+
+void FAngelscriptEngine::ResetStaticNames()
+{
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		if (CurrentEngine->SharedState.IsValid())
+		{
+			CurrentEngine->SharedState->StaticNames.Reset();
+			CurrentEngine->SharedState->StaticNamesByIndex.Reset();
+			return;
+		}
+	}
+
+	GLegacyStaticNames.Reset();
+	GLegacyStaticNamesByIndex.Reset();
+}
+
+void FAngelscriptEngine::AddStaticNameFromPrecompiled(FName Name)
+{
+	TArray<FName>* Names = &GLegacyStaticNames;
+	TMap<FName, int32>* NamesByIndex = &GLegacyStaticNamesByIndex;
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		if (CurrentEngine->SharedState.IsValid())
+		{
+			Names = &CurrentEngine->SharedState->StaticNames;
+			NamesByIndex = &CurrentEngine->SharedState->StaticNamesByIndex;
+		}
+	}
+
+	const int32 Index = Names->Add(Name);
+	NamesByIndex->Add(Name, Index);
+}
+
+const TArray<FName>& FAngelscriptEngine::GetStaticNames()
+{
+	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
+	{
+		if (CurrentEngine->SharedState.IsValid())
+		{
+			return CurrentEngine->SharedState->StaticNames;
+		}
+	}
+
+	return GLegacyStaticNames;
+}
 
 bool FAngelscriptEngine::DiscardModule(const TCHAR* ModuleName)
 {
@@ -1323,21 +1483,14 @@ void FAngelscriptEngine::PreInitialize_GameThread()
 	ConfigSettings = GetMutableDefault<UAngelscriptSettings>();
 	bUseAutomaticImportMethod = ConfigSettings->bAutomaticImports;
 
-	FAngelscriptEngine::bUseScriptNameForBlueprintLibraryNamespaces = ConfigSettings->bUseScriptNameForBlueprintLibraryNamespaces;
-	FAngelscriptEngine::BlueprintLibraryNamespacePrefixesToStrip = ConfigSettings->BlueprintLibraryNamespacePrefixesToStrip;
-	FAngelscriptEngine::BlueprintLibraryNamespaceSuffixesToStrip = ConfigSettings->BlueprintLibraryNamespaceSuffixesToStrip;
+	bUseScriptNameForBlueprintLibraryNamespaces = ConfigSettings->bUseScriptNameForBlueprintLibraryNamespaces;
+	BlueprintLibraryNamespacePrefixesToStrip = ConfigSettings->BlueprintLibraryNamespacePrefixesToStrip;
+	BlueprintLibraryNamespaceSuffixesToStrip = ConfigSettings->BlueprintLibraryNamespaceSuffixesToStrip;
 
 	// Sort the prefixes and suffixes by length
 	// We sort to prioritize stripping long prefixes/suffixes, since eg. Library should not be stripped if we can strip BlueprintFunctionLibrary instead
-	const auto SortByStringLength = [](const FString& LHS, const FString& RHS)
-	{
-		if(LHS.Len() == RHS.Len())
-			return LHS > RHS;
-		else
-			return LHS.Len() > RHS.Len();
-	};
-	FAngelscriptEngine::BlueprintLibraryNamespacePrefixesToStrip.Sort(SortByStringLength);
-	FAngelscriptEngine::BlueprintLibraryNamespaceSuffixesToStrip.Sort(SortByStringLength);
+	SortBlueprintLibraryNamespaceTrimList(BlueprintLibraryNamespacePrefixesToStrip);
+	SortBlueprintLibraryNamespaceTrimList(BlueprintLibraryNamespaceSuffixesToStrip);
 
 #if WITH_EDITOR && ENGINE_MAJOR_VERSION >= 5
 	// In editor, we need to be able to resolve object pointers to make
@@ -1592,7 +1745,7 @@ void FAngelscriptEngine::Initialize_AnyThread()
 	}
 	else
 	{
-		StaticNames.Reserve(7000);
+		ReserveStaticNames(7000);
 	}
 
 	// Setup thread local data
@@ -1677,7 +1830,7 @@ bool FAngelscriptEngine::IsGeneratingPrecompiledData()
 {
 	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
 	{
-		return CurrentEngine->StaticJIT != nullptr;
+		return CurrentEngine->bGeneratePrecompiledData;
 	}
 
 	return false;
@@ -2895,6 +3048,12 @@ void FAngelscriptEngine::AdoptSharedStateFrom(const FAngelscriptEngine& Source)
 	AllRootPaths = Source.AllRootPaths;
 	bDidInitialCompileSucceed = Source.bDidInitialCompileSucceed;
 	bCompletedAssetScan = Source.bCompletedAssetScan;
+	bGeneratePrecompiledData = Source.bGeneratePrecompiledData;
+	bUsePrecompiledData = Source.bUsePrecompiledData;
+	bScriptDevelopmentMode = Source.bScriptDevelopmentMode;
+	bUseScriptNameForBlueprintLibraryNamespaces = Source.bUseScriptNameForBlueprintLibraryNamespaces;
+	BlueprintLibraryNamespacePrefixesToStrip = Source.BlueprintLibraryNamespacePrefixesToStrip;
+	BlueprintLibraryNamespaceSuffixesToStrip = Source.BlueprintLibraryNamespaceSuffixesToStrip;
 }
 
 void FAngelscriptEngine::CheckForFileChanges()

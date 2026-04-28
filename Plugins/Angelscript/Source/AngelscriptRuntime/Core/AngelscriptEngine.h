@@ -138,13 +138,11 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptEngine
 	static UObject* GetAmbientWorldContext();
 	static bool ShouldUseEditorScriptsForCurrentContext();
 	static bool ShouldUseAutomaticImportMethodForCurrentContext();
+	static bool ShouldUseScriptNameForBlueprintLibraryNamespacesForCurrentContext();
+	static const TArray<FString>& GetBlueprintLibraryNamespacePrefixesToStripForCurrentContext();
+	static const TArray<FString>& GetBlueprintLibraryNamespaceSuffixesToStripForCurrentContext();
 	static class asCThreadLocalData* GameThreadTLD;
-	static bool bGeneratePrecompiledData;
 	static bool bStaticJITTranspiledCodeLoaded;
-
-	static bool bUseScriptNameForBlueprintLibraryNamespaces;
-	static TArray<FString> BlueprintLibraryNamespacePrefixesToStrip;
-	static TArray<FString> BlueprintLibraryNamespaceSuffixesToStrip;
 
 	bool bSimulateCooked = false;
 	bool bTestErrors = false;
@@ -152,6 +150,7 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptEngine
 	bool bForcePreprocessEditorCode = false;
 	bool bUseEditorScripts = false;
 	bool bUseAutomaticImportMethod = false;
+	bool bGeneratePrecompiledData = false;
 
 	static bool IsSimulatingCookedForCurrentContext();
 	static bool IsTestingErrorsForCurrentContext();
@@ -576,15 +575,17 @@ public:
 	static int32 GetLocalPooledContextCountForTesting(asIScriptEngine* ScriptEngine);
 	void SetUseEditorScriptsForTesting(bool bEnabled);
 	void SetAutomaticImportMethodForTesting(bool bEnabled);
+	void SetBlueprintLibraryNamespaceSettingsForTesting(bool bUseScriptName, TArray<FString> PrefixesToStrip, TArray<FString> SuffixesToStrip);
 #endif
 
-	static TArray<FName> StaticNames;
-	static TMap<FName, int32> StaticNamesByIndex;
-
-	FORCEINLINE static const FName& GetStaticName(int32 Index)
-	{
-		return StaticNames[Index];
-	}
+	static const FName& GetStaticName(int32 Index);
+	static bool TryGetStaticName(int32 Index, FName& OutName);
+	static int32 GetOrAddStaticName(FName Name);
+	static int32 GetStaticNameCount();
+	static void ReserveStaticNames(int32 Count);
+	static void ResetStaticNames();
+	static void AddStaticNameFromPrecompiled(FName Name);
+	static const TArray<FName>& GetStaticNames();
 
 	static void AssignWorldContext(UObject* NewWorldContext);
 
@@ -609,6 +610,10 @@ public:
 #endif
 
 private:
+	bool bUseScriptNameForBlueprintLibraryNamespaces = true;
+	TArray<FString> BlueprintLibraryNamespacePrefixesToStrip;
+	TArray<FString> BlueprintLibraryNamespaceSuffixesToStrip;
+
 	FAngelscriptEngineConfig RuntimeConfig;
 	FAngelscriptEngineDependencies Dependencies;
 };

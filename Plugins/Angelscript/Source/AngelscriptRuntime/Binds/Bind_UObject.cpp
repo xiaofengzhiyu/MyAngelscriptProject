@@ -137,23 +137,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_UObject_Base((int32)FAngelscri
 	{
 		auto& Manager = FAngelscriptEngine::Get();
 		asITypeInfo* RequestedType = Manager.Engine->GetTypeInfoById(TypeId);
-		const bool bScenarioCastProbe =
-			Object != nullptr
-			&& Object->GetClass() != nullptr
-			&& Object->GetClass()->GetName().Contains(TEXT("ScenarioInterfaceCastSuccess"));
 		const bool bLogDamageableCast = RequestedType != nullptr && FCStringAnsi::Strstr(RequestedType->GetName(), "DamageableCast") != nullptr;
-		if (bScenarioCastProbe)
-		{
-			UE_LOG(
-				Angelscript,
-				Display,
-				TEXT("UObject::opCast scenario entry typeId=%d requestedType=%hs isHandle=%s outAddress=%p objectClass=%s"),
-				TypeId,
-				RequestedType != nullptr ? RequestedType->GetName() : "<null>",
-				(TypeId & asTYPEID_OBJHANDLE) != 0 ? TEXT("true") : TEXT("false"),
-				OutAddress,
-				*Object->GetClass()->GetName());
-		}
 		if (bLogDamageableCast)
 		{
 			UE_LOG(

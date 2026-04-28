@@ -152,7 +152,7 @@ struct FAngelscriptFunctionSignature
 		FString Namespace;
 
 		bool bIsScriptName = false;
-		if(FAngelscriptEngine::bUseScriptNameForBlueprintLibraryNamespaces && InFunction->GetOuterUClass()->HasMetaData(NAME_Signature_ScriptName))
+		if(FAngelscriptEngine::ShouldUseScriptNameForBlueprintLibraryNamespacesForCurrentContext() && InFunction->GetOuterUClass()->HasMetaData(NAME_Signature_ScriptName))
 		{
 			// Use the ScriptName meta data instead of the type name if available
 			// We assume that the ScriptName does not start with U
@@ -167,7 +167,7 @@ struct FAngelscriptFunctionSignature
 		// Remove the first prefix that matches the start of the namespace
 		// The prefixes are sorted by length, so that the longest found prefix is removed
 		bool bFoundPrefix = false;
-		for(const auto& Prefix : FAngelscriptEngine::BlueprintLibraryNamespacePrefixesToStrip)
+		for(const auto& Prefix : FAngelscriptEngine::GetBlueprintLibraryNamespacePrefixesToStripForCurrentContext())
 		{
 			if(Namespace.RemoveFromStart(Prefix))
 			{
@@ -179,7 +179,7 @@ struct FAngelscriptFunctionSignature
 		// Remove the first suffix that matches the end of the namespace
 		// The suffixes are sorted by length, so that the longest found suffix is removed
 		bool bFoundSuffix = false;
-		for(const auto& Suffix : FAngelscriptEngine::BlueprintLibraryNamespaceSuffixesToStrip)
+		for(const auto& Suffix : FAngelscriptEngine::GetBlueprintLibraryNamespaceSuffixesToStripForCurrentContext())
 		{
 			if(Namespace.RemoveFromEnd(Suffix))
 			{
