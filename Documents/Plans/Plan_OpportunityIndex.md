@@ -3,8 +3,8 @@
 本文档是对当前 Angelscript 插件所有可执行方向的系统性盘点，涵盖 AS 2.38 合入、测试增强、缺陷重构、功能增强、工具链与架构演进六大类。每个条目标注优先级、已有 Plan 状态与建议动作。
 
 **编制时间**：2026-04-05（数字基线更新于 2026-04-28）
-**当前基线**：AS 2.33.0 WIP，文档化 C++ 基线为 `275/275 PASS`，当前 live automation / full-suite 状态以测试增强章节、`Documents/Guides/TestCatalog.md` 与 `Documents/Guides/TechnicalDebtInventory.md` 为准；当前可直接统计到 `124` 个 `Bind_*.cpp`、`417+` 个自动化测试定义（覆盖 `429` 个测试 .cpp 文件）、`27` 个脚本示例（`Script/Examples/`）。仅剩 `2` 个 Disabled 测试（均为 `#ue57-headless` 已知限制）。新增总览入口 `Plan_StatusPriorityRoadmap.md`，用于统一维护当前完成现状、Hazelight 差距与后续优先级。`Documents/Plans/` 根目录当前可见 `57` 份 `Plan_*.md`（含 `55` 份执行 Plan、`1` 份状态总览 Plan 和 `1` 份索引文档）；`Plan.md` 作为编写规则文档单独保留，`Archives/` 下另有 `7` 份已归档 Plan。
-**Plan 状态快照**：55 份执行 Plan、1 份状态总览 Plan（`Plan_StatusPriorityRoadmap.md`）、1 份索引文档（`Plan_OpportunityIndex.md`）、1 份编写规则文档（`Plan.md`）、7 份已归档完成 Plan
+**当前基线**：AS 2.33.0 WIP，文档化 C++ 基线为 `275/275 PASS`，当前 live automation / full-suite 状态以测试增强章节、`Documents/Guides/TestCatalog.md` 与 `Documents/Guides/TechnicalDebtInventory.md` 为准；当前可直接统计到 `124` 个 `Bind_*.cpp`、`417+` 个自动化测试定义（覆盖 `429` 个测试 .cpp 文件）、`27` 个脚本示例（`Script/Examples/`）。仅剩 `2` 个 Disabled 测试（均为 `#ue57-headless` 已知限制）。新增总览入口 `Plan_StatusPriorityRoadmap.md`，用于统一维护当前完成现状、Hazelight 差距与后续优先级。`Documents/Plans/` 根目录当前可见 `59` 份 `Plan_*.md`（含 `57` 份执行 Plan、`1` 份状态总览 Plan 和 `1` 份索引文档）；`Plan.md` 作为编写规则文档单独保留，`Archives/` 下另有 `7` 份已归档 Plan。
+**Plan 状态快照**：57 份执行 Plan、1 份状态总览 Plan（`Plan_StatusPriorityRoadmap.md`）、1 份索引文档（`Plan_OpportunityIndex.md`）、1 份编写规则文档（`Plan.md`）、7 份已归档完成 Plan
 
 ---
 
@@ -58,6 +58,7 @@
 | M | 测试体系规范化 | `Plan_TestSystemNormalization.md` | 未开始 |
 | N | 全局变量 / Console Variable 对齐与专项测试 | `Plan_GlobalVariableAndCVarParity.md` | 部分完成（`FConsoleVariable` bool/string + 首批 `Bindings` 测试已落地，`FConsoleCommand` 与剩余矩阵待收口） |
 | O | Disabled 测试重新启用 | `Plan_DisabledTestReenablement.md` | 基本完成（仅剩 2 个 `#ue57-headless` Disabled 测试，其余已通过 UE 5.7 迁移修复批量重新启用） |
+| P | 测试套件累积稳定性 | `Plan_TestSuiteAccumulationStability.md` | 执行中（修复全量单进程状态 / socket / async IO 累积问题） |
 
 ### 2.2 新建议 Plan
 
@@ -112,8 +113,9 @@
 |---|------|-----------|------|
 | A | C++ UInterface 绑定 | `Plan_CppInterfaceBinding.md` | 未开始（P1 优先级） |
 | B | 接口绑定总设计 | `Plan_InterfaceBinding.md` | 未开始（P1 优先级） |
-| C | UHT Exporter 插件 | `Plan_UhtPlugin.md` | 未开始 |
-| D | Bind 并行化 | `Plan_BindParallelization.md` | 分析完成，未实施 |
+| C | UHT Exporter 插件 | `Plan_UhtPlugin.md` | 一期已落地（函数表生成 + 三份汇总），二期由 `Plan_UhtArtifactExpansion.md` 承接 |
+| C2 | UHT 产物扩展（Bind 加速） | `Plan_UhtArtifactExpansion.md` | 未开始（P2 优先级，依赖 `Plan_UhtPlugin.md` 一期产物） |
+| D | Bind 并行化 | `Plan_BindParallelization.md` | 分析完成，未实施（结论：不能并行 → 改由 `Plan_UhtArtifactExpansion.md` 走"减少 CallBinds 工作量"路线） |
 | E | 状态 Dump | `Archives/Plan_ASEngineStateDump.md` | 已归档（已完成） |
 | F | Mod 支持探索 | `Plan_AngelscriptModSupportExploration.md` | 未开始 |
 | G | UnrealCSharp 架构吸收 | `Plan_UnrealCSharpArchitectureAbsorption.md` | 未开始 |
@@ -208,6 +210,7 @@
 | 12 | ThirdParty 修改追踪体系 | 架构 | `Plan_ThirdPartyModificationTracking` |
 | 13 | StructUtils 运行时边界迁移 | 重构 | `Plan_StructUtilsMigration` |
 | 14 | ASClass 查询语义与加速研究 | 架构 / 性能 | `Plan_ASClassLookupSemanticsAndAcceleration` |
+| 15 | UHT 产物扩展（启动期 Bind 加速） | 功能 / 性能 | `Plan_UhtArtifactExpansion` |
 
 ### 🟡 P3（有价值，可根据需求插入）
 
