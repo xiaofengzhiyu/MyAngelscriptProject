@@ -1,5 +1,3 @@
-#include "AngelscriptTArrayBindingCoverage.h"
-
 #include "../Shared/AngelscriptGlobalFunctionInvoker.h"
 #include "../Shared/AngelscriptTestEngineHelper.h"
 #include "../Shared/AngelscriptTestUtilities.h"
@@ -14,7 +12,6 @@
 
 using namespace AngelscriptTestSupport;
 using namespace AngelscriptReflectiveAccess;
-using namespace AngelscriptTest_Bindings_TArrayCoverage;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTArrayBindingsTest,
@@ -27,29 +24,16 @@ namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private
 
 	struct FArraySyntaxCoverageProfile
 	{
-		EArraySyntaxCoverage Syntax;
 		const TCHAR* CasePrefix;
 		const TCHAR* ModulePrefix;
 		const TCHAR* LogCategory;
 	};
 
-	const FArraySyntaxCoverageProfile& GetCoverageProfile(EArraySyntaxCoverage Syntax)
-	{
-		static const FArraySyntaxCoverageProfile TArrayProfile{
-			EArraySyntaxCoverage::ExplicitTArray,
-			TEXT("TArray"),
-			TEXT("ASTArray"),
-			TEXT("TArrayBindings"),
-		};
-		static const FArraySyntaxCoverageProfile ShorthandProfile{
-			EArraySyntaxCoverage::ShorthandArray,
-			TEXT("ArraySyntaxCompat"),
-			TEXT("ASArraySyntaxCompat"),
-			TEXT("ArraySyntaxCompatBindings"),
-		};
-
-		return Syntax == EArraySyntaxCoverage::ShorthandArray ? ShorthandProfile : TArrayProfile;
-	}
+	static const FArraySyntaxCoverageProfile TArrayProfile{
+		TEXT("TArray"),
+		TEXT("ASTArray"),
+		TEXT("TArrayBindings"),
+	};
 
 	struct FExpectedGlobalInt
 	{
@@ -65,98 +49,14 @@ namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private
 		int32 MinimumValue;
 	};
 
-	bool UsesShorthandArraySyntax(const FArraySyntaxCoverageProfile& Profile)
-	{
-		return Profile.Syntax == EArraySyntaxCoverage::ShorthandArray;
-	}
-
 	FString MakeModuleName(const FArraySyntaxCoverageProfile& Profile, const TCHAR* SectionName)
 	{
 		return FString::Printf(TEXT("%s%s"), Profile.ModulePrefix, SectionName);
 	}
 
-	bool IsObjectHandleArrayElementType(const FString& ElementType)
-	{
-		return ElementType == TEXT("UObject")
-			|| ElementType == TEXT("UClass")
-			|| ElementType == TEXT("AActor")
-			|| ElementType == TEXT("UActorComponent")
-			|| ElementType == TEXT("USceneComponent");
-	}
-
-	FString MakeShorthandArrayType(const TCHAR* ElementType)
-	{
-		const FString ElementTypeString(ElementType);
-		return IsObjectHandleArrayElementType(ElementTypeString)
-			? FString::Printf(TEXT("TArray<%s>"), ElementType)
-			: FString::Printf(TEXT("%s[]"), ElementType);
-	}
-
-	FString MakeArrayType(const FArraySyntaxCoverageProfile& Profile, const TCHAR* ElementType)
-	{
-		return UsesShorthandArraySyntax(Profile)
-			? MakeShorthandArrayType(ElementType)
-			: FString::Printf(TEXT("TArray<%s>"), ElementType);
-	}
-
-	FString ApplyArraySyntaxReplacements(const FString& Input)
-	{
-		FString Result = Input;
-		Result.ReplaceInline(TEXT("TArray<TArray<int>>"), TEXT("int[][]"), ESearchCase::CaseSensitive);
-
-		static const TCHAR* ElementTypes[] = {
-			TEXT("TSubclassOf<AActor>"),
-			TEXT("UActorComponent"),
-			TEXT("USceneComponent"),
-			TEXT("FLinearColor"),
-			TEXT("FIntVector4"),
-			TEXT("FIntVector"),
-			TEXT("FTransform"),
-			TEXT("FVector2D"),
-			TEXT("FIntPoint"),
-			TEXT("FRotator"),
-			TEXT("FVector4"),
-			TEXT("FString"),
-			TEXT("UObject"),
-			TEXT("AActor"),
-			TEXT("FVector"),
-			TEXT("double"),
-			TEXT("uint64"),
-			TEXT("uint32"),
-			TEXT("uint16"),
-			TEXT("FColor"),
-			TEXT("FName"),
-			TEXT("FText"),
-			TEXT("FGuid"),
-			TEXT("UClass"),
-			TEXT("float"),
-			TEXT("int64"),
-			TEXT("int16"),
-			TEXT("uint8"),
-			TEXT("bool"),
-			TEXT("int8"),
-			TEXT("int"),
-		};
-
-		for (const TCHAR* ElementType : ElementTypes)
-		{
-			const FString ExplicitType = FString::Printf(TEXT("TArray<%s>"), ElementType);
-			const FString ShorthandType = MakeShorthandArrayType(ElementType);
-			Result.ReplaceInline(*ExplicitType, *ShorthandType, ESearchCase::CaseSensitive);
-		}
-		return Result;
-	}
-
 	FString FormatCoverageText(const FArraySyntaxCoverageProfile& Profile, const FString& Text)
 	{
-		FString Result = UsesShorthandArraySyntax(Profile) ? ApplyArraySyntaxReplacements(Text) : Text;
-		if (UsesShorthandArraySyntax(Profile))
-		{
-			Result.ReplaceInline(TEXT("TArrayBindings"), Profile.LogCategory, ESearchCase::CaseSensitive);
-			Result.ReplaceInline(TEXT("TArray."), *FString::Printf(TEXT("%s."), Profile.CasePrefix), ESearchCase::CaseSensitive);
-			Result.ReplaceInline(TEXT("TArray "), *FString::Printf(TEXT("%s "), Profile.CasePrefix), ESearchCase::CaseSensitive);
-		}
-		return Result;
+		return Text;
 	}
 
 	FString MakeArrayFunctionDecl(
@@ -164,7 +64,7 @@ namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private
 		const TCHAR* ElementType,
 		const TCHAR* FunctionName)
 	{
-		return FString::Printf(TEXT("%s %s()"), *MakeArrayType(Profile, ElementType), FunctionName);
+		return FString::Printf(TEXT("TArray<%s> %s()"), ElementType, FunctionName);
 	}
 
 	asIScriptModule* BuildCoverageModule(
@@ -175,9 +75,8 @@ namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private
 		const FString& Source)
 	{
 		const FString ModuleName = MakeModuleName(Profile, SectionName);
-		const FString CoverageSource = FormatCoverageText(Profile, Source);
 		FTCHARToUTF8 ModuleNameUtf8(*ModuleName);
-		return BuildModule(Test, Engine, ModuleNameUtf8.Get(), CoverageSource);
+		return BuildModule(Test, Engine, ModuleNameUtf8.Get(), Source);
 	}
 
 	bool TraceTArrayCase(
@@ -2207,49 +2106,9 @@ int Entry()
 		ECompileResult::Error);
 	bPassed &= Test.TestTrue(
 		*FormatCoverageText(Profile, TEXT("TArray<TArray<int>> rejection should report the nested container diagnostic or use the shorthand parser rejection path")),
-		UsesShorthandArraySyntax(Profile) || CompileSummaryContainsDiagnosticMessage(Summary, TArrayNestedContainerDiagnostic));
+		CompileSummaryContainsDiagnosticMessage(Summary, TArrayNestedContainerDiagnostic));
 
 	return bPassed;
-}
-
-namespace AngelscriptTest_Bindings_TArrayCoverage
-{
-	using namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private;
-
-	bool RunTArrayBindingCoverageSections(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		EArraySyntaxCoverage Syntax)
-	{
-		const FArraySyntaxCoverageProfile& Profile = GetCoverageProfile(Syntax);
-		bool bPassed = true;
-
-		Test.AddInfo(FString::Printf(TEXT("%s.MutationCompat: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayMutationCompatSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.IteratorCompat: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayIteratorCompatSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.Operations: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayOperationsSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.TypeMatrix: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayTypeMatrixSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.ObjectTypes: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayObjectTypesSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.ReturnValues: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayReturnValuesSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.ErrorPaths: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayErrorPathsSection(Test, Engine, Profile);
-
-		Test.AddInfo(FString::Printf(TEXT("%s.NestedContainerRejection: begin"), Profile.CasePrefix));
-		bPassed &= RunTArrayNestedContainerRejectionSection(Test, Engine, Profile);
-
-		return bPassed;
-	}
 }
 
 bool FAngelscriptTArrayBindingsTest::RunTest(const FString& Parameters)
@@ -2262,10 +2121,29 @@ bool FAngelscriptTArrayBindingsTest::RunTest(const FString& Parameters)
 		ResetSharedCloneEngine(Engine);
 	};
 
-	bPassed &= AngelscriptTest_Bindings_TArrayCoverage::RunTArrayBindingCoverageSections(
-		*this,
-		Engine,
-		EArraySyntaxCoverage::ExplicitTArray);
+	AddInfo(FString::Printf(TEXT("%s.MutationCompat: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayMutationCompatSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.IteratorCompat: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayIteratorCompatSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.Operations: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayOperationsSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.TypeMatrix: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayTypeMatrixSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.ObjectTypes: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayObjectTypesSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.ReturnValues: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayReturnValuesSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.ErrorPaths: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayErrorPathsSection(*this, Engine, TArrayProfile);
+
+	AddInfo(FString::Printf(TEXT("%s.NestedContainerRejection: begin"), TArrayProfile.CasePrefix));
+	bPassed &= RunTArrayNestedContainerRejectionSection(*this, Engine, TArrayProfile);
 	ASTEST_END_SHARE_CLEAN
 
 	return bPassed;
