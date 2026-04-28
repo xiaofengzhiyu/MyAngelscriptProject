@@ -14,6 +14,7 @@
 ├── Arch_RuntimeLifecycle.md               // Runtime 总控与生命周期
 ├── Arch_EditorTestDumpCollaboration.md    // Editor / Test / Dump 协作边界
 ├── Arch_ModuleLoading.md                  // 模块清单与装载关系
+├── Arch_ErrorDiagnostics.md               // 报错机制：编译诊断、错误收集与输出链路
 └── Arch_UHTToolchain.md                   // UHT 工具链位置与边界
 ```
 
@@ -68,6 +69,29 @@
 ├── Test_TopicClusters.md                  // 主题测试簇映射
 └── Test_RuntimeInternal.md                // Runtime 内部测试边界
 ```
+
+## Syntax_ — 语法机制与实现原理
+
+```
+├── Syntax_DefaultStatement.md             // default 语句：解析、展开与构造函数映射
+├── Syntax_UPROPERTY.md                    // UPROPERTY 修饰符：反射注册与编辑器元数据
+├── Syntax_UFUNCTION.md                    // UFUNCTION 修饰符：BlueprintOverride / Event / Pure
+├── Syntax_DefaultComponent.md             // DefaultComponent / Attach / RootComponent 组件声明
+├── Syntax_DelegateEvent.md                // delegate / event 关键字：签名声明与多播机制
+├── Syntax_AccessSpecifiers.md             // access 自定义访问修饰符
+├── Syntax_PropertyAccessor.md             // property 关键字：Get/Set 访问器语法糖
+├── Syntax_Mixin.md                        // mixin 关键字：非侵入式扩展方法
+└── Syntax_FString.md                      // f-string 格式化：编译期展开与格式说明符
+```
+
+## Diff_ — 与参考实现的差异分析
+
+```
+├── Diff_HazelightDefaultStatement.md       // default 语句实现与 Hazelight 引擎的偏离分析
+└── Diff_HazelightInsightsToBorrow.md       // 全插件视角：Hazelight 中可借鉴的设计点汇总
+```
+
+> 注：Diff_ 仅做客观差异比对与处理决策记录；可执行的补足任务对应到 `Documents/Plans/Plan_*HazelightParity.md` 系列。
 
 ## Guide_ — 实践指南
 

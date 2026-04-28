@@ -272,7 +272,108 @@ class AFloatingCube : AActor
 
 ---
 
-## 案例 4：重叠检测 — 事件绑定
+## 案例 4：default 语句 — 覆盖默认值
+
+`default` 关键字等价于 C++ 构造函数中的赋值，用来设置父类属性和子对象的默认值。这是声明式配置，不需要写任何函数体。
+
+### 覆盖父类属性
+
+```angelscript
+class ANetworkedEnemy : AActor
+{
+    // 覆盖 AActor 父类的属性默认值
+    default bReplicates = true;
+    default bAlwaysRelevant = true;
+
+    // 可以调用方法（如 TArray.Add）
+    default Tags.Add(n"Enemy");
+    default Tags.Add(n"Targetable");
+};
+```
+
+### 配置 DefaultComponent 的属性
+
+`default` 可以直接设置组件的属性，无需在 BeginPlay 中赋值：
+
+```angelscript
+class AShieldedCharacter : AActor
+{
+    UPROPERTY(DefaultComponent, RootComponent)
+    USceneComponent SceneRoot;
+
+    UPROPERTY(DefaultComponent)
+    USkeletalMeshComponent CharacterMesh;
+
+    UPROPERTY(DefaultComponent)
+    UStaticMeshComponent ShieldMesh;
+
+    // 通过 default 配置组件属性
+    default CharacterMesh.RelativeLocation = FVector(0.0, 0.0, -90.0);
+    default CharacterMesh.RelativeRotation = FRotator(0.0, -90.0, 0.0);
+
+    // 隐藏护盾 Mesh，只在受伤时显示
+    default ShieldMesh.bHiddenInGame = true;
+    // 调用方法也可以
+    default ShieldMesh.SetCollisionEnabled(ECollisionEnabled::NoCollision);
+};
+```
+
+### 子类覆盖父类脚本属性
+
+```angelscript
+class APickupBase : AActor
+{
+    UPROPERTY(Category = "Pickup")
+    int PickupValue = 10;
+
+    UPROPERTY(Category = "Pickup")
+    FString PickupName = "Generic";
+};
+
+class AGoldPickup : APickupBase
+{
+    // 子类中用 default 覆盖父类脚本定义的属性
+    default PickupValue = 100;
+    default PickupName = "Gold Coin";
+};
+
+class ASilverPickup : APickupBase
+{
+    default PickupValue = 50;
+    default PickupName = "Silver Coin";
+};
+```
+
+### 配置 AI 行为树节点
+
+```angelscript
+class UBTTask_PatrolToPoint : UBTTask_BlueprintBase
+{
+    // 在编辑器行为树中显示的节点名称
+    default NodeName = "Patrol To Point";
+
+    UPROPERTY(Category = "Patrol")
+    float AcceptanceRadius = 100.0;
+
+    UFUNCTION(BlueprintOverride)
+    void ExecuteAI(AAIController Controller, APawn Pawn)
+    {
+        Print(f"Patrolling with radius {AcceptanceRadius}");
+    }
+};
+```
+
+**要点：**
+
+- `default 属性 = 值` — 覆盖父类或自身声明的 UPROPERTY 默认值
+- `default 组件.属性 = 值` — 设置 DefaultComponent 的属性
+- `default 组件.方法(参数)` — 在构造时调用组件方法
+- `default 数组.Add(值)` — 向容器属性追加元素
+- `default` 是声明式的，不在任何函数内，在类体顶层书写
+
+---
+
+## 案例 5：重叠检测 — 事件绑定
 
 ### Actor 级别重叠
 
@@ -336,7 +437,7 @@ class ATriggerZone : AActor
 
 ---
 
-## 案例 5：定时器 — 延迟与循环
+## 案例 6：定时器 — 延迟与循环
 
 ```angelscript
 class ASpawner : AActor
@@ -388,7 +489,7 @@ class ASpawner : AActor
 
 ---
 
-## 案例 6：委托与事件 — 自定义回调
+## 案例 7：委托与事件 — 自定义回调
 
 ```angelscript
 // 单播委托（等价于 DECLARE_DYNAMIC_DELEGATE）
@@ -442,7 +543,7 @@ class AScoreManager : AActor
 
 ---
 
-## 案例 7：自定义结构体
+## 案例 8：自定义结构体
 
 ```angelscript
 struct FWeaponData
@@ -485,7 +586,7 @@ class AWeaponHolder : AActor
 
 ---
 
-## 案例 8：构造脚本 — 编辑器时逻辑
+## 案例 9：构造脚本 — 编辑器时逻辑
 
 ```angelscript
 class AProceduralFence : AActor
@@ -517,7 +618,7 @@ class AProceduralFence : AActor
 
 ---
 
-## 案例 9：UMG Widget — 脚本化 UI
+## 案例 10：UMG Widget — 脚本化 UI
 
 ```angelscript
 class UGameHUD : UUserWidget
@@ -581,7 +682,7 @@ void ShowGameHUD(APlayerController Player, TSubclassOf<UGameHUD> WidgetClass)
 
 ---
 
-## 案例 10：子系统 — 全局管理器
+## 案例 11：子系统 — 全局管理器
 
 子系统是不需要手动创建的单例，引擎自动管理其生命周期：
 
@@ -640,7 +741,7 @@ class UPlayerProgressSubsystem : UScriptGameInstanceSubsystem
 
 ---
 
-## 案例 11：继承与多态
+## 案例 12：继承与多态
 
 ```angelscript
 // 基类：定义可被重写的事件接口
@@ -705,7 +806,7 @@ void DamageTarget(AGameCharacter Target, float Damage)
 
 ---
 
-## 案例 12：网络复制与 RPC
+## 案例 13：网络复制与 RPC
 
 ```angelscript
 class ANetworkPlayer : AActor
@@ -776,7 +877,7 @@ class ANetworkPlayer : AActor
 
 ---
 
-## 案例 13：增强输入 (Enhanced Input)
+## 案例 14：增强输入 (Enhanced Input)
 
 ```angelscript
 class APlayerPawn : APawn
@@ -830,7 +931,7 @@ class APlayerPawn : APawn
 
 ---
 
-## 案例 14：f-string 格式化
+## 案例 15：f-string 格式化
 
 AngelScript 支持类似 Python 的 f-string：
 
@@ -871,7 +972,7 @@ void FormatStringDemo()
 
 ---
 
-## 案例 15：TArray 与 TMap 容器
+## 案例 16：TArray 与 TMap 容器
 
 ```angelscript
 UFUNCTION()
