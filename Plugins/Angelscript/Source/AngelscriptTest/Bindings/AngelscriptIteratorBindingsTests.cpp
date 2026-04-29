@@ -1,42 +1,77 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+// ============================================================================
+// AngelscriptIteratorBindingsTests.cpp
+//
+// TSet/TMap iterator binding coverage — CQTest refactor.
+// Automation ID:
+//   Angelscript.TestModule.Bindings.Iterator.FAngelscriptIteratorBindingsTest.*
+//
+// Sections:
+//   SetIterator        — TSetIterator sum via CanProceed/Proceed
+//   MapIterator        — TMapIterator sum + key enumeration
+//   MapIteratorPairing — empty-map guard, copy semantics, key/value
+//                        correspondence preservation
+//
+// CQTest adaptation notes:
+//   Three original IMPLEMENT_SIMPLE_AUTOMATION_TEST classes merged into one
+//   TEST_CLASS with three TEST_METHODs.  Each `int Entry()` has been renamed
+//   to a descriptive function returning 1 (pass) or 0 (fail).  The pairing
+//   test is split into empty-map guard + full traversal-with-copy.
+// ============================================================================
 
-#include "Misc/ScopeExit.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptSetIteratorBindingsTest,
-	"Angelscript.TestModule.Bindings.SetIteratorCompat",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GIteratorProfile{
+	TEXT("Iterator"),          // Theme
+	TEXT(""),                  // Variant
+	TEXT("ASIterator"),        // ModulePrefix
+	TEXT("Iterator"),          // CasePrefix
+	TEXT("IteratorBindings"),  // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptIteratorBindingsTest,
+	"Angelscript.TestModule.Bindings.Iterator",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMapIteratorBindingsTest,
-	"Angelscript.TestModule.Bindings.MapIteratorCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMapIteratorPairingBindingsTest,
-	"Angelscript.TestModule.Bindings.MapIteratorPairingCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptSetIteratorBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(TEXT("ASSetIteratorCompat"));
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASSetIteratorCompat",
-		TEXT(R"(
-int Entry()
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: SetIterator
+	// ====================================================================
+
+	TEST_METHOD(SetIterator)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GIteratorProfile, TEXT("SetIter"), TEXT(R"(
+int SetIter_SumElements()
 {
 	TSet<int> Values;
 	Values.Add(2);
@@ -49,47 +84,26 @@ int Entry()
 		Sum += It.Proceed();
 	}
 
-	return Sum == 7 ? 1 : 10;
+	return (Sum == 7) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GIteratorProfile, TEXT("int SetIter_SumElements()"), TEXT("TSet iterator should sum all elements via CanProceed/Proceed"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: MapIterator
+	// ====================================================================
+
+	TEST_METHOD(MapIterator)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("TSet iterator helpers should behave as expected"), Result, 1);
-	ASTEST_END_SHARE_CLEAN
-
-	return true;
-}
-
-bool FAngelscriptMapIteratorBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASMapIteratorCompat"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASMapIteratorCompat",
-		TEXT(R"(
-int Entry()
+		FCoverageModuleScope Mod(*TestRunner, Engine, GIteratorProfile, TEXT("MapIter"), TEXT(R"(
+int MapIter_SumValuesAndCountKeys()
 {
 	TMap<FName, int> Values;
 	Values.Add(FName("Alpha"), 2);
@@ -106,46 +120,25 @@ int Entry()
 		Sum += It.GetValue();
 	}
 
-	return (Sum == 7 && KeyCount == 2) ? 1 : 10;
+	return (Sum == 7 && KeyCount == 2) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GIteratorProfile, TEXT("int MapIter_SumValuesAndCountKeys()"), TEXT("TMap iterator should sum values and enumerate keys"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: MapIteratorPairing
+	// ====================================================================
+
+	TEST_METHOD(MapIteratorPairing)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("TMap iterator helpers should behave as expected"), Result, 1);
-	ASTEST_END_SHARE_CLEAN
-
-	return true;
-}
-
-bool FAngelscriptMapIteratorPairingBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASMapIteratorPairingCompat"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASMapIteratorPairingCompat",
-		TEXT(R"(
+		FCoverageModuleScope Mod(*TestRunner, Engine, GIteratorProfile, TEXT("MapIterPair"), TEXT(R"(
 bool MatchesExpectedPair(FName Key, int Value)
 {
 	if (Key == FName("Alpha"))
@@ -157,12 +150,14 @@ bool MatchesExpectedPair(FName Key, int Value)
 	return false;
 }
 
-int Entry()
+int MapIterPair_EmptyMapDoesNotProceed()
 {
 	TMap<FName, int> Empty;
-	if (Empty.Iterator().CanProceed)
-		return 10;
+	return (!Empty.Iterator().CanProceed) ? 1 : 0;
+}
 
+int MapIterPair_CopyPreservesCorrespondence()
+{
 	TMap<FName, int> Values;
 	Values.Add(FName("Alpha"), 2);
 	Values.Add(FName("Beta"), 9);
@@ -170,11 +165,11 @@ int Entry()
 
 	TMapIterator<FName, int> It = Values.Iterator();
 	if (!It.CanProceed)
-		return 11;
+		return 0;
 
 	It.Proceed();
 	if (!MatchesExpectedPair(It.GetKey(), It.GetValue()))
-		return 12;
+		return 0;
 
 	TMapIterator<FName, int> Copy = It;
 
@@ -188,7 +183,7 @@ int Entry()
 	{
 		It.Proceed();
 		if (!MatchesExpectedPair(It.GetKey(), It.GetValue()))
-			return 20;
+			return 0;
 		OriginalRemaining.Add(It.GetKey(), It.GetValue());
 	}
 
@@ -196,55 +191,34 @@ int Entry()
 	{
 		Copy.Proceed();
 		if (!MatchesExpectedPair(Copy.GetKey(), Copy.GetValue()))
-			return 21;
+			return 0;
 		CopyRemaining.Add(Copy.GetKey(), Copy.GetValue());
 	}
 
 	if (It.CanProceed || Copy.CanProceed)
-		return 30;
+		return 0;
 
 	if (OriginalRemaining.Num() != 3 || CopyRemaining.Num() != 3)
-		return 31;
+		return 0;
 
 	int Value = 0;
-	if (!OriginalRemaining.Find(FName("Alpha"), Value) || Value != 2)
-		return 32;
-	if (!OriginalRemaining.Find(FName("Beta"), Value) || Value != 9)
-		return 33;
-	if (!OriginalRemaining.Find(FName("Gamma"), Value) || Value != 17)
-		return 34;
+	if (!OriginalRemaining.Find(FName("Alpha"), Value) || Value != 2) return 0;
+	if (!OriginalRemaining.Find(FName("Beta"), Value) || Value != 9) return 0;
+	if (!OriginalRemaining.Find(FName("Gamma"), Value) || Value != 17) return 0;
 
-	if (!CopyRemaining.Find(FName("Alpha"), Value) || Value != 2)
-		return 35;
-	if (!CopyRemaining.Find(FName("Beta"), Value) || Value != 9)
-		return 36;
-	if (!CopyRemaining.Find(FName("Gamma"), Value) || Value != 17)
-		return 37;
+	if (!CopyRemaining.Find(FName("Alpha"), Value) || Value != 2) return 0;
+	if (!CopyRemaining.Find(FName("Beta"), Value) || Value != 9) return 0;
+	if (!CopyRemaining.Find(FName("Gamma"), Value) || Value != 17) return 0;
 
 	return 1;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GIteratorProfile, TEXT("int MapIterPair_EmptyMapDoesNotProceed()"), TEXT("empty TMap iterator should not proceed"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GIteratorProfile, TEXT("int MapIterPair_CopyPreservesCorrespondence()"), TEXT("TMap iterator copy should preserve key/value correspondence and remaining state"), 1);
 	}
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("TMap iterator pairing helpers should preserve key/value correspondence and copy remaining state"), Result, 1);
-	ASTEST_END_SHARE_CLEAN
-
-	return true;
-}
+};
 
 #endif

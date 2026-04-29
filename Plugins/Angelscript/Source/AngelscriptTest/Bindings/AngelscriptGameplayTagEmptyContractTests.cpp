@@ -1,5 +1,27 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptGameplayTagEmptyContractTests.cpp
+//
+// FGameplayTag empty-tag contract coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.GameplayTagEmptyContract.FAngelscriptGameplayTagEmptyContractTest.*
+//
+// Sections:
+//   ValidTagSanity     — ValidTag self-consistency (MatchesTagExact, MatchesAnyExact,
+//                        GetSingleTagContainer)
+//   EmptyTagMatching   — EmptyTag.MatchesTag/MatchesTagExact/MatchesTagDepth/
+//                        MatchesAny/MatchesAnyExact vs valid tag
+//   EmptyTagSingle     — EmptyTag.GetSingleTagContainer state parity
+//   EmptyTagParent     — EmptyTag.RequestDirectParent and GetGameplayTagParents parity
+//
+// CQTest adaptation notes:
+//   Native C++ reference values are captured from the first valid gameplay tag
+//   at test time and substituted into script via FString::Format.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "GameplayTagsManager.h"
 #include "Misc/ScopeExit.h"
@@ -7,10 +29,45 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-namespace AngelscriptTest_Bindings_AngelscriptGameplayTagEmptyContractTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GGPTagEmptyProfile{
+	TEXT("GameplayTagEmpty"),             // Theme
+	TEXT(""),                             // Variant
+	TEXT("ASGPTagEmpty"),                 // ModulePrefix
+	TEXT("GPTagEmpty"),                   // CasePrefix
+	TEXT("GameplayTagEmptyBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace AngelscriptGameplayTagEmptyContractTests_Private
 {
-	struct FGameplayTagEmptyReference
+	int32 BoolToScriptInt(const bool bValue)
+	{
+		return bValue ? 1 : 0;
+	}
+
+	bool FindValidGameplayTag(FGameplayTag& OutValidTag)
+	{
+		FGameplayTagContainer AllTags;
+		UGameplayTagsManager::Get().RequestAllGameplayTags(AllTags, false);
+		if (AllTags.Num() == 0)
+		{
+			return false;
+		}
+
+		OutValidTag = AllTags.First();
+		return OutValidTag.IsValid();
+	}
+
+	struct FEmptyTagReference
 	{
 		int32 MatchesTag = 0;
 		int32 MatchesTagExact = 0;
@@ -30,27 +87,7 @@ namespace AngelscriptTest_Bindings_AngelscriptGameplayTagEmptyContractTests_Priv
 		int32 ParentsEqualsEmptyContainer = 0;
 	};
 
-	static constexpr ANSICHAR GameplayTagEmptyContractsModuleName[] = "ASGameplayTagEmptyContracts";
-
-	int32 BoolToScriptInt(const bool bValue)
-	{
-		return bValue ? 1 : 0;
-	}
-
-	bool FindValidGameplayTag(FGameplayTag& OutValidTag)
-	{
-		FGameplayTagContainer AllTags;
-		UGameplayTagsManager::Get().RequestAllGameplayTags(AllTags, false);
-		if (AllTags.Num() == 0)
-		{
-			return false;
-		}
-
-		OutValidTag = AllTags.First();
-		return OutValidTag.IsValid();
-	}
-
-	FGameplayTagEmptyReference CaptureEmptyTagReference(const FGameplayTag& ValidTag)
+	FEmptyTagReference CaptureEmptyTagReference(const FGameplayTag& ValidTag)
 	{
 		FGameplayTagContainer ValidContainer;
 		ValidContainer.AddTag(ValidTag);
@@ -60,174 +97,167 @@ namespace AngelscriptTest_Bindings_AngelscriptGameplayTagEmptyContractTests_Priv
 		const FGameplayTag DirectParent = EmptyTag.RequestDirectParent();
 		const FGameplayTagContainer ParentChain = EmptyTag.GetGameplayTagParents();
 
-		FGameplayTagEmptyReference Reference;
-		Reference.MatchesTag = BoolToScriptInt(EmptyTag.MatchesTag(ValidTag));
-		Reference.MatchesTagExact = BoolToScriptInt(EmptyTag.MatchesTagExact(ValidTag));
-		Reference.MatchesTagDepth = EmptyTag.MatchesTagDepth(ValidTag);
-		Reference.MatchesAny = BoolToScriptInt(EmptyTag.MatchesAny(ValidContainer));
-		Reference.MatchesAnyExact = BoolToScriptInt(EmptyTag.MatchesAnyExact(ValidContainer));
-		Reference.SingleIsEmpty = BoolToScriptInt(SingleContainer.IsEmpty());
-		Reference.SingleNum = SingleContainer.Num();
-		Reference.SingleHasEmpty = BoolToScriptInt(SingleContainer.HasTagExact(FGameplayTag::EmptyTag));
-		Reference.SingleEqualsEmptyContainer = BoolToScriptInt(SingleContainer == FGameplayTagContainer::EmptyContainer);
-		Reference.ParentIsValid = BoolToScriptInt(DirectParent.IsValid());
-		Reference.ParentEqualsEmpty = BoolToScriptInt(DirectParent == FGameplayTag::EmptyTag);
-		Reference.ParentsIsEmpty = BoolToScriptInt(ParentChain.IsEmpty());
-		Reference.ParentsNum = ParentChain.Num();
-		Reference.ParentsHasEmpty = BoolToScriptInt(ParentChain.HasTagExact(FGameplayTag::EmptyTag));
-		Reference.ParentsHasValid = BoolToScriptInt(ParentChain.HasTagExact(ValidTag));
-		Reference.ParentsEqualsEmptyContainer = BoolToScriptInt(ParentChain == FGameplayTagContainer::EmptyContainer);
-		return Reference;
+		FEmptyTagReference Ref;
+		Ref.MatchesTag = BoolToScriptInt(EmptyTag.MatchesTag(ValidTag));
+		Ref.MatchesTagExact = BoolToScriptInt(EmptyTag.MatchesTagExact(ValidTag));
+		Ref.MatchesTagDepth = EmptyTag.MatchesTagDepth(ValidTag);
+		Ref.MatchesAny = BoolToScriptInt(EmptyTag.MatchesAny(ValidContainer));
+		Ref.MatchesAnyExact = BoolToScriptInt(EmptyTag.MatchesAnyExact(ValidContainer));
+		Ref.SingleIsEmpty = BoolToScriptInt(SingleContainer.IsEmpty());
+		Ref.SingleNum = SingleContainer.Num();
+		Ref.SingleHasEmpty = BoolToScriptInt(SingleContainer.HasTagExact(FGameplayTag::EmptyTag));
+		Ref.SingleEqualsEmptyContainer = BoolToScriptInt(SingleContainer == FGameplayTagContainer::EmptyContainer);
+		Ref.ParentIsValid = BoolToScriptInt(DirectParent.IsValid());
+		Ref.ParentEqualsEmpty = BoolToScriptInt(DirectParent == FGameplayTag::EmptyTag);
+		Ref.ParentsIsEmpty = BoolToScriptInt(ParentChain.IsEmpty());
+		Ref.ParentsNum = ParentChain.Num();
+		Ref.ParentsHasEmpty = BoolToScriptInt(ParentChain.HasTagExact(FGameplayTag::EmptyTag));
+		Ref.ParentsHasValid = BoolToScriptInt(ParentChain.HasTagExact(ValidTag));
+		Ref.ParentsEqualsEmptyContainer = BoolToScriptInt(ParentChain == FGameplayTagContainer::EmptyContainer);
+		return Ref;
 	}
 
-	FString BuildGameplayTagEmptyContractsScript(const FString& ValidTagName, const FGameplayTagEmptyReference& Reference)
+	FString BuildEmptyContractScript(const FString& ValidTagName, const FEmptyTagReference& Ref)
 	{
-		FStringFormatOrderedArguments Arguments;
-		Arguments.Add(ValidTagName);
-		Arguments.Add(Reference.MatchesTag);
-		Arguments.Add(Reference.MatchesTagExact);
-		Arguments.Add(Reference.MatchesTagDepth);
-		Arguments.Add(Reference.MatchesAny);
-		Arguments.Add(Reference.MatchesAnyExact);
-		Arguments.Add(Reference.SingleIsEmpty);
-		Arguments.Add(Reference.SingleNum);
-		Arguments.Add(Reference.SingleHasEmpty);
-		Arguments.Add(Reference.SingleEqualsEmptyContainer);
-		Arguments.Add(Reference.ParentIsValid);
-		Arguments.Add(Reference.ParentEqualsEmpty);
-		Arguments.Add(Reference.ParentsIsEmpty);
-		Arguments.Add(Reference.ParentsNum);
-		Arguments.Add(Reference.ParentsHasEmpty);
-		Arguments.Add(Reference.ParentsHasValid);
-		Arguments.Add(Reference.ParentsEqualsEmptyContainer);
+		FStringFormatOrderedArguments Args;
+		Args.Add(ValidTagName);                     // {0}
+		Args.Add(Ref.MatchesTag);                   // {1}
+		Args.Add(Ref.MatchesTagExact);              // {2}
+		Args.Add(Ref.MatchesTagDepth);              // {3}
+		Args.Add(Ref.MatchesAny);                   // {4}
+		Args.Add(Ref.MatchesAnyExact);              // {5}
+		Args.Add(Ref.SingleIsEmpty);                // {6}
+		Args.Add(Ref.SingleNum);                    // {7}
+		Args.Add(Ref.SingleHasEmpty);               // {8}
+		Args.Add(Ref.SingleEqualsEmptyContainer);   // {9}
+		Args.Add(Ref.ParentIsValid);                // {10}
+		Args.Add(Ref.ParentEqualsEmpty);            // {11}
+		Args.Add(Ref.ParentsIsEmpty);               // {12}
+		Args.Add(Ref.ParentsNum);                   // {13}
+		Args.Add(Ref.ParentsHasEmpty);              // {14}
+		Args.Add(Ref.ParentsHasValid);              // {15}
+		Args.Add(Ref.ParentsEqualsEmptyContainer);  // {16}
 
 		return FString::Format(TEXT(R"(
-int Entry()
+int ValidTag_SelfConsistency()
 {
-	FGameplayTag EmptyTag;
 	FGameplayTag ValidTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
-	if (!ValidTag.IsValid())
-		return 10;
+	if (!ValidTag.IsValid()) return 0;
 
 	FGameplayTagContainer ValidContainer;
 	ValidContainer.AddTag(ValidTag);
 
-	if (!ValidTag.MatchesTagExact(ValidTag))
-		return 20;
-	if (!ValidTag.MatchesAnyExact(ValidContainer))
-		return 30;
-	if (!ValidTag.GetSingleTagContainer().HasTagExact(ValidTag))
-		return 40;
-
-	if ((EmptyTag.MatchesTag(ValidTag) ? 1 : 0) != {1})
-		return 50;
-	if ((EmptyTag.MatchesTagExact(ValidTag) ? 1 : 0) != {2})
-		return 60;
-	if (EmptyTag.MatchesTagDepth(ValidTag) != {3})
-		return 70;
-	if ((EmptyTag.MatchesAny(ValidContainer) ? 1 : 0) != {4})
-		return 80;
-	if ((EmptyTag.MatchesAnyExact(ValidContainer) ? 1 : 0) != {5})
-		return 90;
-
-	FGameplayTagContainer SingleContainer = EmptyTag.GetSingleTagContainer();
-	if ((SingleContainer.IsEmpty() ? 1 : 0) != {6})
-		return 100;
-	if (SingleContainer.Num() != {7})
-		return 110;
-	if ((SingleContainer.HasTagExact(FGameplayTag::EmptyTag) ? 1 : 0) != {8})
-		return 120;
-	if ((SingleContainer == FGameplayTagContainer::EmptyContainer ? 1 : 0) != {9})
-		return 130;
-	if (SingleContainer.HasTagExact(ValidTag))
-		return 140;
-
-	FGameplayTag DirectParent = EmptyTag.RequestDirectParent();
-	if ((DirectParent.IsValid() ? 1 : 0) != {10})
-		return 150;
-	if ((DirectParent == FGameplayTag::EmptyTag ? 1 : 0) != {11})
-		return 160;
-	if (DirectParent == ValidTag)
-		return 170;
-
-	FGameplayTagContainer ParentChain = EmptyTag.GetGameplayTagParents();
-	if ((ParentChain.IsEmpty() ? 1 : 0) != {12})
-		return 180;
-	if (ParentChain.Num() != {13})
-		return 190;
-	if ((ParentChain.HasTagExact(FGameplayTag::EmptyTag) ? 1 : 0) != {14})
-		return 200;
-	if ((ParentChain.HasTagExact(ValidTag) ? 1 : 0) != {15})
-		return 210;
-	if ((ParentChain == FGameplayTagContainer::EmptyContainer ? 1 : 0) != {16})
-		return 220;
-
+	if (!ValidTag.MatchesTagExact(ValidTag)) return 0;
+	if (!ValidTag.MatchesAnyExact(ValidContainer)) return 0;
+	if (!ValidTag.GetSingleTagContainer().HasTagExact(ValidTag)) return 0;
 	return 1;
 }
-)"), Arguments);
-	}
-}
 
-using namespace AngelscriptTest_Bindings_AngelscriptGameplayTagEmptyContractTests_Private;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGameplayTagEmptyContractBindingsTest,
-	"Angelscript.TestModule.Bindings.GameplayTagEmptyTagContracts",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptGameplayTagEmptyContractBindingsTest::RunTest(const FString& Parameters)
+int EmptyTag_MatchesParity()
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	FGameplayTag EmptyTag;
+	FGameplayTag ValidTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
+	if (!ValidTag.IsValid()) return 0;
 
-	FGameplayTag ValidTag;
-	if (!TestTrue(
-		TEXT("GameplayTag empty-contract test requires at least one registered gameplay tag"),
-		FindValidGameplayTag(ValidTag)))
-	{
-		return false;
-	}
+	FGameplayTagContainer ValidContainer;
+	ValidContainer.AddTag(ValidTag);
 
-	const FGameplayTagEmptyReference Reference = CaptureEmptyTagReference(ValidTag);
-	const FString Script = BuildGameplayTagEmptyContractsScript(
-		ValidTag.ToString().ReplaceCharWithEscapedChar(),
-		Reference);
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASGameplayTagEmptyContracts"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		GameplayTagEmptyContractsModuleName,
-		Script);
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("GameplayTag empty-tag helpers should mirror native empty-tag contracts and stay fail-closed against a valid tag/container"),
-		Result,
-		1);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
+	if ((EmptyTag.MatchesTag(ValidTag) ? 1 : 0) != {1}) return 0;
+	if ((EmptyTag.MatchesTagExact(ValidTag) ? 1 : 0) != {2}) return 0;
+	if (EmptyTag.MatchesTagDepth(ValidTag) != {3}) return 0;
+	if ((EmptyTag.MatchesAny(ValidContainer) ? 1 : 0) != {4}) return 0;
+	if ((EmptyTag.MatchesAnyExact(ValidContainer) ? 1 : 0) != {5}) return 0;
+	return 1;
 }
+
+int EmptyTag_SingleContainerParity()
+{
+	FGameplayTag EmptyTag;
+	FGameplayTag ValidTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
+
+	FGameplayTagContainer SingleContainer = EmptyTag.GetSingleTagContainer();
+	if ((SingleContainer.IsEmpty() ? 1 : 0) != {6}) return 0;
+	if (SingleContainer.Num() != {7}) return 0;
+	if ((SingleContainer.HasTagExact(FGameplayTag::EmptyTag) ? 1 : 0) != {8}) return 0;
+	if ((SingleContainer == FGameplayTagContainer::EmptyContainer ? 1 : 0) != {9}) return 0;
+	if (SingleContainer.HasTagExact(ValidTag)) return 0;
+	return 1;
+}
+
+int EmptyTag_ParentParity()
+{
+	FGameplayTag EmptyTag;
+	FGameplayTag ValidTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
+
+	FGameplayTag DirectParent = EmptyTag.RequestDirectParent();
+	if ((DirectParent.IsValid() ? 1 : 0) != {10}) return 0;
+	if ((DirectParent == FGameplayTag::EmptyTag ? 1 : 0) != {11}) return 0;
+	if (DirectParent == ValidTag) return 0;
+
+	FGameplayTagContainer ParentChain = EmptyTag.GetGameplayTagParents();
+	if ((ParentChain.IsEmpty() ? 1 : 0) != {12}) return 0;
+	if (ParentChain.Num() != {13}) return 0;
+	if ((ParentChain.HasTagExact(FGameplayTag::EmptyTag) ? 1 : 0) != {14}) return 0;
+	if ((ParentChain.HasTagExact(ValidTag) ? 1 : 0) != {15}) return 0;
+	if ((ParentChain == FGameplayTagContainer::EmptyContainer ? 1 : 0) != {16}) return 0;
+	return 1;
+}
+)"), Args);
+	}
+}
+
+using namespace AngelscriptGameplayTagEmptyContractTests_Private;
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptGameplayTagEmptyContractTest,
+	"Angelscript.TestModule.Bindings.GameplayTagEmptyContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: EmptyTagContracts
+	// ====================================================================
+
+	TEST_METHOD(EmptyTagContracts)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FGameplayTag ValidTag;
+		if (!TestRunner->TestTrue(
+			TEXT("[GPTagEmpty] requires at least one registered gameplay tag"),
+			FindValidGameplayTag(ValidTag)))
+		{
+			return;
+		}
+
+		const FEmptyTagReference Ref = CaptureEmptyTagReference(ValidTag);
+		const FString Script = BuildEmptyContractScript(
+			ValidTag.ToString().ReplaceCharWithEscapedChar(),
+			Ref);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGPTagEmptyProfile, TEXT("EmptyTagContracts"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagEmptyProfile, TEXT("int ValidTag_SelfConsistency()"), TEXT("valid tag self-consistency sanity check"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagEmptyProfile, TEXT("int EmptyTag_MatchesParity()"), TEXT("empty tag Matches* parity with native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagEmptyProfile, TEXT("int EmptyTag_SingleContainerParity()"), TEXT("empty tag GetSingleTagContainer parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagEmptyProfile, TEXT("int EmptyTag_ParentParity()"), TEXT("empty tag parent chain parity"), 1);
+	}
+};
 
 #endif

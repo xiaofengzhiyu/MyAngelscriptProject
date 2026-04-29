@@ -1,162 +1,175 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptJsonObjectConverterBindingsTests.cpp
+//
+// FJsonObjectConverter binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.JsonObjectConverter.FAngelscriptJsonObjectConverterBindingsTest.*
+//
+// Sections:
+//   RoundTrip  — UStructToJsonObjectString, JsonObjectStringToUStruct,
+//                AppendUStructToJsonObjectString, Json::ParseString field parity
+//   ErrorPaths — non-USTRUCT input rejection, malformed JSON rejection
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptJsonObjectConverterRoundTripBindingsTest,
-	"Angelscript.TestModule.Bindings.JsonObjectConverterRoundTrip",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GJsonConvProfile{
+	TEXT("JsonObjectConverter"),       // Theme
+	TEXT(""),                          // Variant
+	TEXT("ASJsonConv"),                // ModulePrefix
+	TEXT("JsonConv"),                  // CasePrefix
+	TEXT("JsonObjectConverterBindings"), // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptJsonObjectConverterBindingsTest,
+	"Angelscript.TestModule.Bindings.JsonObjectConverter",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptJsonObjectConverterErrorPathBindingsTest,
-	"Angelscript.TestModule.Bindings.JsonObjectConverterErrorPaths",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-namespace AngelscriptTest_Bindings_AngelscriptJsonObjectConverterBindingsTests_Private
 {
-	static constexpr ANSICHAR JsonObjectConverterRoundTripModuleName[] = "ASJsonObjectConverterRoundTrip";
-	static constexpr ANSICHAR JsonObjectConverterErrorPathModuleName[] = "ASJsonObjectConverterErrorPaths";
-}
-
-using namespace AngelscriptTest_Bindings_AngelscriptJsonObjectConverterBindingsTests_Private;
-
-bool FAngelscriptJsonObjectConverterRoundTripBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(TEXT("ASJsonObjectConverterRoundTrip"));
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		JsonObjectConverterRoundTripModuleName,
-		TEXT(R"(
-int Entry()
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: RoundTrip
+	// ====================================================================
+
+	TEST_METHOD(RoundTrip)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GJsonConvProfile, TEXT("RoundTrip"), TEXT(R"(
+int RoundTrip_VectorToJson()
 {
 	const FVector Original = FVector(1.0, 2.0, 3.0);
 	FString Json;
 	if (!FJsonObjectConverter::UStructToJsonObjectString(Original, Json, 0, 0, 0, false))
-		return 10;
+		return 0;
 	if (Json.IsEmpty())
-		return 20;
+		return 0;
+	return 1;
+}
+
+int RoundTrip_JsonToVector()
+{
+	const FVector Original = FVector(1.0, 2.0, 3.0);
+	FString Json;
+	FJsonObjectConverter::UStructToJsonObjectString(Original, Json, 0, 0, 0, false);
 
 	FVector Parsed;
 	if (!FJsonObjectConverter::JsonObjectStringToUStruct(Json, Parsed, 0, 0))
-		return 30;
+		return 0;
 	if (!Parsed.Equals(Original))
-		return 40;
+		return 0;
+	return 1;
+}
+
+int RoundTrip_AppendRotator()
+{
+	const FVector Original = FVector(1.0, 2.0, 3.0);
+	FString Json;
+	FJsonObjectConverter::UStructToJsonObjectString(Original, Json, 0, 0, 0, false);
 
 	const FRotator ExtraRotation = FRotator(10.0, 20.0, 30.0);
 	if (!FJsonObjectConverter::AppendUStructToJsonObjectString(ExtraRotation, Json, 0, 0, 0, false))
-		return 50;
+		return 0;
 	if (!Json.Contains("\"X\"") || !Json.Contains("\"Y\"") || !Json.Contains("\"Z\""))
-		return 60;
+		return 0;
 	if (!Json.Contains("\"Pitch\"") || !Json.Contains("\"Yaw\"") || !Json.Contains("\"Roll\""))
-		return 70;
+		return 0;
+	return 1;
+}
+
+int RoundTrip_AppendedFieldParity()
+{
+	const FVector Original = FVector(1.0, 2.0, 3.0);
+	FString Json;
+	FJsonObjectConverter::UStructToJsonObjectString(Original, Json, 0, 0, 0, false);
+
+	const FRotator ExtraRotation = FRotator(10.0, 20.0, 30.0);
+	FJsonObjectConverter::AppendUStructToJsonObjectString(ExtraRotation, Json, 0, 0, 0, false);
 
 	FJsonObject Appended = Json::ParseString(Json);
 	if (!Appended.IsValid())
-		return 80;
+		return 0;
 	if (Appended.GetNumberField("X") != 1.0 || Appended.GetNumberField("Y") != 2.0 || Appended.GetNumberField("Z") != 3.0)
-		return 90;
+		return 0;
 	if (Appended.GetNumberField("Pitch") != 10.0 || Appended.GetNumberField("Yaw") != 20.0 || Appended.GetNumberField("Roll") != 30.0)
-		return 100;
-
+		return 0;
 	return 1;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonConvProfile, TEXT("int RoundTrip_VectorToJson()"), TEXT("UStructToJsonObjectString produces non-empty JSON"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonConvProfile, TEXT("int RoundTrip_JsonToVector()"), TEXT("JsonObjectStringToUStruct round-trips FVector"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonConvProfile, TEXT("int RoundTrip_AppendRotator()"), TEXT("AppendUStructToJsonObjectString merges FRotator fields"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonConvProfile, TEXT("int RoundTrip_AppendedFieldParity()"), TEXT("appended JSON preserves numeric field values"), 1);
 	}
 
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
+	// ====================================================================
+	// Section: ErrorPaths
+	// ====================================================================
+
+	TEST_METHOD(ErrorPaths)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("Json object converter bindings should round-trip USTRUCT values and append fields into a valid JSON object"),
-		Result,
-		1);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
-}
-
-bool FAngelscriptJsonObjectConverterErrorPathBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASJsonObjectConverterErrorPaths"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		JsonObjectConverterErrorPathModuleName,
-		TEXT(R"(
-int Entry()
+		FCoverageModuleScope Mod(*TestRunner, Engine, GJsonConvProfile, TEXT("ErrorPaths"), TEXT(R"(
+int Error_NonUStructRejected()
 {
 	int PlainValue = 7;
 	FString Json = "Seed";
 	if (FJsonObjectConverter::UStructToJsonObjectString(PlainValue, Json, 0, 0, 0, false))
-		return 10;
+		return 0;
 	if (Json != "Seed")
-		return 20;
+		return 0;
+	return 1;
+}
 
+int Error_MalformedJsonRejected()
+{
 	FVector Parsed = FVector(9.0, 9.0, 9.0);
 	if (FJsonObjectConverter::JsonObjectStringToUStruct("{", Parsed, 0, 0))
-		return 30;
+		return 0;
 	if (!Parsed.Equals(FVector(9.0, 9.0, 9.0)))
-		return 40;
-
+		return 0;
 	return 1;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonConvProfile, TEXT("int Error_NonUStructRejected()"), TEXT("non-USTRUCT input fails without mutating sentinel"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonConvProfile, TEXT("int Error_MalformedJsonRejected()"), TEXT("malformed JSON fails without mutating output"), 1);
 	}
-
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("Json object converter bindings should fail closed for non-USTRUCT inputs and malformed JSON without mutating output sentinels"),
-		Result,
-		1);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
-}
+};
 
 #endif

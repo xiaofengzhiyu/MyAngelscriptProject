@@ -1,163 +1,75 @@
+// ============================================================================
+// AngelscriptWidgetFunctionLibraryTests.cpp
+//
+// Widget function library binding coverage — CQTest refactor.
+// Automation ID:
+//   Angelscript.TestModule.FunctionLibraries.Widget.FAngelscriptWidgetFunctionLibraryTest.*
+//
+// Sections:
+//   RenderTransformNullGuard — GetRenderTransform with valid and null widgets
+//
+// CQTest adaptation notes:
+//   The valid-widget path passes a UButton to the script function via
+//   FASGlobalFunctionInvoker::AddArgObject. The null-widget path calls a
+//   no-arg wrapper that passes null from script, tested via
+//   ExecuteFunctionExpectingScriptException.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Components/Button.h"
-#include "Misc/AutomationTest.h"
-#include "Misc/ScopeExit.h"
-#include "Templates/Function.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-namespace AngelscriptTest_Bindings_AngelscriptWidgetFunctionLibraryTests_Private
-{
-	static constexpr ANSICHAR ModuleName[] = "ASWidgetRenderTransformNullGuard";
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-	bool SetArgObjectChecked(
-		FAutomationTestBase& Test,
-		asIScriptContext& Context,
-		asUINT ArgumentIndex,
-		void* Object,
-		const TCHAR* ContextLabel)
-	{
-		return Test.TestEqual(
-			*FString::Printf(TEXT("%s should bind object argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
-			Context.SetArgObject(ArgumentIndex, Object),
-			static_cast<int32>(asSUCCESS));
-	}
+static const FBindingsCoverageProfile GWidgetProfile{
+	TEXT("Widget"),            // Theme
+	TEXT(""),                  // Variant
+	TEXT("ASWidget"),          // ModulePrefix
+	TEXT("Widget"),            // CasePrefix
+	TEXT("WidgetBindings"),    // LogCategory
+};
 
-	bool ExecuteIntFunction(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		asIScriptModule& Module,
-		const TCHAR* FunctionDecl,
-		TFunctionRef<bool(asIScriptContext&)> BindArguments,
-		const TCHAR* ContextLabel,
-		int32& OutResult)
-	{
-		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
-		if (Function == nullptr)
-		{
-			return false;
-		}
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
 
-		FAngelscriptEngineScope EngineScope(Engine);
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
-		{
-			return false;
-		}
-
-		ON_SCOPE_EXIT
-		{
-			Context->Release();
-		};
-
-		const int PrepareResult = Context->Prepare(Function);
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
-			PrepareResult,
-			static_cast<int32>(asSUCCESS)))
-		{
-			return false;
-		}
-
-		if (!BindArguments(*Context))
-		{
-			return false;
-		}
-
-		const int ExecuteResult = Context->Execute();
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should execute successfully"), ContextLabel),
-			ExecuteResult,
-			static_cast<int32>(asEXECUTION_FINISHED)))
-		{
-			return false;
-		}
-
-		OutResult = static_cast<int32>(Context->GetReturnDWord());
-		return true;
-	}
-
-	bool ExecuteFunctionExpectingException(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		asIScriptModule& Module,
-		const TCHAR* FunctionDecl,
-		TFunctionRef<bool(asIScriptContext&)> BindArguments,
-		const TCHAR* ContextLabel,
-		FString& OutExceptionString)
-	{
-		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
-		if (Function == nullptr)
-		{
-			return false;
-		}
-
-		FAngelscriptEngineScope EngineScope(Engine);
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
-		{
-			return false;
-		}
-
-		ON_SCOPE_EXIT
-		{
-			Context->Release();
-		};
-
-		const int PrepareResult = Context->Prepare(Function);
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
-			PrepareResult,
-			static_cast<int32>(asSUCCESS)))
-		{
-			return false;
-		}
-
-		if (!BindArguments(*Context))
-		{
-			return false;
-		}
-
-		const int ExecuteResult = Context->Execute();
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should fail with a script exception"), ContextLabel),
-			ExecuteResult,
-			static_cast<int32>(asEXECUTION_EXCEPTION)))
-		{
-			return false;
-		}
-
-		OutExceptionString = Context->GetExceptionString() != nullptr ? UTF8_TO_TCHAR(Context->GetExceptionString()) : TEXT("");
-		return true;
-	}
-}
-
-using namespace AngelscriptTest_Bindings_AngelscriptWidgetFunctionLibraryTests_Private;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptWidgetRenderTransformNullGuardTest,
-	"Angelscript.TestModule.FunctionLibraries.WidgetRenderTransformNullGuard",
+TEST_CLASS_WITH_FLAGS(FAngelscriptWidgetFunctionLibraryTest,
+	"Angelscript.TestModule.FunctionLibraries.Widget",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptWidgetRenderTransformNullGuardTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	AddExpectedError(TEXT("Null pointer access"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("ASWidgetRenderTransformNullGuard"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("int ReadWidgetTransform(UWidget) | Line 4 | Col 2"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
-	ASTEST_BEGIN_FULL
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT(R"(
+	// ====================================================================
+	// Section: RenderTransformNullGuard
+	// ====================================================================
+
+	TEST_METHOD(RenderTransformNullGuard)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FString ScriptSource = TEXT(R"(
 int ReadWidgetTransform(UWidget Widget)
 {
 	const FWidgetTransform Transform = Widget.GetRenderTransform();
@@ -169,68 +81,51 @@ int ReadWidgetTransform(UWidget Widget)
 		return 30;
 	return 1;
 }
-)"));
-	if (Module == nullptr)
-	{
-		return false;
-	}
 
-	UButton* TestWidget = NewObject<UButton>(GetTransientPackage(), TEXT("FunctionLibraryWidget"));
-	if (!TestNotNull(TEXT("Widget function library test should create a concrete widget"), TestWidget))
-	{
-		return false;
-	}
-
-	FWidgetTransform ExpectedTransform;
-	ExpectedTransform.Translation = FVector2D(13.5f, -9.25f);
-	ExpectedTransform.Scale = FVector2D(1.25f, 0.75f);
-	ExpectedTransform.Angle = 42.0f;
-	TestWidget->SetRenderTransform(ExpectedTransform);
-
-	int32 ScriptResult = INDEX_NONE;
-	if (!ExecuteIntFunction(
-		*this,
-		Engine,
-		*Module,
-		TEXT("int ReadWidgetTransform(UWidget Widget)"),
-		[this, TestWidget](asIScriptContext& Context)
-		{
-			return SetArgObjectChecked(*this, Context, 0, TestWidget, TEXT("ReadWidgetTransform(valid)"));
-		},
-		TEXT("ReadWidgetTransform(valid)"),
-		ScriptResult))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("GetRenderTransform should preserve the native translation, scale, and angle for a valid widget"),
-		ScriptResult,
-		1);
-
-	FString NullWidgetException;
-	if (!ExecuteFunctionExpectingException(
-		*this,
-		Engine,
-		*Module,
-		TEXT("int ReadWidgetTransform(UWidget Widget)"),
-		[this](asIScriptContext& Context)
-		{
-			return SetArgObjectChecked(*this, Context, 0, nullptr, TEXT("ReadWidgetTransform(null)"));
-		},
-		TEXT("ReadWidgetTransform(null)"),
-		NullWidgetException))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("GetRenderTransform should report a stable null-pointer diagnostic for a null widget receiver"),
-		NullWidgetException,
-		FString(TEXT("Null pointer access")));
-
-	ASTEST_END_FULL
-	return bPassed;
+void ReadWidgetTransformNull()
+{
+	ReadWidgetTransform(null);
 }
+)");
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GWidgetProfile, TEXT("RenderTransform"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		// ---- Create the concrete test widget ----
+		UButton* TestWidget = NewObject<UButton>(GetTransientPackage(), TEXT("FunctionLibraryWidget"));
+		if (!TestRunner->TestNotNull(TEXT("Widget function library test should create a concrete widget"), TestWidget))
+		{
+			return;
+		}
+
+		FWidgetTransform ExpectedTransform;
+		ExpectedTransform.Translation = FVector2D(13.5f, -9.25f);
+		ExpectedTransform.Scale = FVector2D(1.25f, 0.75f);
+		ExpectedTransform.Angle = 42.0f;
+		TestWidget->SetRenderTransform(ExpectedTransform);
+
+		// ---- Valid widget: pass via FASGlobalFunctionInvoker ----
+		{
+			FASGlobalFunctionInvoker Invoker(*TestRunner, Engine, M, TEXT("int ReadWidgetTransform(UWidget)"));
+			if (!Invoker.IsValid()) return;
+			Invoker.AddArgObject(TestWidget);
+			const int32 Result = Invoker.CallAndReturn<int32>(INDEX_NONE);
+			TestRunner->TestEqual(
+				TEXT("GetRenderTransform should preserve the native translation, scale, and angle for a valid widget"),
+				Result,
+				1);
+		}
+
+		// ---- Null widget: expect script exception ----
+		TestRunner->AddExpectedError(TEXT("Null pointer access"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(*Mod.GetModuleName(), EAutomationExpectedErrorFlags::Contains, 0);
+
+		ExecuteFunctionExpectingScriptException(*TestRunner, Engine, M, GWidgetProfile,
+			TEXT("void ReadWidgetTransformNull()"),
+			TEXT("GetRenderTransform should report a null-pointer diagnostic for a null widget receiver"),
+			TEXT("Null pointer access"));
+	}
+};
 
 #endif
