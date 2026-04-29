@@ -1,351 +1,248 @@
+// ============================================================================
+// AngelscriptClassBindingsTests.cpp
+//
+// UClass / TSubclassOf / TSoftClassPtr / StaticClass binding coverage.
+// All 7 Automation IDs are grouped under the Class. prefix so a single
+// `RunTests.ps1 -Prefix Angelscript.TestModule.Bindings.Class` invocation
+// covers everything in one Editor startup.
+//
+//   - Angelscript.TestModule.Bindings.Class.ClassLookupCompat
+//   - Angelscript.TestModule.Bindings.Class.TSubclassOfCompat
+//   - Angelscript.TestModule.Bindings.Class.TSubclassOfRejectsUnrelatedClass
+//   - Angelscript.TestModule.Bindings.Class.TSoftClassPtrCompat
+//   - Angelscript.TestModule.Bindings.Class.StaticClassCompat
+//   - Angelscript.TestModule.Bindings.Class.NativeStaticClassNamespace
+//   - Angelscript.TestModule.Bindings.Class.NativeStaticTypeGlobal
+// ============================================================================
+
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+
 #include "Shared/AngelscriptTestUtilities.h"
 #include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 
+#include "Camera/CameraActor.h"
 #include "GameFramework/Actor.h"
 #include "Misc/ScopeExit.h"
-#include "Templates/Function.h"
+#include "UObject/Package.h"
+
+#include "StartAngelscriptHeaders.h"
+#include "source/as_context.h"
+#include "source/as_scriptengine.h"
+#include "source/as_scriptfunction.h"
+#include "EndAngelscriptHeaders.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-namespace AngelscriptTest_Bindings_AngelscriptClassBindingsTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GClassProfile{
+	TEXT("Class"),         // Theme
+	TEXT(""),              // Variant
+	TEXT("ASClass"),       // ModulePrefix
+	TEXT("Class"),         // CasePrefix
+	TEXT("ClassBindings"), // LogCategory
+};
+
+// ============================================================================
+// Sections
+// ============================================================================
+
+namespace
 {
-	static constexpr ANSICHAR TSubclassOfRejectsUnrelatedClassModuleName[] = "ASTSubclassOfRejectsUnrelatedClass";
-
-	bool SetArgAddressChecked(
-		FAutomationTestBase& Test,
-		asIScriptContext& Context,
-		asUINT ArgumentIndex,
-		void* Address,
-		const TCHAR* ContextLabel)
-	{
-		return Test.TestEqual(
-			*FString::Printf(TEXT("%s should bind address argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
-			Context.SetArgAddress(ArgumentIndex, Address),
-			static_cast<int32>(asSUCCESS));
-	}
-
-	bool SetArgObjectChecked(
-		FAutomationTestBase& Test,
-		asIScriptContext& Context,
-		asUINT ArgumentIndex,
-		void* Object,
-		const TCHAR* ContextLabel)
-	{
-		return Test.TestEqual(
-			*FString::Printf(TEXT("%s should bind object argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
-			Context.SetArgObject(ArgumentIndex, Object),
-			static_cast<int32>(asSUCCESS));
-	}
-
-	bool ExecuteFunctionExpectingSuccess(
+	// -----------------------------------------------------------------------
+	// Section: ClassLookup — FindClass / GetAllClasses
+	// -----------------------------------------------------------------------
+	bool RunClassLookupSection(
 		FAutomationTestBase& Test,
 		FAngelscriptEngine& Engine,
-		asIScriptModule& Module,
-		const TCHAR* FunctionDecl,
-		TFunctionRef<bool(asIScriptContext&)> BindArguments,
-		const TCHAR* ContextLabel)
+		const FBindingsCoverageProfile& Profile)
 	{
-		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
-		if (Function == nullptr)
-		{
-			return false;
-		}
-
-		FAngelscriptEngineScope EngineScope(Engine);
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
-		{
-			return false;
-		}
-
-		ON_SCOPE_EXIT
-		{
-			Context->Release();
-		};
-
-		const int PrepareResult = Context->Prepare(Function);
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
-			PrepareResult,
-			static_cast<int32>(asSUCCESS)))
-		{
-			return false;
-		}
-
-		if (!BindArguments(*Context))
-		{
-			return false;
-		}
-
-		return Test.TestEqual(
-			*FString::Printf(TEXT("%s should execute successfully"), ContextLabel),
-			Context->Execute(),
-			static_cast<int32>(asEXECUTION_FINISHED));
-	}
-
-	bool ExecuteFunctionExpectingException(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		asIScriptModule& Module,
-		const TCHAR* FunctionDecl,
-		TFunctionRef<bool(asIScriptContext&)> BindArguments,
-		const TCHAR* ContextLabel,
-		FString& OutExceptionString)
-	{
-		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
-		if (Function == nullptr)
-		{
-			return false;
-		}
-
-		FAngelscriptEngineScope EngineScope(Engine);
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
-		{
-			return false;
-		}
-
-		ON_SCOPE_EXIT
-		{
-			Context->Release();
-		};
-
-		const int PrepareResult = Context->Prepare(Function);
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
-			PrepareResult,
-			static_cast<int32>(asSUCCESS)))
-		{
-			return false;
-		}
-
-		if (!BindArguments(*Context))
-		{
-			return false;
-		}
-
-		const int ExecuteResult = Context->Execute();
-		if (!Test.TestEqual(
-			*FString::Printf(TEXT("%s should fail with a script exception"), ContextLabel),
-			ExecuteResult,
-			static_cast<int32>(asEXECUTION_EXCEPTION)))
-		{
-			return false;
-		}
-
-		OutExceptionString = Context->GetExceptionString() != nullptr ? UTF8_TO_TCHAR(Context->GetExceptionString()) : TEXT("");
-		return true;
-	}
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("Lookup"), TEXT(R"(
+int FindClass_NotNull()
+{
+	UClass C = FindClass("AActor");
+	return (C == null) ? 0 : 1;
 }
-
-using namespace AngelscriptTest_Bindings_AngelscriptClassBindingsTests_Private;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptClassLookupBindingsTest,
-	"Angelscript.TestModule.Bindings.ClassLookupCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSubclassOfBindingsTest,
-	"Angelscript.TestModule.Bindings.TSubclassOfCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest,
-	"Angelscript.TestModule.Bindings.TSubclassOfRejectsUnrelatedClass",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSoftClassPtrBindingsTest,
-	"Angelscript.TestModule.Bindings.TSoftClassPtrCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptStaticClassCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.StaticClassCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNativeStaticClassNamespaceBindingTest,
-	"Angelscript.TestModule.Bindings.NativeStaticClassNamespace",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNativeStaticTypeGlobalBindingTest,
-	"Angelscript.TestModule.Bindings.NativeStaticTypeGlobal",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptClassLookupBindingsTest::RunTest(const FString& Parameters)
+int FindClass_MissingIsNull()
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASClassLookupCompat",
-		TEXT(R"(
-int Entry()
+	UClass C = FindClass("DefinitelyNotAClass_xyz_42");
+	return (C == null) ? 1 : 0;
+}
+int GetAllClasses_NonEmpty()
+{
+	TArray<UClass> All;
+	GetAllClasses(All);
+	return (All.Num() > 0) ? 1 : 0;
+}
+int GetAllClasses_ContainsActor()
 {
 	UClass ActorClass = FindClass("AActor");
-	if (ActorClass == null)
-		return 10;
-
-	TArray<UClass> AllClasses;
-	GetAllClasses(AllClasses);
-	if (AllClasses.Num() <= 0)
-		return 20;
-
-	bool bFoundActor = false;
-	for (int Index = 0; Index < AllClasses.Num(); ++Index)
+	TArray<UClass> All;
+	GetAllClasses(All);
+	foreach (UClass C : All)
 	{
-		if (AllClasses[Index] == ActorClass)
-		{
-			bFoundActor = true;
-			break;
-		}
+		if (C == ActorClass)
+			return 1;
 	}
-
-	if (!bFoundActor)
-		return 30;
-
-	return 1;
+	return 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		const FExpectedGlobalInt Cases[] = {
+			{ TEXT("int FindClass_NotNull()"),         TEXT("FindClass(AActor) should not be null"),               1 },
+			{ TEXT("int FindClass_MissingIsNull()"),    TEXT("FindClass on missing name should return null"),       1 },
+			{ TEXT("int GetAllClasses_NonEmpty()"),     TEXT("GetAllClasses should populate at least one entry"),    1 },
+			{ TEXT("int GetAllClasses_ContainsActor()"),TEXT("GetAllClasses should include AActor"),                  1 },
+		};
+		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// -----------------------------------------------------------------------
+	// Section: TSubclassOf — basic ops + arg passing + GetDefaultObject
+	// -----------------------------------------------------------------------
+	bool RunTSubclassOfSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
 	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Class lookup helper operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
-
-bool FAngelscriptTSubclassOfBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASTSubclassOfCompat",
-		TEXT(R"(
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("TSubclassOf"), TEXT(R"(
 TSubclassOf<AActor> EchoSubclass(TSubclassOf<AActor> Value)
 {
 	return Value;
 }
-
 UClass EchoSubclassClass(TSubclassOf<AActor> Value)
 {
 	return Value;
 }
 
-int Entry()
+int Empty_IsValid()
 {
-	TSubclassOf<AActor> Empty;
-	if (Empty.IsValid())
-		return 10;
-	if (!(Empty.Get() == null))
-		return 20;
-
-	Empty = AActor::StaticClass();
-	if (!Empty.IsValid())
-		return 30;
-	if (!(Empty.Get() == AActor::StaticClass()))
-		return 40;
-	if (!(Empty == AActor::StaticClass()))
-		return 50;
-
-	TSubclassOf<AActor> ImplicitFromClassArg = EchoSubclass(AActor::StaticClass());
-	if (!(ImplicitFromClassArg == AActor::StaticClass()))
-		return 55;
-
-	UClass ImplicitClassArg = EchoSubclassClass(ACameraActor::StaticClass());
-	if (!(ImplicitClassArg == ACameraActor::StaticClass()))
-		return 56;
-
-	TSubclassOf<AActor> Narrowed = ACameraActor::StaticClass();
-	TSubclassOf<AActor> Copy = Narrowed;
-	if (!(Copy == ACameraActor::StaticClass()))
-		return 60;
-
-	AActor DefaultActor = Copy.GetDefaultObject();
-	if (!IsValid(DefaultActor))
-		return 70;
-	if (!DefaultActor.IsA(ACameraActor::StaticClass()))
-		return 80;
-
-	TArray<TSubclassOf<AActor>> LiteralSubclassHistory;
-	LiteralSubclassHistory.Add(AActor::StaticClass());
-	LiteralSubclassHistory.Add(ACameraActor::StaticClass());
-	if (LiteralSubclassHistory.Num() != 2)
-		return 90;
-	if (!(LiteralSubclassHistory[1] == ACameraActor::StaticClass()))
-		return 100;
-
-	return 1;
+	TSubclassOf<AActor> S;
+	return S.IsValid() ? 1 : 0;
+}
+int Empty_GetIsNull()
+{
+	TSubclassOf<AActor> S;
+	return (S.Get() == null) ? 1 : 0;
+}
+int AssignActor_IsValid()
+{
+	TSubclassOf<AActor> S;
+	S = AActor::StaticClass();
+	return S.IsValid() ? 1 : 0;
+}
+int AssignActor_GetMatch()
+{
+	TSubclassOf<AActor> S;
+	S = AActor::StaticClass();
+	return (S.Get() == AActor::StaticClass()) ? 1 : 0;
+}
+int AssignActor_OpEqualsClass()
+{
+	TSubclassOf<AActor> S;
+	S = AActor::StaticClass();
+	return (S == AActor::StaticClass()) ? 1 : 0;
+}
+int ImplicitFromClassArg_OpEquals()
+{
+	TSubclassOf<AActor> R = EchoSubclass(AActor::StaticClass());
+	return (R == AActor::StaticClass()) ? 1 : 0;
+}
+int ImplicitClassArg_RoundTrip()
+{
+	UClass R = EchoSubclassClass(ACameraActor::StaticClass());
+	return (R == ACameraActor::StaticClass()) ? 1 : 0;
+}
+int Narrowed_CopyOpEquals()
+{
+	TSubclassOf<AActor> N = ACameraActor::StaticClass();
+	TSubclassOf<AActor> Copy = N;
+	return (Copy == ACameraActor::StaticClass()) ? 1 : 0;
+}
+int GetDefaultObject_IsValid()
+{
+	TSubclassOf<AActor> N = ACameraActor::StaticClass();
+	AActor D = N.GetDefaultObject();
+	return IsValid(D) ? 1 : 0;
+}
+int GetDefaultObject_IsACameraActor()
+{
+	TSubclassOf<AActor> N = ACameraActor::StaticClass();
+	AActor D = N.GetDefaultObject();
+	return D.IsA(ACameraActor::StaticClass()) ? 1 : 0;
+}
+int Array_LiteralNum()
+{
+	TArray<TSubclassOf<AActor>> H;
+	H.Add(AActor::StaticClass());
+	H.Add(ACameraActor::StaticClass());
+	return H.Num();
+}
+int Array_LiteralIndex()
+{
+	TArray<TSubclassOf<AActor>> H;
+	H.Add(AActor::StaticClass());
+	H.Add(ACameraActor::StaticClass());
+	return (H[1] == ACameraActor::StaticClass()) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		const FExpectedGlobalInt Cases[] = {
+			{ TEXT("int Empty_IsValid()"),                TEXT("Empty TSubclassOf should not be valid"),                  0 },
+			{ TEXT("int Empty_GetIsNull()"),               TEXT("Empty TSubclassOf.Get() should be null"),                  1 },
+			{ TEXT("int AssignActor_IsValid()"),           TEXT("Assign(AActor) should make TSubclassOf valid"),            1 },
+			{ TEXT("int AssignActor_GetMatch()"),          TEXT("Assign(AActor).Get() should equal AActor::StaticClass()"), 1 },
+			{ TEXT("int AssignActor_OpEqualsClass()"),     TEXT("opEquals should compare TSubclassOf with raw UClass"),     1 },
+			{ TEXT("int ImplicitFromClassArg_OpEquals()"), TEXT("Implicit conversion from UClass arg should round-trip"),   1 },
+			{ TEXT("int ImplicitClassArg_RoundTrip()"),    TEXT("TSubclassOf -> UClass arg should round-trip"),             1 },
+			{ TEXT("int Narrowed_CopyOpEquals()"),         TEXT("Copy ctor should preserve narrowed class"),                1 },
+			{ TEXT("int GetDefaultObject_IsValid()"),      TEXT("GetDefaultObject of camera class should be valid"),        1 },
+			{ TEXT("int GetDefaultObject_IsACameraActor()"),TEXT("GetDefaultObject should be a ACameraActor"),                1 },
+			{ TEXT("int Array_LiteralNum()"),              TEXT("TArray<TSubclassOf<AActor>> Num after Add x2 should be 2"), 2 },
+			{ TEXT("int Array_LiteralIndex()"),            TEXT("Array index access should preserve narrowed class"),       1 },
+		};
+		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// -----------------------------------------------------------------------
+	// Section: TSubclassOfReject — exception path on unrelated class assignment
+	//
+	// Two negative paths:
+	//   1) Implicit construction with unrelated class throws
+	//   2) Assignment via UClass arg with unrelated class throws and resets dest
+	// Plus one positive sanity path:
+	//   3) Assignment with null UClass arg cleanly resets dest
+	// -----------------------------------------------------------------------
+	bool RunTSubclassOfRejectSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
 	{
-		return false;
-	}
+		// Register all expected error patterns up front. The AS engine logs
+		// the diagnostic + the call-stack frame, so cover both.
+		const FString DiagnosticText(TEXT("Class set to TSubclassOf<> was not a child of templated class."));
+		Test.AddExpectedErrorPlain(DiagnosticText, EAutomationExpectedErrorFlags::Contains, 0);
+		Test.AddExpectedErrorPlain(
+			MakeCoverageModuleName(Profile, TEXT("Reject")),
+			EAutomationExpectedErrorFlags::Contains, 0);
+		Test.AddExpectedErrorPlain(TEXT("TriggerInvalidImplicitCtor"),
+			EAutomationExpectedErrorFlags::Contains, 0);
+		Test.AddExpectedErrorPlain(TEXT("AssignClass"),
+			EAutomationExpectedErrorFlags::Contains, 0);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("TSubclassOf compat operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
-
-bool FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	AddExpectedError(TEXT("Class set to TSubclassOf<> was not a child of templated class."), EAutomationExpectedErrorFlags::Contains, 2);
-	AddExpectedError(TEXT("ASTSubclassOfRejectsUnrelatedClass"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("TriggerInvalidImplicitCtor"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("AssignClass"), EAutomationExpectedErrorFlags::Contains, 0);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASTSubclassOfRejectsUnrelatedClass"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		TSubclassOfRejectsUnrelatedClassModuleName,
-		TEXT(R"(
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("Reject"), TEXT(R"(
 void TriggerInvalidImplicitCtor()
 {
 	TSubclassOf<AActor> Invalid = UPackage::StaticClass();
@@ -356,232 +253,250 @@ void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)
 	OutValue = NewClass;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
-	}
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
 
-	TSubclassOf<AActor> ResetTarget = AActor::StaticClass();
-	if (!ExecuteFunctionExpectingSuccess(
-		*this,
-		Engine,
-		*Module,
-		TEXT("void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)"),
-		[this, &ResetTarget](asIScriptContext& Context)
+		bool bPassed = true;
+
+		// (3) Positive sanity: null assignment via the AssignClass(out, null) path.
+		// Drive AssignClass directly with FASGlobalFunctionInvoker so we can pass
+		// a TSubclassOf& out-ref + a UClass* arg.
 		{
-			return SetArgAddressChecked(*this, Context, 0, &ResetTarget, TEXT("AssignClass(null)"))
-				&& SetArgObjectChecked(*this, Context, 1, nullptr, TEXT("AssignClass(null)"));
-		},
-		TEXT("AssignClass(null)")))
-	{
-		return false;
-	}
+			TSubclassOf<AActor> ResetTarget = AActor::StaticClass();
 
-	bPassed &= TestFalse(
-		TEXT("TSubclassOf assignment from a null UClass should reset the destination to an invalid state"),
-		ResetTarget.Get() != nullptr);
-	bPassed &= TestNull(
-		TEXT("TSubclassOf assignment from a null UClass should clear the stored class pointer"),
-		ResetTarget.Get());
-	bPassed &= TestNull(
-		TEXT("TSubclassOf assignment from a null UClass should clear the default object path"),
-		ResetTarget.GetDefaultObject());
+			AngelscriptReflectiveAccess::FASGlobalFunctionInvoker NullInvoker(
+				Test, Engine, Module,
+				TEXT("void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)"));
+			if (NullInvoker.IsValid())
+			{
+				NullInvoker.AddArgRef(ResetTarget);
+				NullInvoker.AddArgObject(nullptr);
+				bPassed &= Test.TestTrue(
+					TEXT("[Class] AssignClass(out, null) should execute"),
+					NullInvoker.Call());
 
-	FString InvalidCtorExceptionString;
-	if (!ExecuteFunctionExpectingException(
-		*this,
-		Engine,
-		*Module,
-		TEXT("void TriggerInvalidImplicitCtor()"),
-		[](asIScriptContext& Context)
+				bPassed &= Test.TestNull(
+					TEXT("[Class] AssignClass(null) should clear stored class pointer"),
+					ResetTarget.Get());
+				bPassed &= Test.TestNull(
+					TEXT("[Class] AssignClass(null) should clear default object path"),
+					ResetTarget.GetDefaultObject());
+			}
+			else
+			{
+				bPassed = false;
+			}
+		}
+
+		// (1) Negative: implicit ctor with unrelated UClass should throw.
+		bPassed &= ExecuteFunctionExpectingScriptException(
+			Test, Engine, Module, Profile,
+			TEXT("void TriggerInvalidImplicitCtor()"),
+			TEXT("Implicit ctor from unrelated UClass should raise script exception"),
+			DiagnosticText);
+
+		// (2) Negative: AssignClass with unrelated class should throw + reset dest.
+		// We must drive the call manually because we need to pass arguments and
+		// inspect post-state — ExecuteFunctionExpectingScriptException is the
+		// no-arg shortcut. Use the lower-level invoker.
 		{
-			return true;
-		},
-		TEXT("TriggerInvalidImplicitCtor"),
-		InvalidCtorExceptionString))
-	{
-		return false;
+			TSubclassOf<AActor> AssignmentTarget = AActor::StaticClass();
+
+			AngelscriptReflectiveAccess::FASGlobalFunctionInvoker BadInvoker(
+				Test, Engine, Module,
+				TEXT("void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)"));
+			if (BadInvoker.IsValid())
+			{
+				BadInvoker.AddArgRef(AssignmentTarget);
+				BadInvoker.AddArgObject(UPackage::StaticClass());
+				const bool bCalled = BadInvoker.Call();
+				// Call() returns false on script exception — that's the desired
+				// outcome here. Don't TestTrue it.
+				(void)bCalled;
+
+				bPassed &= Test.TestNull(
+					TEXT("[Class] AssignClass(unrelated) should clear stored class pointer"),
+					AssignmentTarget.Get());
+				bPassed &= Test.TestNull(
+					TEXT("[Class] AssignClass(unrelated) should clear default object path"),
+					AssignmentTarget.GetDefaultObject());
+			}
+			else
+			{
+				bPassed = false;
+			}
+		}
+
+		return bPassed;
 	}
 
-	bPassed &= TestTrue(
-		TEXT("TSubclassOf implicit construction from an unrelated UClass should report the expected diagnostic"),
-		InvalidCtorExceptionString.Contains(TEXT("Class set to TSubclassOf<> was not a child of templated class.")));
-
-	TSubclassOf<AActor> AssignmentTarget = AActor::StaticClass();
-	FString InvalidAssignmentExceptionString;
-	if (!ExecuteFunctionExpectingException(
-		*this,
-		Engine,
-		*Module,
-		TEXT("void AssignClass(TSubclassOf<AActor>& OutValue, UClass NewClass)"),
-		[this, &AssignmentTarget](asIScriptContext& Context)
-		{
-			return SetArgAddressChecked(*this, Context, 0, &AssignmentTarget, TEXT("AssignClass(invalid)"))
-				&& SetArgObjectChecked(*this, Context, 1, UPackage::StaticClass(), TEXT("AssignClass(invalid)"));
-		},
-		TEXT("AssignClass(invalid)"),
-		InvalidAssignmentExceptionString))
+	// -----------------------------------------------------------------------
+	// Section: TSoftClassPtr — soft references to UClass
+	// -----------------------------------------------------------------------
+	bool RunTSoftClassPtrSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
 	{
-		return false;
-	}
-
-	bPassed &= TestTrue(
-		TEXT("TSubclassOf assignment from an unrelated UClass should report the expected diagnostic"),
-		InvalidAssignmentExceptionString.Contains(TEXT("Class set to TSubclassOf<> was not a child of templated class.")));
-	bPassed &= TestFalse(
-		TEXT("TSubclassOf assignment from an unrelated UClass should reset the destination to an invalid state"),
-		AssignmentTarget.Get() != nullptr);
-	bPassed &= TestNull(
-		TEXT("TSubclassOf assignment from an unrelated UClass should clear the stored class pointer"),
-		AssignmentTarget.Get());
-	bPassed &= TestNull(
-		TEXT("TSubclassOf assignment from an unrelated UClass should clear the default object path"),
-		AssignmentTarget.GetDefaultObject());
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptTSoftClassPtrBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASTSoftClassPtrCompat",
-		TEXT(R"(
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("TSoftClassPtr"), TEXT(R"(
 TSoftClassPtr<AActor> EchoSoftClass(TSoftClassPtr<AActor> Value)
 {
 	return Value;
 }
-
 UClass EchoSoftClassClass(TSoftClassPtr<AActor> Value)
 {
 	return Value.Get();
 }
 
-int Entry()
+int Empty_IsNull()
 {
-	TSoftClassPtr<AActor> Empty;
-	if (!Empty.IsNull())
-		return 10;
-	if (Empty.IsValid())
-		return 20;
-
-	TSoftClassPtr<AActor> Constructed(AActor::StaticClass());
-	if (!(Constructed == AActor::StaticClass()))
-		return 30;
-	if (!(Constructed.Get() == AActor::StaticClass()))
-		return 40;
-	if (!(Constructed.Get() == AActor::StaticClass()))
-		return 50;
-	if (!Constructed.IsValid())
-		return 60;
-	if (Constructed.ToString().IsEmpty())
-		return 70;
-
-	TSoftClassPtr<AActor> ImplicitFromClassArg = EchoSoftClass(TSoftClassPtr<AActor>(AActor::StaticClass()));
-	if (!(ImplicitFromClassArg == AActor::StaticClass()))
-		return 80;
-
-	UClass ImplicitClassArg = EchoSoftClassClass(TSoftClassPtr<AActor>(ACameraActor::StaticClass()));
-	if (!(ImplicitClassArg == ACameraActor::StaticClass()))
-		return 90;
-
-	TSoftClassPtr<AActor> Assigned;
-	Assigned = AActor::StaticClass();
-	if (!(Assigned == AActor::StaticClass()))
-		return 100;
-
-	TArray<TSoftClassPtr<AActor>> LiteralHistory;
-	LiteralHistory.Add(TSoftClassPtr<AActor>(AActor::StaticClass()));
-	LiteralHistory.Add(TSoftClassPtr<AActor>(ACameraActor::StaticClass()));
-	if (LiteralHistory.Num() != 2)
-		return 110;
-	if (!(LiteralHistory[1] == ACameraActor::StaticClass()))
-		return 120;
-
-	Assigned.Reset();
-	if (!Assigned.IsNull())
-		return 130;
-
-	return 1;
+	TSoftClassPtr<AActor> S;
+	return S.IsNull() ? 1 : 0;
+}
+int Empty_IsValid()
+{
+	TSoftClassPtr<AActor> S;
+	return S.IsValid() ? 1 : 0;
+}
+int Constructed_OpEquals()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	return (S == AActor::StaticClass()) ? 1 : 0;
+}
+int Constructed_GetMatch()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	return (S.Get() == AActor::StaticClass()) ? 1 : 0;
+}
+int Constructed_IsValid()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	return S.IsValid() ? 1 : 0;
+}
+int Constructed_ToStringNonEmpty()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	return S.ToString().IsEmpty() ? 0 : 1;
+}
+int ImplicitArg_OpEquals()
+{
+	TSoftClassPtr<AActor> R = EchoSoftClass(TSoftClassPtr<AActor>(AActor::StaticClass()));
+	return (R == AActor::StaticClass()) ? 1 : 0;
+}
+int Echo_GetMatch()
+{
+	UClass R = EchoSoftClassClass(TSoftClassPtr<AActor>(ACameraActor::StaticClass()));
+	return (R == ACameraActor::StaticClass()) ? 1 : 0;
+}
+int Assigned_OpEquals()
+{
+	TSoftClassPtr<AActor> A;
+	A = AActor::StaticClass();
+	return (A == AActor::StaticClass()) ? 1 : 0;
+}
+int Array_LiteralNum()
+{
+	TArray<TSoftClassPtr<AActor>> H;
+	H.Add(TSoftClassPtr<AActor>(AActor::StaticClass()));
+	H.Add(TSoftClassPtr<AActor>(ACameraActor::StaticClass()));
+	return H.Num();
+}
+int Array_LiteralIndex()
+{
+	TArray<TSoftClassPtr<AActor>> H;
+	H.Add(TSoftClassPtr<AActor>(AActor::StaticClass()));
+	H.Add(TSoftClassPtr<AActor>(ACameraActor::StaticClass()));
+	return (H[1] == ACameraActor::StaticClass()) ? 1 : 0;
+}
+int Reset_IsNull()
+{
+	TSoftClassPtr<AActor> A(AActor::StaticClass());
+	A.Reset();
+	return A.IsNull() ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		const FExpectedGlobalInt Cases[] = {
+			{ TEXT("int Empty_IsNull()"),               TEXT("Empty TSoftClassPtr should be null"),               1 },
+			{ TEXT("int Empty_IsValid()"),               TEXT("Empty TSoftClassPtr should not be valid"),         0 },
+			{ TEXT("int Constructed_OpEquals()"),        TEXT("Constructed TSoftClassPtr opEquals UClass"),        1 },
+			{ TEXT("int Constructed_GetMatch()"),        TEXT("Constructed TSoftClassPtr.Get() should match"),     1 },
+			{ TEXT("int Constructed_IsValid()"),         TEXT("Constructed TSoftClassPtr should be valid"),        1 },
+			{ TEXT("int Constructed_ToStringNonEmpty()"),TEXT("Constructed ToString should not be empty"),         1 },
+			{ TEXT("int ImplicitArg_OpEquals()"),        TEXT("Implicit construction in arg should round-trip"),   1 },
+			{ TEXT("int Echo_GetMatch()"),               TEXT("Echo via .Get() should preserve narrowed class"),   1 },
+			{ TEXT("int Assigned_OpEquals()"),           TEXT("opAssign(UClass) should make value equal"),         1 },
+			{ TEXT("int Array_LiteralNum()"),            TEXT("TArray<TSoftClassPtr<AActor>> Num should be 2"),    2 },
+			{ TEXT("int Array_LiteralIndex()"),          TEXT("Array element [1] should equal camera class"),       1 },
+			{ TEXT("int Reset_IsNull()"),                TEXT("Reset should make TSoftClassPtr null"),              1 },
+		};
+		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// -----------------------------------------------------------------------
+	// Section: StaticClass — both plain native classes and annotated ASClass
+	//
+	// Three sub-modules:
+	//   (a) Plain native StaticClass syntax
+	//   (b) Annotated ASClass compiled from memory + reflective UFUNCTION call
+	//   (c) Follow-up plain module that resolves the generated class
+	// -----------------------------------------------------------------------
+	bool RunStaticClassSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
 	{
-		return false;
-	}
+		bool bPassed = true;
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("TSoftClassPtr compat operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
+		// (a) Plain native StaticClass module.
+		{
+			FCoverageModuleScope PlainScope(Test, Engine, Profile, TEXT("StaticClassPlain"), TEXT(R"(
+int Plain_ActorIsValid()
+{
+	UClass C = AActor::StaticClass();
+	return IsValid(C) ? 1 : 0;
 }
-
-bool FAngelscriptStaticClassCompatBindingsTest::RunTest(const FString& Parameters)
+int Plain_TSubclassOfIsValid()
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-
-	asIScriptModule* PlainModule = BuildModule(
-		*this,
-		Engine,
-		"ASStaticClassCompat",
-		TEXT(R"(
-int Entry()
+	TSubclassOf<AActor> S = AActor::StaticClass();
+	return S.IsValid() ? 1 : 0;
+}
+int Plain_IsChildOfSelfBoth()
 {
-	UClass ActorClass = AActor::StaticClass();
-	TSubclassOf<AActor> CompatClass = AActor::StaticClass();
-
-	if (!IsValid(ActorClass) || !CompatClass.IsValid())
-		return 10;
-	if (!ActorClass.IsChildOf(CompatClass) || !CompatClass.IsChildOf(ActorClass))
-		return 20;
-	if (!IsValid(ActorClass.GetDefaultObject()))
-		return 30;
-
-	return 1;
+	UClass C = AActor::StaticClass();
+	TSubclassOf<AActor> S = AActor::StaticClass();
+	return (C.IsChildOf(S) && S.IsChildOf(C)) ? 1 : 0;
+}
+int Plain_DefaultObjectIsValid()
+{
+	UClass C = AActor::StaticClass();
+	return IsValid(C.GetDefaultObject()) ? 1 : 0;
 }
 )"));
-	if (PlainModule == nullptr)
-	{
-		return false;
-	}
+			if (!PlainScope.IsValid()) return false;
+			asIScriptModule& PlainModule = PlainScope.GetModule();
 
-	asIScriptFunction* PlainFunction = GetFunctionByDecl(*this, *PlainModule, TEXT("int Entry()"));
-	if (PlainFunction == nullptr)
-	{
-		return false;
-	}
+			const FExpectedGlobalInt PlainCases[] = {
+				{ TEXT("int Plain_ActorIsValid()"),         TEXT("Plain native StaticClass should produce a valid UClass"), 1 },
+				{ TEXT("int Plain_TSubclassOfIsValid()"),    TEXT("Plain TSubclassOf from StaticClass should be valid"),     1 },
+				{ TEXT("int Plain_IsChildOfSelfBoth()"),     TEXT("UClass <-> TSubclassOf IsChildOf should be reflexive"),   1 },
+				{ TEXT("int Plain_DefaultObjectIsValid()"),  TEXT("StaticClass GetDefaultObject should be valid"),           1 },
+			};
+			bPassed &= ExpectGlobalInts(Test, Engine, PlainModule, Profile, PlainCases);
+		}
 
-	int32 PlainResult = 0;
-	if (!ExecuteIntFunction(*this, Engine, *PlainFunction, PlainResult))
-	{
-		return false;
-	}
-	if (!TestEqual(TEXT("Plain module StaticClass and TSubclassOf compat syntax should behave as expected"), PlainResult, 1))
-	{
-		return false;
-	}
-	const bool bAnnotatedCompiled = CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("ASAnnotatedStaticClassCompat"),
-		TEXT("ASAnnotatedStaticClassCompat.as"),
-		TEXT(R"(
+		// (b) Annotated ASClass + reflective UFUNCTION call.
+		// CompileAnnotatedModuleFromMemory bypasses our coverage scope; do
+		// the cleanup manually after invocation.
+		{
+			const TCHAR* AnnotatedModuleName = TEXT("ASAnnotatedStaticClassCompat");
+			const bool bAnnotatedCompiled = CompileAnnotatedModuleFromMemory(
+				&Engine,
+				AnnotatedModuleName,
+				TEXT("ASAnnotatedStaticClassCompat.as"),
+				TEXT(R"(
 UCLASS()
 class ABindingStaticClassActor : AActor
 {
@@ -601,157 +516,295 @@ class ABindingStaticClassActor : AActor
 		return IsValid(SelfClass.GetDefaultObject()) ? 1 : 40;
 	}
 }
-
 )"));
-	if (!TestTrue(TEXT("Annotated StaticClass compat module should compile"), bAnnotatedCompiled))
-	{
-		return false;
-	}
+			ON_SCOPE_EXIT { Engine.DiscardModule(AnnotatedModuleName); };
 
-	UClass* RuntimeActorClass = FindGeneratedClass(&Engine, TEXT("ABindingStaticClassActor"));
-	if (!TestNotNull(TEXT("Generated actor class for StaticClass compat should exist"), RuntimeActorClass))
-	{
-		return false;
-	}
+			bPassed &= Test.TestTrue(
+				TEXT("[Class] Annotated StaticClass compat module should compile"),
+				bAnnotatedCompiled);
 
-	UFunction* ReadStaticClassCompatFunction = FindGeneratedFunction(RuntimeActorClass, TEXT("ReadStaticClassCompat"));
-	if (!TestNotNull(TEXT("StaticClass compat function should exist"), ReadStaticClassCompatFunction))
-	{
-		return false;
-	}
-	AActor* RuntimeActor = NewObject<AActor>(GetTransientPackage(), RuntimeActorClass);
-	if (!TestNotNull(TEXT("Generated actor for StaticClass compat should instantiate"), RuntimeActor))
-	{
-		return false;
-	}
+			if (bAnnotatedCompiled)
+			{
+				UClass* RuntimeActorClass = FindGeneratedClass(&Engine, TEXT("ABindingStaticClassActor"));
+				bPassed &= Test.TestNotNull(
+					TEXT("[Class] Generated actor class for StaticClass compat should exist"),
+					RuntimeActorClass);
 
-	int32 AnnotatedResult = 0;
-	if (!TestTrue(TEXT("StaticClass compat reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeActor, ReadStaticClassCompatFunction, AnnotatedResult)))
-	{
-		return false;
-	}
-	if (!TestEqual(TEXT("Annotated module StaticClass and TSubclassOf compat syntax should behave as expected"), AnnotatedResult, 1))
-	{
-		return false;
-	}
+				UFunction* ReadStaticClassCompatFunction = RuntimeActorClass != nullptr
+					? FindGeneratedFunction(RuntimeActorClass, TEXT("ReadStaticClassCompat"))
+					: nullptr;
+				bPassed &= Test.TestNotNull(
+					TEXT("[Class] StaticClass compat function should exist"),
+					ReadStaticClassCompatFunction);
 
-	asIScriptModule* QueryModule = BuildModule(
-		*this,
-		Engine,
-		"ASGeneratedStaticClassQuery",
-		TEXT(R"(
-int Entry()
+				if (RuntimeActorClass != nullptr && ReadStaticClassCompatFunction != nullptr)
+				{
+					AActor* RuntimeActor = NewObject<AActor>(GetTransientPackage(), RuntimeActorClass);
+					bPassed &= Test.TestNotNull(
+						TEXT("[Class] Generated actor for StaticClass compat should instantiate"),
+						RuntimeActor);
+
+					if (RuntimeActor != nullptr)
+					{
+						int32 AnnotatedResult = 0;
+						const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(
+							&Engine, RuntimeActor, ReadStaticClassCompatFunction, AnnotatedResult);
+						bPassed &= Test.TestTrue(
+							TEXT("[Class] Reflected call should execute on game thread"),
+							bExecuted);
+						bPassed &= Test.TestEqual(
+							TEXT("[Class] Annotated module StaticClass should report success (1)"),
+							AnnotatedResult, 1);
+					}
+				}
+			}
+		}
+
+		// (c) Follow-up plain module resolves the generated class.
+		{
+			FCoverageModuleScope QueryScope(Test, Engine, Profile, TEXT("StaticClassQuery"), TEXT(R"(
+int Query_FindGeneratedIsValid()
 {
-	UClass SelfClass = FindClass("ABindingStaticClassActor");
-	TSubclassOf<AActor> CompatClass = FindClass("ABindingStaticClassActor");
-
-	if (!IsValid(SelfClass) || !CompatClass.IsValid())
-		return 10;
-	if (!SelfClass.IsChildOf(AActor::StaticClass()))
-		return 20;
-	if (!CompatClass.IsChildOf(SelfClass) || !SelfClass.IsChildOf(CompatClass))
-		return 30;
-
-	return 1;
+	UClass C = FindClass("ABindingStaticClassActor");
+	return IsValid(C) ? 1 : 0;
+}
+int Query_TSubclassOfFromFindIsValid()
+{
+	TSubclassOf<AActor> S = FindClass("ABindingStaticClassActor");
+	return S.IsValid() ? 1 : 0;
+}
+int Query_IsChildOfActor()
+{
+	UClass C = FindClass("ABindingStaticClassActor");
+	return C.IsChildOf(AActor::StaticClass()) ? 1 : 0;
+}
+int Query_TSubclassOf_IsChildOfBoth()
+{
+	UClass C = FindClass("ABindingStaticClassActor");
+	TSubclassOf<AActor> S = FindClass("ABindingStaticClassActor");
+	return (C.IsChildOf(S) && S.IsChildOf(C)) ? 1 : 0;
 }
 )"));
-	if (QueryModule == nullptr)
-	{
-		return false;
+			if (!QueryScope.IsValid()) return false;
+			asIScriptModule& QueryModule = QueryScope.GetModule();
+
+			const FExpectedGlobalInt QueryCases[] = {
+				{ TEXT("int Query_FindGeneratedIsValid()"),       TEXT("FindClass on generated class should be valid"),   1 },
+				{ TEXT("int Query_TSubclassOfFromFindIsValid()"), TEXT("TSubclassOf from FindClass should be valid"),     1 },
+				{ TEXT("int Query_IsChildOfActor()"),             TEXT("Generated class should be child of AActor"),      1 },
+				{ TEXT("int Query_TSubclassOf_IsChildOfBoth()"),  TEXT("Generated class TSubclassOf round-trip"),         1 },
+			};
+			bPassed &= ExpectGlobalInts(Test, Engine, QueryModule, Profile, QueryCases);
+		}
+
+		return bPassed;
 	}
 
-	asIScriptFunction* QueryFunction = GetFunctionByDecl(*this, *QueryModule, TEXT("int Entry()"));
-	if (QueryFunction == nullptr)
+	// -----------------------------------------------------------------------
+	// Section: NativeStaticClassNamespace — engine-level introspection,
+	// no script module construction.
+	// -----------------------------------------------------------------------
+	bool RunNativeStaticClassNamespaceSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
 	{
-		return false;
+		Test.AddInfo(FormatCaseLabel(Profile, TEXT("Probe AActor::StaticClass via default namespace")));
+
+		FAngelscriptEngineScope EngineScope(Engine);
+		asIScriptEngine* ScriptEngine = Engine.Engine;
+		if (!Test.TestNotNull(TEXT("[Class] AS engine pointer should exist"), ScriptEngine))
+		{
+			return false;
+		}
+
+		bool bPassed = true;
+		bPassed &= Test.TestTrue(
+			TEXT("[Class] Set namespace to AActor should succeed"),
+			ScriptEngine->SetDefaultNamespace("AActor") >= 0);
+
+		asIScriptFunction* StaticClassFunction = ScriptEngine->GetGlobalFunctionByDecl("UClass StaticClass()");
+		bPassed &= Test.TestNotNull(
+			TEXT("[Class] Native AActor namespace should expose StaticClass"),
+			StaticClassFunction);
+
+		if (StaticClassFunction != nullptr)
+		{
+			bPassed &= Test.TestEqual(
+				TEXT("[Class] StaticClass userdata should equal AActor::StaticClass()"),
+				static_cast<UClass*>(StaticClassFunction->GetUserData()),
+				AActor::StaticClass());
+		}
+
+		bPassed &= Test.TestTrue(
+			TEXT("[Class] Restoring global namespace should succeed"),
+			ScriptEngine->SetDefaultNamespace("") >= 0);
+
+		return bPassed;
 	}
 
-	int32 QueryResult = 0;
-	if (!ExecuteIntFunction(*this, Engine, *QueryFunction, QueryResult))
+	// -----------------------------------------------------------------------
+	// Section: NativeStaticTypeGlobal — __StaticType_AActor global symbol
+	// -----------------------------------------------------------------------
+	bool RunNativeStaticTypeGlobalSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
 	{
-		return false;
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("StaticTypeGlobal"), TEXT(R"(
+int StaticType_IsValid()
+{
+	return __StaticType_AActor.IsValid() ? 1 : 0;
+}
+int StaticType_GetMatch()
+{
+	return (__StaticType_AActor.Get() == AActor::StaticClass()) ? 1 : 0;
+}
+int StaticType_OpEqualsClass()
+{
+	return (__StaticType_AActor == AActor::StaticClass()) ? 1 : 0;
+}
+int StaticType_IsChildOfSelf()
+{
+	return __StaticType_AActor.IsChildOf(AActor::StaticClass()) ? 1 : 0;
+}
+int StaticType_DefaultObjectIsValid()
+{
+	return IsValid(__StaticType_AActor.GetDefaultObject()) ? 1 : 0;
+}
+)"));
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		const FExpectedGlobalInt Cases[] = {
+			{ TEXT("int StaticType_IsValid()"),              TEXT("__StaticType_AActor should be valid"),               1 },
+			{ TEXT("int StaticType_GetMatch()"),             TEXT("__StaticType_AActor.Get() should equal AActor::StaticClass()"), 1 },
+			{ TEXT("int StaticType_OpEqualsClass()"),         TEXT("__StaticType_AActor opEquals AActor::StaticClass()"),  1 },
+			{ TEXT("int StaticType_IsChildOfSelf()"),         TEXT("__StaticType_AActor.IsChildOf(self) should be true"),  1 },
+			{ TEXT("int StaticType_DefaultObjectIsValid()"),  TEXT("__StaticType_AActor.GetDefaultObject should be valid"),1 },
+		};
+		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
+}
 
-	TestEqual(TEXT("Follow-up plain module should resolve generated classes into TSubclassOf compat flow"), QueryResult, 1);
-	ASTEST_END_SHARE
+// ============================================================================
+// Automation ID registrations (7 IDs under Class. prefix)
+// ============================================================================
 
-	return true;
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptClassLookupBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.ClassLookupCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTSubclassOfBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.TSubclassOfCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.TSubclassOfRejectsUnrelatedClass",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTSoftClassPtrBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.TSoftClassPtrCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptStaticClassCompatBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.StaticClassCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptNativeStaticClassNamespaceBindingTest,
+	"Angelscript.TestModule.Bindings.Class.NativeStaticClassNamespace",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptNativeStaticTypeGlobalBindingTest,
+	"Angelscript.TestModule.Bindings.Class.NativeStaticTypeGlobal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// ============================================================================
+// RunTest implementations
+// ============================================================================
+
+bool FAngelscriptClassLookupBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunClassLookupSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptTSubclassOfBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunTSubclassOfSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunTSubclassOfRejectSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptTSoftClassPtrBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunTSoftClassPtrSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptStaticClassCompatBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunStaticClassSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
 }
 
 bool FAngelscriptNativeStaticClassNamespaceBindingTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptEngine* ScriptEngine = Engine.Engine;
-	if (!TestNotNull(TEXT("AngelScript engine should exist"), ScriptEngine))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Set namespace to AActor should succeed"), ScriptEngine->SetDefaultNamespace("AActor") >= 0))
-	{
-		return false;
-	}
-
-	asIScriptFunction* StaticClassFunction = ScriptEngine->GetGlobalFunctionByDecl("UClass StaticClass()");
-	const bool bHasFunction = TestNotNull(TEXT("Native class namespace should expose StaticClass"), StaticClassFunction);
-
-	if (StaticClassFunction != nullptr)
-	{
-		TestEqual(TEXT("Native class namespace StaticClass should keep bound UClass userdata"), static_cast<UClass*>(StaticClassFunction->GetUserData()), AActor::StaticClass());
-	}
-
-	TestTrue(TEXT("Restore global namespace should succeed"), ScriptEngine->SetDefaultNamespace("") >= 0);
-	bPassed = bHasFunction;
-	ASTEST_END_SHARE
-
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunNativeStaticClassNamespaceSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }
 
 bool FAngelscriptNativeStaticTypeGlobalBindingTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASNativeStaticTypeGlobal",
-		TEXT(R"(
-int Entry()
-{
-	if (!__StaticType_AActor.IsValid())
-		return 5;
-	if (!(__StaticType_AActor.Get() == AActor::StaticClass()))
-		return 7;
-	if (!(__StaticType_AActor == AActor::StaticClass()))
-		return 10;
-	if (!__StaticType_AActor.IsChildOf(AActor::StaticClass()))
-		return 20;
-	return IsValid(__StaticType_AActor.GetDefaultObject()) ? 1 : 30;
-}
-)"));
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Native static type globals should expose usable UClass values"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunNativeStaticTypeGlobalSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
 }
 
-#endif
+#endif // WITH_DEV_AUTOMATION_TESTS
