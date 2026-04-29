@@ -5,7 +5,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "AngelscriptBindingsCoverage.h"
-#include "Shared/AngelscriptTestUtilities.h"
+#include "AngelscriptTestUtilities.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_scriptengine.h"
@@ -22,9 +22,8 @@
  *    string literal. This is fragile under refactor (rename the module,
  *    forget to rename the discard) and forces every test to know the
  *    convention.
- *  - The Coverage refactor (see `Plan_BindingsTestSuiteRefactor.md`) wants
- *    sections to be drop-in: declare scope, get the module, use it, return.
- *    The cleanup happens automatically.
+ *  - The Coverage refactor wants sections to be drop-in: declare scope,
+ *    get the module, use it, return. The cleanup happens automatically.
  *
  * The module name is composed from the profile + section name; tests no
  * longer hard-code `"ASContainer"`-style strings.

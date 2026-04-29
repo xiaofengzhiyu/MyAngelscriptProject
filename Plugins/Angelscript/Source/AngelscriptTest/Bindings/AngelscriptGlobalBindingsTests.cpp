@@ -1,152 +1,170 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+// ============================================================================
+// AngelscriptGlobalBindingsTests.cpp
+//
+// Global utility function binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Global.FAngelscriptGlobalBindingsTest.*
+//
+// Sections:
+//   GlobalVariables     — CollisionProfile, FComponentQueryParams, FGameplayTag globals
+//   CommandletGlobals   — IsRunningCommandlet, IsRunningCookCommandlet, GetRunningCommandletClass
+//
+// CQTest adaptation notes:
+//   CommandletGlobals requires runtime template substitution for expected values.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGlobalVariableBindingsTest,
-	"Angelscript.TestModule.Bindings.GlobalVariableCompat",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GGlobalProfile{
+	TEXT("Global"),             // Theme
+	TEXT(""),                   // Variant
+	TEXT("ASGlobal"),           // ModulePrefix
+	TEXT("Global"),             // CasePrefix
+	TEXT("GlobalBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptGlobalBindingsTest,
+	"Angelscript.TestModule.Bindings.Global",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGlobalCommandletGlobalsBindingsTest,
-	"Angelscript.TestModule.Bindings.GlobalCommandletGlobalsCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptGlobalVariableBindingsTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASGlobalVariableCompat",
-		TEXT(R"(
-int Entry()
-{
-	if (CollisionProfile::BlockAllDynamic.Compare(FName("BlockAllDynamic")) != 0)
-		return 10;
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: GlobalVariables
+	// ====================================================================
+
+	TEST_METHOD(GlobalVariables)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGlobalProfile, TEXT("GlobalVar"), TEXT(R"(
+int GlobalVar_CollisionProfileBlockAllDynamic()
+{
+	return (CollisionProfile::BlockAllDynamic.Compare(FName("BlockAllDynamic")) == 0) ? 1 : 0;
+}
+
+int GlobalVar_DefaultComponentQueryParams()
+{
 	FComponentQueryParams FreshParams;
-	if (FComponentQueryParams::DefaultComponentQueryParams.ShapeCollisionMask.Bits != FreshParams.ShapeCollisionMask.Bits)
-		return 20;
+	return (FComponentQueryParams::DefaultComponentQueryParams.ShapeCollisionMask.Bits == FreshParams.ShapeCollisionMask.Bits) ? 1 : 0;
+}
 
+int GlobalVar_EmptyGameplayTag()
+{
 	FGameplayTag EmptyTagCopy = FGameplayTag::EmptyTag;
-	if (EmptyTagCopy.IsValid())
-		return 30;
-	if (!FGameplayTagContainer::EmptyContainer.IsEmpty())
-		return 40;
-	if (!FGameplayTagQuery::EmptyQuery.IsEmpty())
-		return 50;
+	return (!EmptyTagCopy.IsValid()) ? 1 : 0;
+}
 
-	return 1;
+int GlobalVar_EmptyGameplayTagContainer()
+{
+	return (FGameplayTagContainer::EmptyContainer.IsEmpty()) ? 1 : 0;
+}
+
+int GlobalVar_EmptyGameplayTagQuery()
+{
+	return (FGameplayTagQuery::EmptyQuery.IsEmpty()) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int GlobalVar_CollisionProfileBlockAllDynamic()"), TEXT("CollisionProfile::BlockAllDynamic should match FName"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int GlobalVar_DefaultComponentQueryParams()"), TEXT("DefaultComponentQueryParams should match fresh default"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int GlobalVar_EmptyGameplayTag()"), TEXT("FGameplayTag::EmptyTag should not be valid"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int GlobalVar_EmptyGameplayTagContainer()"), TEXT("FGameplayTagContainer::EmptyContainer should be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int GlobalVar_EmptyGameplayTagQuery()"), TEXT("FGameplayTagQuery::EmptyQuery should be empty"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: CommandletGlobals
+	// ====================================================================
+
+	TEST_METHOD(CommandletGlobals)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
+		const bool bExpectedRunningCommandlet = ::IsRunningCommandlet();
+		const bool bExpectedRunningCookCommandlet = ::IsRunningCookCommandlet();
+		const bool bExpectedRunningDLCCookCommandlet = ::IsRunningDLCCookCommandlet();
+		UClass* ExpectedCommandletClass = ::GetRunningCommandletClass();
 
-	bPassed = TestEqual(TEXT("Global variable compat operations should preserve bound namespace globals and defaults"), Result, 1);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
+		FString Script = TEXT(R"(
+int CommandletGlobals_IsRunningCommandlet()
+{
+	return (IsRunningCommandlet() == $IS_RUNNING_COMMANDLET$) ? 1 : 0;
 }
 
-bool FAngelscriptGlobalCommandletGlobalsBindingsTest::RunTest(const FString& Parameters)
+int CommandletGlobals_IsRunningCookCommandlet()
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	return (IsRunningCookCommandlet() == $IS_RUNNING_COOK_COMMANDLET$) ? 1 : 0;
+}
 
-	const bool bExpectedRunningCommandlet = ::IsRunningCommandlet();
-	const bool bExpectedRunningCookCommandlet = ::IsRunningCookCommandlet();
-	const bool bExpectedRunningDLCCookCommandlet = ::IsRunningDLCCookCommandlet();
-	UClass* ExpectedCommandletClass = ::GetRunningCommandletClass();
-
-	FString Script = TEXT(R"(
-int Entry()
+int CommandletGlobals_IsRunningDLCCookCommandlet()
 {
-	if (IsRunningCommandlet() != $IS_RUNNING_COMMANDLET$)
-		return 10;
-	if (IsRunningCookCommandlet() != $IS_RUNNING_COOK_COMMANDLET$)
-		return 20;
-	if (IsRunningDLCCookCommandlet() != $IS_RUNNING_DLC_COOK_COMMANDLET$)
-		return 30;
+	return (IsRunningDLCCookCommandlet() == $IS_RUNNING_DLC_COOK_COMMANDLET$) ? 1 : 0;
+}
 
+int CommandletGlobals_GetRunningCommandletClass()
+{
 	UClass RunningCommandletClass = GetRunningCommandletClass();
 	if ($EXPECTS_NULL_COMMANDLET_CLASS$)
 	{
-		if (!(RunningCommandletClass == null))
-			return 40;
+		return (RunningCommandletClass == null) ? 1 : 0;
 	}
 	else
 	{
 		if (!IsValid(RunningCommandletClass))
-			return 50;
-		if (!(RunningCommandletClass.GetName() == "$RUNNING_COMMANDLET_CLASS_NAME$"))
-			return 60;
+			return 0;
+		return (RunningCommandletClass.GetName() == "$RUNNING_COMMANDLET_CLASS_NAME$") ? 1 : 0;
 	}
-
-	return 1;
 }
 )");
-	Script.ReplaceInline(TEXT("$IS_RUNNING_COMMANDLET$"), bExpectedRunningCommandlet ? TEXT("true") : TEXT("false"));
-	Script.ReplaceInline(TEXT("$IS_RUNNING_COOK_COMMANDLET$"), bExpectedRunningCookCommandlet ? TEXT("true") : TEXT("false"));
-	Script.ReplaceInline(TEXT("$IS_RUNNING_DLC_COOK_COMMANDLET$"), bExpectedRunningDLCCookCommandlet ? TEXT("true") : TEXT("false"));
-	Script.ReplaceInline(TEXT("$EXPECTS_NULL_COMMANDLET_CLASS$"), ExpectedCommandletClass == nullptr ? TEXT("true") : TEXT("false"));
-	Script.ReplaceInline(
-		TEXT("$RUNNING_COMMANDLET_CLASS_NAME$"),
-		ExpectedCommandletClass != nullptr
-			? *ExpectedCommandletClass->GetName().ReplaceCharWithEscapedChar()
-			: TEXT(""));
+		Script.ReplaceInline(TEXT("$IS_RUNNING_COMMANDLET$"), bExpectedRunningCommandlet ? TEXT("true") : TEXT("false"));
+		Script.ReplaceInline(TEXT("$IS_RUNNING_COOK_COMMANDLET$"), bExpectedRunningCookCommandlet ? TEXT("true") : TEXT("false"));
+		Script.ReplaceInline(TEXT("$IS_RUNNING_DLC_COOK_COMMANDLET$"), bExpectedRunningDLCCookCommandlet ? TEXT("true") : TEXT("false"));
+		Script.ReplaceInline(TEXT("$EXPECTS_NULL_COMMANDLET_CLASS$"), ExpectedCommandletClass == nullptr ? TEXT("true") : TEXT("false"));
+		Script.ReplaceInline(
+			TEXT("$RUNNING_COMMANDLET_CLASS_NAME$"),
+			ExpectedCommandletClass != nullptr
+				? *ExpectedCommandletClass->GetName().ReplaceCharWithEscapedChar()
+				: TEXT(""));
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASGlobalCommandletGlobalsCompat",
-		Script);
-	if (Module == nullptr)
-	{
-		return false;
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGlobalProfile, TEXT("Commandlet"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int CommandletGlobals_IsRunningCommandlet()"), TEXT("IsRunningCommandlet should match native value"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int CommandletGlobals_IsRunningCookCommandlet()"), TEXT("IsRunningCookCommandlet should match native value"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int CommandletGlobals_IsRunningDLCCookCommandlet()"), TEXT("IsRunningDLCCookCommandlet should match native value"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGlobalProfile, TEXT("int CommandletGlobals_GetRunningCommandletClass()"), TEXT("GetRunningCommandletClass should match native value"), 1);
 	}
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("Commandlet global compat operations should preserve running commandlet flags and the current commandlet class"),
-		Result,
-		1);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
-}
+};
 
 #endif

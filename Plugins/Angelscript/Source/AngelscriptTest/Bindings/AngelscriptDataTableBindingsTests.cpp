@@ -1,21 +1,55 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptDataTableBindingsTests.cpp
+//
+// DataTable row/handle/category binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.DataTable.FAngelscriptDataTableBindingsTest.*
+//
+// Sections:
+//   RowHandleCompat  — AddRow, FindRow, GetAllRows, FDataTableRowHandle, FDataTableCategoryHandle
+//   ErrorPaths       — wrong-struct, null-handle, wrong-array exception paths
+//
+// CQTest adaptation notes:
+//   Two IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   Uses $TOKEN$ → ReplaceInline for DataTable path injection.
+//   ErrorPaths section preserves AddExpectedError + manual context execution.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Bindings/AngelscriptDataTableBindingTestTypes.h"
 
 #include "Engine/DataTable.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UObjectGlobals.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-namespace AngelscriptTest_Bindings_AngelscriptDataTableBindingsTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GDataTableProfile{
+	TEXT("DataTable"),              // Theme
+	TEXT(""),                       // Variant
+	TEXT("ASDataTable"),            // ModulePrefix
+	TEXT("DataTable"),              // CasePrefix
+	TEXT("DataTableBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace
 {
-	static constexpr ANSICHAR DataTableBindingsModuleName[] = "ASDataTableRowHandleCompat";
-
 	const FAngelscriptBindingDataTableRow* FindBindingRow(
 		FAutomationTestBase& Test,
 		const UDataTable& DataTable,
@@ -28,33 +62,48 @@ namespace AngelscriptTest_Bindings_AngelscriptDataTableBindingsTests_Private
 	}
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptDataTableBindingsTests_Private;
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDataTableRowHandleBindingsTest,
-	"Angelscript.TestModule.Bindings.DataTableRowHandleCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptDataTableBindingsTest,
+	"Angelscript.TestModule.Bindings.DataTable",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDataTableRowHandleBindingsTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(TEXT("ASDataTableRowHandleCompat"));
-	};
-
-	const FName TableName = MakeUniqueObjectName(GetTransientPackage(), UDataTable::StaticClass(), TEXT("BindingDataTableCompat"));
-	UDataTable* DataTable = NewObject<UDataTable>(GetTransientPackage(), TableName);
-	if (!TestNotNull(TEXT("Data table binding test should create a transient UDataTable"), DataTable))
-	{
-		return false;
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	DataTable->RowStruct = FAngelscriptBindingDataTableRow::StaticStruct();
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	FString Script = TEXT(R"(
+	// ====================================================================
+	// Section: RowHandleCompat
+	// ====================================================================
+
+	TEST_METHOD(RowHandleCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(TEXT("ASDataTableRowHandleCompat"));
+		};
+
+		const FName TableName = MakeUniqueObjectName(GetTransientPackage(), UDataTable::StaticClass(), TEXT("BindingDataTableCompat"));
+		UDataTable* DataTable = NewObject<UDataTable>(GetTransientPackage(), TableName);
+		if (!TestRunner->TestNotNull(TEXT("Data table binding test should create a transient UDataTable"), DataTable))
+		{
+			return;
+		}
+
+		DataTable->RowStruct = FAngelscriptBindingDataTableRow::StaticStruct();
+
+		FString Script = TEXT(R"(
 int Entry()
 {
 	UObject TableObject = FindObject("$TABLE_PATH$");
@@ -171,90 +220,85 @@ int Entry()
 }
 )");
 
-	Script.ReplaceInline(TEXT("$TABLE_PATH$"), *DataTable->GetPathName().ReplaceCharWithEscapedChar());
+		Script.ReplaceInline(TEXT("$TABLE_PATH$"), *DataTable->GetPathName().ReplaceCharWithEscapedChar());
 
-	asIScriptModule* Module = BuildModule(*this, Engine, DataTableBindingsModuleName, Script);
-	if (Module == nullptr)
-	{
-		return false;
+		asIScriptModule* Module = BuildModule(*TestRunner, Engine, "ASDataTableRowHandleCompat", Script);
+		if (Module == nullptr)
+		{
+			return;
+		}
+
+		asIScriptFunction* EntryFunction = GetFunctionByDecl(*TestRunner, *Module, TEXT("int Entry()"));
+		if (EntryFunction == nullptr)
+		{
+			return;
+		}
+
+		int32 Result = 0;
+		if (!ExecuteIntFunction(*TestRunner, Engine, *EntryFunction, Result))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Data table row, handle and category bindings should preserve row copy, append and category-filter semantics"),
+			Result,
+			1);
+
+		TestRunner->TestEqual(
+			TEXT("Native data table should contain three rows after the script add-row round-trip"),
+			DataTable->GetRowNames().Num(),
+			3);
+
+		const FAngelscriptBindingDataTableRow* AlphaRow = FindBindingRow(*TestRunner, *DataTable, TEXT("Alpha"), TEXT("Data table row handle compat"));
+		const FAngelscriptBindingDataTableRow* BetaRow = FindBindingRow(*TestRunner, *DataTable, TEXT("Beta"), TEXT("Data table row handle compat"));
+		const FAngelscriptBindingDataTableRow* GammaRow = FindBindingRow(*TestRunner, *DataTable, TEXT("Gamma"), TEXT("Data table row handle compat"));
+		if (AlphaRow == nullptr || BetaRow == nullptr || GammaRow == nullptr)
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Alpha row category should match the script-authored value"), AlphaRow->Category, FName(TEXT("Enemy")));
+		TestRunner->TestEqual(TEXT("Alpha row count should match the script-authored value"), AlphaRow->Count, 2);
+		TestRunner->TestEqual(TEXT("Alpha row label should match the script-authored value"), AlphaRow->Label, FString(TEXT("Alpha")));
+		TestRunner->TestEqual(TEXT("Beta row category should match the script-authored value"), BetaRow->Category, FName(TEXT("Item")));
+		TestRunner->TestEqual(TEXT("Beta row count should match the script-authored value"), BetaRow->Count, 7);
+		TestRunner->TestEqual(TEXT("Beta row label should match the script-authored value"), BetaRow->Label, FString(TEXT("Beta")));
+		TestRunner->TestEqual(TEXT("Gamma row category should match the script-authored value"), GammaRow->Category, FName(TEXT("Enemy")));
+		TestRunner->TestEqual(TEXT("Gamma row count should match the script-authored value"), GammaRow->Count, 5);
+		TestRunner->TestEqual(TEXT("Gamma row label should match the script-authored value"), GammaRow->Label, FString(TEXT("Gamma")));
 	}
 
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
+	// ====================================================================
+	// Section: ErrorPaths
+	// ====================================================================
+
+	TEST_METHOD(ErrorPaths)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(TEXT("ASDataTableErrorPathsState"));
+			Engine.DiscardModule(TEXT("ASDataTableErrorPathsWrongArray"));
+		};
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
+		const FName TableName = MakeUniqueObjectName(GetTransientPackage(), UDataTable::StaticClass(), TEXT("BindingDataTableErrorPaths"));
+		UDataTable* DataTable = NewObject<UDataTable>(GetTransientPackage(), TableName);
+		if (!TestRunner->TestNotNull(TEXT("Data table error-path test should create a transient UDataTable"), DataTable))
+		{
+			return;
+		}
 
-	bPassed &= TestEqual(
-		TEXT("Data table row, handle and category bindings should preserve row copy, append and category-filter semantics"),
-		Result,
-		1);
+		DataTable->RowStruct = FAngelscriptBindingDataTableRow::StaticStruct();
 
-	bPassed &= TestEqual(
-		TEXT("Native data table should contain three rows after the script add-row round-trip"),
-		DataTable->GetRowNames().Num(),
-		3);
+		FAngelscriptBindingDataTableRow AlphaRow;
+		AlphaRow.Category = TEXT("Enemy");
+		AlphaRow.Count = 2;
+		AlphaRow.Label = TEXT("Alpha");
+		DataTable->AddRow(TEXT("Alpha"), AlphaRow);
 
-	const FAngelscriptBindingDataTableRow* AlphaRow = FindBindingRow(*this, *DataTable, TEXT("Alpha"), TEXT("Data table row handle compat"));
-	const FAngelscriptBindingDataTableRow* BetaRow = FindBindingRow(*this, *DataTable, TEXT("Beta"), TEXT("Data table row handle compat"));
-	const FAngelscriptBindingDataTableRow* GammaRow = FindBindingRow(*this, *DataTable, TEXT("Gamma"), TEXT("Data table row handle compat"));
-	if (AlphaRow == nullptr || BetaRow == nullptr || GammaRow == nullptr)
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(TEXT("Alpha row category should match the script-authored value"), AlphaRow->Category, FName(TEXT("Enemy")));
-	bPassed &= TestEqual(TEXT("Alpha row count should match the script-authored value"), AlphaRow->Count, 2);
-	bPassed &= TestEqual(TEXT("Alpha row label should match the script-authored value"), AlphaRow->Label, FString(TEXT("Alpha")));
-	bPassed &= TestEqual(TEXT("Beta row category should match the script-authored value"), BetaRow->Category, FName(TEXT("Item")));
-	bPassed &= TestEqual(TEXT("Beta row count should match the script-authored value"), BetaRow->Count, 7);
-	bPassed &= TestEqual(TEXT("Beta row label should match the script-authored value"), BetaRow->Label, FString(TEXT("Beta")));
-	bPassed &= TestEqual(TEXT("Gamma row category should match the script-authored value"), GammaRow->Category, FName(TEXT("Enemy")));
-	bPassed &= TestEqual(TEXT("Gamma row count should match the script-authored value"), GammaRow->Count, 5);
-	bPassed &= TestEqual(TEXT("Gamma row label should match the script-authored value"), GammaRow->Label, FString(TEXT("Gamma")));
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDataTableErrorPathsTest,
-	"Angelscript.TestModule.Bindings.DataTableErrorPaths",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDataTableErrorPathsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASDataTableErrorPathsState"));
-		Engine.DiscardModule(TEXT("ASDataTableErrorPathsWrongArray"));
-	};
-
-	const FName TableName = MakeUniqueObjectName(GetTransientPackage(), UDataTable::StaticClass(), TEXT("BindingDataTableErrorPaths"));
-	UDataTable* DataTable = NewObject<UDataTable>(GetTransientPackage(), TableName);
-	if (!TestNotNull(TEXT("Data table error-path test should create a transient UDataTable"), DataTable))
-	{
-		return false;
-	}
-
-	DataTable->RowStruct = FAngelscriptBindingDataTableRow::StaticStruct();
-
-	FAngelscriptBindingDataTableRow AlphaRow;
-	AlphaRow.Category = TEXT("Enemy");
-	AlphaRow.Count = 2;
-	AlphaRow.Label = TEXT("Alpha");
-	DataTable->AddRow(TEXT("Alpha"), AlphaRow);
-
-	FString StateScript = TEXT(R"(
+		FString StateScript = TEXT(R"(
 int Entry()
 {
 	UObject TableObject = FindObject("$TABLE_PATH$");
@@ -307,7 +351,7 @@ int Entry()
 }
 )");
 
-	FString WrongArrayScript = TEXT(R"(
+		FString WrongArrayScript = TEXT(R"(
 int Entry()
 {
 	UObject TableObject = FindObject("$TABLE_PATH$");
@@ -326,96 +370,93 @@ int Entry()
 }
 )");
 
-	const FString EscapedTablePath = DataTable->GetPathName().ReplaceCharWithEscapedChar();
-	StateScript.ReplaceInline(TEXT("$TABLE_PATH$"), *EscapedTablePath);
-	WrongArrayScript.ReplaceInline(TEXT("$TABLE_PATH$"), *EscapedTablePath);
+		const FString EscapedTablePath = DataTable->GetPathName().ReplaceCharWithEscapedChar();
+		StateScript.ReplaceInline(TEXT("$TABLE_PATH$"), *EscapedTablePath);
+		WrongArrayScript.ReplaceInline(TEXT("$TABLE_PATH$"), *EscapedTablePath);
 
-	asIScriptModule* StateModule = BuildModule(*this, Engine, "ASDataTableErrorPathsState", StateScript);
-	if (StateModule == nullptr)
-	{
-		return false;
+		asIScriptModule* StateModule = BuildModule(*TestRunner, Engine, "ASDataTableErrorPathsState", StateScript);
+		if (StateModule == nullptr)
+		{
+			return;
+		}
+
+		asIScriptFunction* StateEntryFunction = GetFunctionByDecl(*TestRunner, *StateModule, TEXT("int Entry()"));
+		if (StateEntryFunction == nullptr)
+		{
+			return;
+		}
+
+		int32 StateResult = 0;
+		if (!ExecuteIntFunction(*TestRunner, Engine, *StateEntryFunction, StateResult))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Data table error paths should keep wrong-struct, null-handle and invalid-category operations fail-closed"),
+			StateResult,
+			1);
+		TestRunner->TestEqual(
+			TEXT("Data table error paths should keep the native table row count unchanged after wrong-struct AddRow"),
+			DataTable->GetRowNames().Num(),
+			1);
+		TestRunner->TestFalse(
+			TEXT("Data table error paths should not create a new row when AddRow receives the wrong struct type"),
+			DataTable->GetRowNames().Contains(TEXT("Bad")));
+
+		asIScriptModule* WrongArrayModule = BuildModule(*TestRunner, Engine, "ASDataTableErrorPathsWrongArray", WrongArrayScript);
+		if (WrongArrayModule == nullptr)
+		{
+			return;
+		}
+
+		asIScriptFunction* WrongArrayEntryFunction = GetFunctionByDecl(*TestRunner, *WrongArrayModule, TEXT("int Entry()"));
+		if (WrongArrayEntryFunction == nullptr)
+		{
+			return;
+		}
+
+		TestRunner->AddExpectedError(TEXT("ASDataTableErrorPathsWrongArray"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("int Entry() | Line 15 | Col 2"), EAutomationExpectedErrorFlags::Contains, 1, false);
+		TestRunner->AddExpectedError(TEXT("OutArray must be a TArray of structs."), EAutomationExpectedErrorFlags::Contains, 1);
+
+		asIScriptContext* WrongArrayContext = Engine.CreateContext();
+		if (!TestRunner->TestNotNull(TEXT("Data table error paths should create a context for the wrong-array test case"), WrongArrayContext))
+		{
+			return;
+		}
+
+		ON_SCOPE_EXIT
+		{
+			WrongArrayContext->Release();
+		};
+
+		const int WrongArrayPrepareResult = WrongArrayContext->Prepare(WrongArrayEntryFunction);
+		if (!TestRunner->TestEqual(
+				TEXT("Data table error paths should prepare the wrong-array test case successfully"),
+				WrongArrayPrepareResult,
+				static_cast<int32>(asSUCCESS)))
+		{
+			return;
+		}
+
+		const int WrongArrayExecuteResult = WrongArrayContext->Execute();
+		TestRunner->TestEqual(
+			TEXT("Data table error paths should raise a script exception when GetAllRows receives a TArray with the wrong subtype"),
+			WrongArrayExecuteResult,
+			static_cast<int32>(asEXECUTION_EXCEPTION));
+		const FString WrongArrayException = WrongArrayContext->GetExceptionString() != nullptr
+			? UTF8_TO_TCHAR(WrongArrayContext->GetExceptionString())
+			: TEXT("");
+		TestRunner->TestEqual(
+			TEXT("Data table error paths should preserve the thrown wrong-array exception text"),
+			WrongArrayException,
+			FString(TEXT("OutArray must be a TArray of structs.")));
+		TestRunner->TestEqual(
+			TEXT("Data table error paths should keep the native table unchanged after wrong-array execution fails"),
+			DataTable->GetRowNames().Num(),
+			1);
 	}
-
-	asIScriptFunction* StateEntryFunction = GetFunctionByDecl(*this, *StateModule, TEXT("int Entry()"));
-	if (StateEntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 StateResult = 0;
-	if (!ExecuteIntFunction(*this, Engine, *StateEntryFunction, StateResult))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Data table error paths should keep wrong-struct, null-handle and invalid-category operations fail-closed"),
-		StateResult,
-		1);
-	bPassed &= TestEqual(
-		TEXT("Data table error paths should keep the native table row count unchanged after wrong-struct AddRow"),
-		DataTable->GetRowNames().Num(),
-		1);
-	bPassed &= TestFalse(
-		TEXT("Data table error paths should not create a new row when AddRow receives the wrong struct type"),
-		DataTable->GetRowNames().Contains(TEXT("Bad")));
-
-	asIScriptModule* WrongArrayModule = BuildModule(*this, Engine, "ASDataTableErrorPathsWrongArray", WrongArrayScript);
-	if (WrongArrayModule == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* WrongArrayEntryFunction = GetFunctionByDecl(*this, *WrongArrayModule, TEXT("int Entry()"));
-	if (WrongArrayEntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	AddExpectedError(TEXT("ASDataTableErrorPathsWrongArray"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("int Entry() | Line 15 | Col 2"), EAutomationExpectedErrorFlags::Contains, 1, false);
-	AddExpectedError(TEXT("OutArray must be a TArray of structs."), EAutomationExpectedErrorFlags::Contains, 1);
-
-	FAngelscriptEngineScope EngineScope(Engine);
-	asIScriptContext* WrongArrayContext = Engine.CreateContext();
-	if (!TestNotNull(TEXT("Data table error paths should create a context for the wrong-array test case"), WrongArrayContext))
-	{
-		return false;
-	}
-
-	ON_SCOPE_EXIT
-	{
-		WrongArrayContext->Release();
-	};
-
-	const int WrongArrayPrepareResult = WrongArrayContext->Prepare(WrongArrayEntryFunction);
-	if (!TestEqual(
-			TEXT("Data table error paths should prepare the wrong-array test case successfully"),
-			WrongArrayPrepareResult,
-			static_cast<int32>(asSUCCESS)))
-	{
-		return false;
-	}
-
-	const int WrongArrayExecuteResult = WrongArrayContext->Execute();
-	bPassed &= TestEqual(
-		TEXT("Data table error paths should raise a script exception when GetAllRows receives a TArray with the wrong subtype"),
-		WrongArrayExecuteResult,
-		static_cast<int32>(asEXECUTION_EXCEPTION));
-	const FString WrongArrayException = WrongArrayContext->GetExceptionString() != nullptr
-		? UTF8_TO_TCHAR(WrongArrayContext->GetExceptionString())
-		: TEXT("");
-	bPassed &= TestEqual(
-		TEXT("Data table error paths should preserve the thrown wrong-array exception text"),
-		WrongArrayException,
-		FString(TEXT("OutArray must be a TArray of structs.")));
-	bPassed &= TestEqual(
-		TEXT("Data table error paths should keep the native table unchanged after wrong-array execution fails"),
-		DataTable->GetRowNames().Num(),
-		1);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

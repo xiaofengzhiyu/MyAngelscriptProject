@@ -1,5 +1,25 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptGameplayTagContainerFunctionLibraryTests.cpp
+//
+// FGameplayTagContainer.RemoveTag binding coverage — CQTest refactor.
+// Automation IDs:
+//   Angelscript.TestModule.FunctionLibraries.GameplayTagContainer.FAngelscriptGameplayTagContainerFunctionLibraryTest.*
+//
+// Sections:
+//   RemoveTagMiss — RemoveTag with missing tag, empty tag, and present tag;
+//                   verifies return value, Num, HasTagExact, and IsEmpty parity
+//                   against native C++ reference values
+//
+// CQTest adaptation notes:
+//   Native C++ reference values are captured at test time from two unrelated
+//   gameplay tags and substituted into script via FString::Format.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "GameplayTagsManager.h"
 #include "Misc/ScopeExit.h"
@@ -7,24 +27,26 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-namespace GameplayTagContainerFunctionLibraryTest
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GGPTagContainerProfile{
+	TEXT("GameplayTagContainer"),         // Theme
+	TEXT(""),                             // Variant
+	TEXT("ASGPTagContainer"),             // ModulePrefix
+	TEXT("GPTagContainer"),               // CasePrefix
+	TEXT("GameplayTagContainerBindings"), // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace AngelscriptGameplayTagContainerFunctionLibraryTests_Private
 {
-	static constexpr ANSICHAR RemoveTagMissModuleName[] = "ASGameplayTagContainerRemoveTagMiss";
-
-	struct FRemoveTagMissReference
-	{
-		int32 RemoveMissing = 0;
-		int32 NumAfterMissing = 0;
-		int32 HasPresentAfterMissing = 0;
-		int32 RemoveEmpty = 0;
-		int32 NumAfterEmpty = 0;
-		int32 HasPresentAfterEmpty = 0;
-		int32 RemovePresent = 0;
-		int32 NumAfterPresent = 0;
-		int32 HasPresentAfterPresent = 0;
-	};
-
 	int32 BoolToScriptInt(const bool bValue)
 	{
 		return bValue ? 1 : 0;
@@ -66,12 +88,25 @@ namespace GameplayTagContainerFunctionLibraryTest
 		return false;
 	}
 
-	FRemoveTagMissReference CaptureReference(const FGameplayTag& PresentTag, const FGameplayTag& MissingTag)
+	struct FRemoveTagReference
+	{
+		int32 RemoveMissing = 0;
+		int32 NumAfterMissing = 0;
+		int32 HasPresentAfterMissing = 0;
+		int32 RemoveEmpty = 0;
+		int32 NumAfterEmpty = 0;
+		int32 HasPresentAfterEmpty = 0;
+		int32 RemovePresent = 0;
+		int32 NumAfterPresent = 0;
+		int32 HasPresentAfterPresent = 0;
+	};
+
+	FRemoveTagReference CaptureReference(const FGameplayTag& PresentTag, const FGameplayTag& MissingTag)
 	{
 		FGameplayTagContainer Container;
 		Container.AddTag(PresentTag);
 
-		FRemoveTagMissReference Reference;
+		FRemoveTagReference Reference;
 		Reference.RemoveMissing = BoolToScriptInt(Container.RemoveTag(MissingTag));
 		Reference.NumAfterMissing = Container.Num();
 		Reference.HasPresentAfterMissing = BoolToScriptInt(Container.HasTagExact(PresentTag));
@@ -86,133 +121,130 @@ namespace GameplayTagContainerFunctionLibraryTest
 		return Reference;
 	}
 
-	FString BuildRemoveTagMissScript(
+	FString BuildRemoveTagScript(
 		const FString& PresentTagName,
 		const FString& MissingTagName,
-		const FRemoveTagMissReference& Reference,
-		const bool bIntentionallyExpectWrongMissingResult)
+		const FRemoveTagReference& Ref)
 	{
-		FStringFormatOrderedArguments Arguments;
-		Arguments.Add(PresentTagName);
-		Arguments.Add(MissingTagName);
-		Arguments.Add(bIntentionallyExpectWrongMissingResult ? 1 : Reference.RemoveMissing);
-		Arguments.Add(Reference.NumAfterMissing);
-		Arguments.Add(Reference.HasPresentAfterMissing);
-		Arguments.Add(Reference.RemoveEmpty);
-		Arguments.Add(Reference.NumAfterEmpty);
-		Arguments.Add(Reference.HasPresentAfterEmpty);
-		Arguments.Add(Reference.RemovePresent);
-		Arguments.Add(Reference.NumAfterPresent);
-		Arguments.Add(Reference.HasPresentAfterPresent);
+		FStringFormatOrderedArguments Args;
+		Args.Add(PresentTagName);   // {0}
+		Args.Add(MissingTagName);   // {1}
+		Args.Add(Ref.RemoveMissing);            // {2}
+		Args.Add(Ref.NumAfterMissing);          // {3}
+		Args.Add(Ref.HasPresentAfterMissing);   // {4}
+		Args.Add(Ref.RemoveEmpty);              // {5}
+		Args.Add(Ref.NumAfterEmpty);            // {6}
+		Args.Add(Ref.HasPresentAfterEmpty);     // {7}
+		Args.Add(Ref.RemovePresent);            // {8}
+		Args.Add(Ref.NumAfterPresent);          // {9}
+		Args.Add(Ref.HasPresentAfterPresent);   // {10}
 
 		return FString::Format(TEXT(R"(
-int Entry()
+int RemoveTag_MissingParity()
 {
 	FGameplayTag PresentTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
 	FGameplayTag MissingTag = FGameplayTag::RequestGameplayTag(FName("{1}"), true);
-	if (!PresentTag.IsValid())
-		return 10;
-	if (!MissingTag.IsValid())
-		return 20;
-	if (PresentTag == MissingTag)
-		return 30;
+	if (!PresentTag.IsValid()) return 0;
+	if (!MissingTag.IsValid()) return 0;
+	if (PresentTag == MissingTag) return 0;
 
 	FGameplayTagContainer Container;
 	Container.AddTag(PresentTag);
 
-	if ((Container.RemoveTag(MissingTag) ? 1 : 0) != {2})
-		return 40;
-	if (Container.Num() != {3})
-		return 50;
-	if ((Container.HasTagExact(PresentTag) ? 1 : 0) != {4})
-		return 60;
-
-	if ((Container.RemoveTag(FGameplayTag::EmptyTag) ? 1 : 0) != {5})
-		return 70;
-	if (Container.Num() != {6})
-		return 80;
-	if ((Container.HasTagExact(PresentTag) ? 1 : 0) != {7})
-		return 90;
-
-	if ((Container.RemoveTag(PresentTag) ? 1 : 0) != {8})
-		return 100;
-	if (Container.Num() != {9})
-		return 110;
-	if ((Container.HasTagExact(PresentTag) ? 1 : 0) != {10})
-		return 120;
-	if (!Container.IsEmpty())
-		return 130;
-
+	if ((Container.RemoveTag(MissingTag) ? 1 : 0) != {2}) return 0;
+	if (Container.Num() != {3}) return 0;
+	if ((Container.HasTagExact(PresentTag) ? 1 : 0) != {4}) return 0;
 	return 1;
 }
-)"), Arguments);
-	}
-}
 
-using namespace GameplayTagContainerFunctionLibraryTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGameplayTagContainerRemoveTagMissTest,
-	"Angelscript.TestModule.FunctionLibraries.GameplayTagContainerRemoveTagMiss",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptGameplayTagContainerRemoveTagMissTest::RunTest(const FString& Parameters)
+int RemoveTag_EmptyParity()
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	FGameplayTag PresentTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
+	FGameplayTag MissingTag = FGameplayTag::RequestGameplayTag(FName("{1}"), true);
 
-	FGameplayTag PresentTag;
-	FGameplayTag MissingTag;
-	if (!TestTrue(
-		TEXT("GameplayTagContainer remove-tag miss test requires two unrelated registered gameplay tags"),
-		GameplayTagContainerFunctionLibraryTest::FindPresentAndMissingTags(PresentTag, MissingTag)))
-	{
-		return false;
-	}
+	FGameplayTagContainer Container;
+	Container.AddTag(PresentTag);
+	Container.RemoveTag(MissingTag);
 
-	const GameplayTagContainerFunctionLibraryTest::FRemoveTagMissReference Reference =
-		GameplayTagContainerFunctionLibraryTest::CaptureReference(PresentTag, MissingTag);
-	const FString Script = GameplayTagContainerFunctionLibraryTest::BuildRemoveTagMissScript(
-		PresentTag.ToString().ReplaceCharWithEscapedChar(),
-		MissingTag.ToString().ReplaceCharWithEscapedChar(),
-		Reference,
-		false);
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(ANSI_TO_TCHAR(GameplayTagContainerFunctionLibraryTest::RemoveTagMissModuleName));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		GameplayTagContainerFunctionLibraryTest::RemoveTagMissModuleName,
-		Script);
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("GameplayTagContainer.RemoveTag should preserve miss and empty-tag behavior exactly"),
-		Result,
-		1);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
+	if ((Container.RemoveTag(FGameplayTag::EmptyTag) ? 1 : 0) != {5}) return 0;
+	if (Container.Num() != {6}) return 0;
+	if ((Container.HasTagExact(PresentTag) ? 1 : 0) != {7}) return 0;
+	return 1;
 }
+
+int RemoveTag_PresentParity()
+{
+	FGameplayTag PresentTag = FGameplayTag::RequestGameplayTag(FName("{0}"), true);
+	FGameplayTag MissingTag = FGameplayTag::RequestGameplayTag(FName("{1}"), true);
+
+	FGameplayTagContainer Container;
+	Container.AddTag(PresentTag);
+	Container.RemoveTag(MissingTag);
+	Container.RemoveTag(FGameplayTag::EmptyTag);
+
+	if ((Container.RemoveTag(PresentTag) ? 1 : 0) != {8}) return 0;
+	if (Container.Num() != {9}) return 0;
+	if ((Container.HasTagExact(PresentTag) ? 1 : 0) != {10}) return 0;
+	if (!Container.IsEmpty()) return 0;
+	return 1;
+}
+)"), Args);
+	}
+}
+
+using namespace AngelscriptGameplayTagContainerFunctionLibraryTests_Private;
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptGameplayTagContainerFunctionLibraryTest,
+	"Angelscript.TestModule.FunctionLibraries.GameplayTagContainer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: RemoveTagMiss
+	// ====================================================================
+
+	TEST_METHOD(RemoveTagMiss)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FGameplayTag PresentTag;
+		FGameplayTag MissingTag;
+		if (!TestRunner->TestTrue(
+			TEXT("[GPTagContainer] requires two unrelated registered gameplay tags"),
+			FindPresentAndMissingTags(PresentTag, MissingTag)))
+		{
+			return;
+		}
+
+		const FRemoveTagReference Ref = CaptureReference(PresentTag, MissingTag);
+		const FString Script = BuildRemoveTagScript(
+			PresentTag.ToString().ReplaceCharWithEscapedChar(),
+			MissingTag.ToString().ReplaceCharWithEscapedChar(),
+			Ref);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGPTagContainerProfile, TEXT("RemoveTagMiss"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagContainerProfile, TEXT("int RemoveTag_MissingParity()"), TEXT("RemoveTag missing tag preserves container"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagContainerProfile, TEXT("int RemoveTag_EmptyParity()"), TEXT("RemoveTag empty tag preserves container"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGPTagContainerProfile, TEXT("int RemoveTag_PresentParity()"), TEXT("RemoveTag present tag empties container"), 1);
+	}
+};
 
 #endif

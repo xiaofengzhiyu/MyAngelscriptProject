@@ -1,44 +1,57 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptPrimitiveComponentBindingsTests.cpp
+//
+// PrimitiveComponent bounds/selectable/lightmap binding coverage — CQTest refactor.
+// Automation IDs:
+//   Angelscript.TestModule.Bindings.PrimitiveComponent.FAngelscriptPrimitiveComponentBindingsTest.*
+//
+// Sections:
+//   BoundsCompat — collision extents, bounds origin/extent/radius, selectable,
+//                  lightmap type round-trip through script
+//
+// CQTest adaptation notes:
+//   Single IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into TEST_CLASS.
+//   $TOKEN$ replacement computed in TEST_METHOD + ReplaceInline.
+//   Original `int Entry()` returning bitmask split into per-aspect functions
+//   returning 1/0, plus native-side C++ assertions for mutated component state.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Components/BoxComponent.h"
 #include "GameFramework/Actor.h"
-#include "Misc/AutomationTest.h"
-#include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptPrimitiveComponentBoundsCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.PrimitiveComponentBoundsCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-namespace AngelscriptTest_Bindings_AngelscriptPrimitiveComponentBindingsTests_Private
+static const FBindingsCoverageProfile GPrimCompProfile{
+	TEXT("PrimComp"),                       // Theme
+	TEXT(""),                               // Variant
+	TEXT("ASPrimComp"),                     // ModulePrefix
+	TEXT("PrimComp"),                       // CasePrefix
+	TEXT("PrimitiveComponentBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers (kept from original, scoped to translation unit)
+// ----------------------------------------------------------------------------
+
+namespace
 {
-	static constexpr ANSICHAR PrimitiveComponentBindingsModuleName[] = "ASPrimitiveComponentBoundsCompat";
-	static constexpr TCHAR PrimitiveComponentHostActorName[] = TEXT("PrimitiveComponentBindingsHostActor");
-	static constexpr TCHAR PrimitiveComponentName[] = TEXT("PrimitiveComponentBindingsBox");
 	static const FVector ExpectedBoxExtent(10.0f, 20.0f, 30.0f);
 	static const FVector ExpectedRelativeLocation(100.0f, 50.0f, 25.0f);
 	static constexpr double BoundsTolerance = 0.01;
-
-	struct FPrimitiveComponentBindingBaseline
-	{
-		FString ComponentPath;
-		FVector BoundingBoxExtents = FVector::ZeroVector;
-		FVector BoundsOrigin = FVector::ZeroVector;
-		FVector BoundsExtent = FVector::ZeroVector;
-		double BoundsRadius = 0.0;
-		bool bSelectable = false;
-		ELightmapType InitialLightmapType = ELightmapType::Default;
-	};
-
-	void ReplaceToken(FString& Source, const TCHAR* Token, const FString& Replacement)
-	{
-		Source.ReplaceInline(Token, *Replacement, ESearchCase::CaseSensitive);
-	}
 
 	FString FormatDoubleLiteral(const double Value)
 	{
@@ -54,14 +67,14 @@ namespace AngelscriptTest_Bindings_AngelscriptPrimitiveComponentBindingsTests_Pr
 			*LexToString(Value.Z));
 	}
 
-	UBoxComponent* CreatePrimitiveComponentFixture(FAutomationTestBase& Test, AActor*& OutHostActor)
+	UBoxComponent* CreatePrimitiveComponentFixture(AActor*& OutHostActor)
 	{
 		OutHostActor = NewObject<AActor>(
 			GetTransientPackage(),
 			AActor::StaticClass(),
-			PrimitiveComponentHostActorName,
+			TEXT("PrimCompBindingsHostActor"),
 			RF_Transient);
-		if (!Test.TestNotNull(TEXT("PrimitiveComponentBoundsCompat should create the transient host actor"), OutHostActor))
+		if (OutHostActor == nullptr)
 		{
 			return nullptr;
 		}
@@ -69,9 +82,9 @@ namespace AngelscriptTest_Bindings_AngelscriptPrimitiveComponentBindingsTests_Pr
 		UBoxComponent* BoxComponent = NewObject<UBoxComponent>(
 			OutHostActor,
 			UBoxComponent::StaticClass(),
-			PrimitiveComponentName,
+			TEXT("PrimCompBindingsBox"),
 			RF_Transient);
-		if (!Test.TestNotNull(TEXT("PrimitiveComponentBoundsCompat should create the transient box component"), BoxComponent))
+		if (BoxComponent == nullptr)
 		{
 			return nullptr;
 		}
@@ -87,167 +100,143 @@ namespace AngelscriptTest_Bindings_AngelscriptPrimitiveComponentBindingsTests_Pr
 		BoxComponent->UpdateBounds();
 		return BoxComponent;
 	}
+}
 
-	FPrimitiveComponentBindingBaseline CapturePrimitiveComponentBaseline(const UBoxComponent& BoxComponent)
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptPrimitiveComponentBindingsTest,
+	"Angelscript.TestModule.Bindings.PrimitiveComponent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	BEFORE_ALL()
 	{
-		FPrimitiveComponentBindingBaseline Baseline;
-		Baseline.ComponentPath = BoxComponent.GetPathName();
-		Baseline.BoundingBoxExtents = BoxComponent.GetCollisionShape().GetExtent();
-		Baseline.BoundsOrigin = BoxComponent.Bounds.Origin;
-		Baseline.BoundsExtent = BoxComponent.Bounds.BoxExtent;
-		Baseline.BoundsRadius = BoxComponent.Bounds.SphereRadius;
-		Baseline.bSelectable = BoxComponent.bSelectable;
-		Baseline.InitialLightmapType = BoxComponent.GetLightmapType();
-		return Baseline;
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	bool VerifyNativeBaseline(
-		FAutomationTestBase& Test,
-		const FPrimitiveComponentBindingBaseline& Baseline)
+	AFTER_ALL()
 	{
-		bool bPassed = true;
-		bPassed &= Test.TestTrue(
-			TEXT("PrimitiveComponentBoundsCompat native collision extents should match the configured box extent"),
-			Baseline.BoundingBoxExtents.Equals(ExpectedBoxExtent, 0.0f));
-		bPassed &= Test.TestTrue(
-			TEXT("PrimitiveComponentBoundsCompat native bounds origin should reflect the configured relative location"),
-			Baseline.BoundsOrigin.Equals(ExpectedRelativeLocation, BoundsTolerance));
-		bPassed &= Test.TestTrue(
-			TEXT("PrimitiveComponentBoundsCompat native bounds extent should match the configured box extent"),
-			Baseline.BoundsExtent.Equals(ExpectedBoxExtent, BoundsTolerance));
-		bPassed &= Test.TestTrue(
-			TEXT("PrimitiveComponentBoundsCompat native bounds radius should match the box extent radius"),
-			FMath::IsNearlyEqual(Baseline.BoundsRadius, ExpectedBoxExtent.Size(), BoundsTolerance));
-		bPassed &= Test.TestFalse(
-			TEXT("PrimitiveComponentBoundsCompat native selectable flag should start disabled"),
-			Baseline.bSelectable);
-		bPassed &= Test.TestEqual(
-			TEXT("PrimitiveComponentBoundsCompat native lightmap type should start at the default"),
-			Baseline.InitialLightmapType,
-			ELightmapType::Default);
-		return bPassed;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
 	}
 
-	FString BuildPrimitiveComponentScript(const FPrimitiveComponentBindingBaseline& Baseline)
+	// ====================================================================
+	// Section: BoundsCompat
+	// ====================================================================
+
+	TEST_METHOD(BoundsCompat)
 	{
-		FString Script = TEXT(R"AS(
-int Entry()
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		// Create fixture
+		AActor* HostActor = nullptr;
+		UBoxComponent* BoxComponent = CreatePrimitiveComponentFixture(HostActor);
+		if (!TestRunner->TestNotNull(TEXT("PrimComp should create transient host actor"), HostActor) ||
+			!TestRunner->TestNotNull(TEXT("PrimComp should create transient box component"), BoxComponent))
+		{
+			return;
+		}
+
+		// Capture baseline values for token replacement
+		const FString ComponentPath = BoxComponent->GetPathName();
+		const FVector CollisionExtents = BoxComponent->GetCollisionShape().GetExtent();
+		const FVector BoundsOrigin = BoxComponent->Bounds.Origin;
+		const FVector BoundsExtent = BoxComponent->Bounds.BoxExtent;
+		const double BoundsRadius = BoxComponent->Bounds.SphereRadius;
+
+		// Verify native baseline
+		TestRunner->TestTrue(TEXT("PrimComp native collision extents should match configured box extent"),
+			CollisionExtents.Equals(ExpectedBoxExtent, 0.0f));
+		TestRunner->TestTrue(TEXT("PrimComp native bounds origin should reflect configured relative location"),
+			BoundsOrigin.Equals(ExpectedRelativeLocation, BoundsTolerance));
+		TestRunner->TestTrue(TEXT("PrimComp native bounds extent should match configured box extent"),
+			BoundsExtent.Equals(ExpectedBoxExtent, BoundsTolerance));
+		TestRunner->TestTrue(TEXT("PrimComp native bounds radius should match box extent radius"),
+			FMath::IsNearlyEqual(BoundsRadius, ExpectedBoxExtent.Size(), BoundsTolerance));
+		TestRunner->TestFalse(TEXT("PrimComp native selectable flag should start disabled"),
+			BoxComponent->bSelectable);
+		TestRunner->TestEqual(TEXT("PrimComp native lightmap type should start at default"),
+			BoxComponent->GetLightmapType(), ELightmapType::Default);
+
+		// Build script with token replacement
+		FString Script = TEXT(R"(
+int BoundsCompat_CollisionExtents()
 {
 	UObject FoundObject = FindObject("__COMPONENT_PATH__");
 	UPrimitiveComponent Component = Cast<UPrimitiveComponent>(FoundObject);
-	if (Component == null)
-		return 1;
-
-	int Failures = 0;
-	if (!Component.GetBoundingBoxExtents().Equals(__EXPECTED_BOX_EXTENT__, 0.0f))
-		Failures |= 2;
-	if (!Component.GetBoundsOrigin().Equals(__EXPECTED_BOUNDS_ORIGIN__, __BOUNDS_TOLERANCE__))
-		Failures |= 4;
-	if (!Component.GetBoundsExtent().Equals(__EXPECTED_BOUNDS_EXTENT__, __BOUNDS_TOLERANCE__))
-		Failures |= 8;
-	if (!Math::IsNearlyEqual(Component.GetBoundsRadius(), __EXPECTED_BOUNDS_RADIUS__, __BOUNDS_TOLERANCE__))
-		Failures |= 16;
-	if (Component.GetbSelectable())
-		Failures |= 32;
-
-	Component.SetbSelectable(true);
-	if (!Component.GetbSelectable())
-		Failures |= 64;
-
-	Component.SetLightmapType(ELightmapType::ForceSurface);
-	return Failures;
+	if (Component == null) return 0;
+	return Component.GetBoundingBoxExtents().Equals(__EXPECTED_BOX_EXTENT__, 0.0f) ? 1 : 0;
 }
-)AS");
-
-		ReplaceToken(Script, TEXT("__COMPONENT_PATH__"), Baseline.ComponentPath.ReplaceCharWithEscapedChar());
-		ReplaceToken(Script, TEXT("__EXPECTED_BOX_EXTENT__"), FormatVectorLiteral(Baseline.BoundingBoxExtents));
-		ReplaceToken(Script, TEXT("__EXPECTED_BOUNDS_ORIGIN__"), FormatVectorLiteral(Baseline.BoundsOrigin));
-		ReplaceToken(Script, TEXT("__EXPECTED_BOUNDS_EXTENT__"), FormatVectorLiteral(Baseline.BoundsExtent));
-		ReplaceToken(Script, TEXT("__EXPECTED_BOUNDS_RADIUS__"), FormatDoubleLiteral(Baseline.BoundsRadius));
-		ReplaceToken(Script, TEXT("__BOUNDS_TOLERANCE__"), FormatDoubleLiteral(BoundsTolerance));
-		return Script;
-	}
-}
-
-using namespace AngelscriptTest_Bindings_AngelscriptPrimitiveComponentBindingsTests_Private;
-
-bool FAngelscriptPrimitiveComponentBoundsCompatBindingsTest::RunTest(const FString& Parameters)
+int BoundsCompat_BoundsOrigin()
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	AActor* HostActor = nullptr;
-	UBoxComponent* BoxComponent = nullptr;
-	bool bModuleCompiled = false;
-
-	ON_SCOPE_EXIT
-	{
-		if (bModuleCompiled)
-		{
-			Engine.DiscardModule(TEXT("ASPrimitiveComponentBoundsCompat"));
-		}
-
-		if (BoxComponent != nullptr)
-		{
-			BoxComponent->MarkAsGarbage();
-		}
-
-		if (HostActor != nullptr)
-		{
-			HostActor->MarkAsGarbage();
-		}
-	};
-
-	BoxComponent = CreatePrimitiveComponentFixture(*this, HostActor);
-	if (BoxComponent == nullptr)
-	{
-		return false;
-	}
-
-	const FPrimitiveComponentBindingBaseline Baseline = CapturePrimitiveComponentBaseline(*BoxComponent);
-	if (!VerifyNativeBaseline(*this, Baseline))
-	{
-		return false;
-	}
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		PrimitiveComponentBindingsModuleName,
-		BuildPrimitiveComponentScript(Baseline));
-	if (Module == nullptr)
-	{
-		return false;
-	}
-	bModuleCompiled = true;
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = INDEX_NONE;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("PrimitiveComponent bounds/selectable/lightmap bindings should preserve the scripted parity matrix"),
-		Result,
-		0);
-	bPassed &= TestTrue(
-		TEXT("PrimitiveComponent SetbSelectable(true) should update the native component immediately"),
-		BoxComponent->bSelectable);
-	bPassed &= TestEqual(
-		TEXT("PrimitiveComponent SetLightmapType(ForceSurface) should update the native lightmap type"),
-		BoxComponent->GetLightmapType(),
-		ELightmapType::ForceSurface);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
+	UObject FoundObject = FindObject("__COMPONENT_PATH__");
+	UPrimitiveComponent Component = Cast<UPrimitiveComponent>(FoundObject);
+	if (Component == null) return 0;
+	return Component.GetBoundsOrigin().Equals(__EXPECTED_BOUNDS_ORIGIN__, __BOUNDS_TOLERANCE__) ? 1 : 0;
 }
+int BoundsCompat_BoundsExtent()
+{
+	UObject FoundObject = FindObject("__COMPONENT_PATH__");
+	UPrimitiveComponent Component = Cast<UPrimitiveComponent>(FoundObject);
+	if (Component == null) return 0;
+	return Component.GetBoundsExtent().Equals(__EXPECTED_BOUNDS_EXTENT__, __BOUNDS_TOLERANCE__) ? 1 : 0;
+}
+int BoundsCompat_BoundsRadius()
+{
+	UObject FoundObject = FindObject("__COMPONENT_PATH__");
+	UPrimitiveComponent Component = Cast<UPrimitiveComponent>(FoundObject);
+	if (Component == null) return 0;
+	return Math::IsNearlyEqual(Component.GetBoundsRadius(), __EXPECTED_BOUNDS_RADIUS__, __BOUNDS_TOLERANCE__) ? 1 : 0;
+}
+int BoundsCompat_Selectable()
+{
+	UObject FoundObject = FindObject("__COMPONENT_PATH__");
+	UPrimitiveComponent Component = Cast<UPrimitiveComponent>(FoundObject);
+	if (Component == null) return 0;
+	if (Component.GetbSelectable()) return 0;
+	Component.SetbSelectable(true);
+	return Component.GetbSelectable() ? 1 : 0;
+}
+int BoundsCompat_LightmapType()
+{
+	UObject FoundObject = FindObject("__COMPONENT_PATH__");
+	UPrimitiveComponent Component = Cast<UPrimitiveComponent>(FoundObject);
+	if (Component == null) return 0;
+	Component.SetLightmapType(ELightmapType::ForceSurface);
+	return 1;
+}
+)");
+
+		Script.ReplaceInline(TEXT("__COMPONENT_PATH__"), *ComponentPath.ReplaceCharWithEscapedChar(), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_BOX_EXTENT__"), *FormatVectorLiteral(CollisionExtents), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_BOUNDS_ORIGIN__"), *FormatVectorLiteral(BoundsOrigin), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_BOUNDS_EXTENT__"), *FormatVectorLiteral(BoundsExtent), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_BOUNDS_RADIUS__"), *FormatDoubleLiteral(BoundsRadius), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__BOUNDS_TOLERANCE__"), *FormatDoubleLiteral(BoundsTolerance), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GPrimCompProfile, TEXT("BoundsCompat"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GPrimCompProfile, TEXT("int BoundsCompat_CollisionExtents()"), TEXT("collision extents should match configured box extent"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GPrimCompProfile, TEXT("int BoundsCompat_BoundsOrigin()"), TEXT("bounds origin should reflect configured relative location"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GPrimCompProfile, TEXT("int BoundsCompat_BoundsExtent()"), TEXT("bounds extent should match configured box extent"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GPrimCompProfile, TEXT("int BoundsCompat_BoundsRadius()"), TEXT("bounds radius should match box extent radius"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GPrimCompProfile, TEXT("int BoundsCompat_Selectable()"), TEXT("SetbSelectable should update native component immediately"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GPrimCompProfile, TEXT("int BoundsCompat_LightmapType()"), TEXT("SetLightmapType(ForceSurface) should execute without error"), 1);
+
+		// Native-side assertions for mutations done by script
+		TestRunner->TestTrue(TEXT("PrimComp SetbSelectable(true) should update native component"),
+			BoxComponent->bSelectable);
+		TestRunner->TestEqual(TEXT("PrimComp SetLightmapType(ForceSurface) should update native lightmap type"),
+			BoxComponent->GetLightmapType(), ELightmapType::ForceSurface);
+
+		// Cleanup
+		BoxComponent->MarkAsGarbage();
+		HostActor->MarkAsGarbage();
+	}
+};
 
 #endif

@@ -1,18 +1,39 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestEngineHelper.h"
+// ============================================================================
+// AngelscriptScriptFunctionLibraryTests.cpp
+//
+// Script function library binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.FunctionLibraries.Script.FAngelscriptScriptFunctionLibraryTest.*
+//
+// Sections:
+//   GlobalInitContextHotReloadName — hot-reload module name propagation
+//   GlobalInitContext              — direct module name propagation
+//
+// CQTest adaptation notes:
+//   Two IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   Both sections use custom compile/execute patterns with FString return values
+//   via ExecuteValueFunction helper. The original structure is largely preserved
+//   since these tests do not follow the simple "int Entry()" pattern.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGlobalInitContextHotReloadNameFunctionLibraryTest,
-	"Angelscript.TestModule.FunctionLibraries.GlobalInitContextHotReloadName",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Helper utilities (retained from original)
+// ----------------------------------------------------------------------------
 
 namespace AngelscriptTest_Bindings_AngelscriptScriptFunctionLibraryTests_Private
 {
@@ -177,215 +198,181 @@ FString GetOutsideInitModule() { return Script::GetModuleNameOfGlobalVariableBei
 
 using namespace AngelscriptTest_Bindings_AngelscriptScriptFunctionLibraryTests_Private;
 
-bool FAngelscriptGlobalInitContextHotReloadNameFunctionLibraryTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ScriptFunctionLibraryModuleName.ToString());
-	};
+static const FBindingsCoverageProfile GScriptFuncLibProfile{
+	TEXT("ScriptFuncLib"),              // Theme
+	TEXT(""),                           // Variant
+	TEXT("ASScriptFuncLib"),            // ModulePrefix
+	TEXT("ScriptFuncLib"),             // CasePrefix
+	TEXT("ScriptFunctionLibraryBindings"), // LogCategory
+};
 
-	ECompileResult InitialCompileResult = ECompileResult::Error;
-	if (!CompileModuleWithResult(
-			&Engine,
-			ECompileType::Initial,
-			ScriptFunctionLibraryModuleName,
-			ScriptFunctionLibraryFilename,
-			BuildScriptSource(1),
-			InitialCompileResult))
-	{
-		return false;
-	}
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
 
-	int32 InitialVersion = 0;
-	if (!ExecuteIntFunction(&Engine, ScriptFunctionLibraryModuleName, TEXT("int GetVersion()"), InitialVersion))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Script function library global-init test should load the initial module before hot reload"),
-		InitialVersion,
-		1);
-
-	ECompileResult ReloadCompileResult = ECompileResult::Error;
-	if (!CompileModuleWithResult(
-			&Engine,
-			ECompileType::FullReload,
-			ScriptFunctionLibraryModuleName,
-			ScriptFunctionLibraryFilename,
-			BuildScriptSource(2),
-			ReloadCompileResult))
-	{
-		return false;
-	}
-
-	asIScriptModule* Module = GetCompiledModule(*this, Engine);
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	int32 ReloadedVersion = 0;
-	if (!ExecuteIntFunction(&Engine, ScriptFunctionLibraryModuleName, TEXT("int GetVersion()"), ReloadedVersion))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Script function library global-init test should expose the reloaded module version"),
-		ReloadedVersion,
-		2);
-
-	FString PlainNameCapture;
-	FString PlainNamespaceCapture;
-	FString PlainModuleCapture;
-	FString ScopedNameCapture;
-	FString ScopedNamespaceCapture;
-	FString ScopedModuleCapture;
-	FString OutsideInitName;
-	FString OutsideInitNamespace;
-	FString OutsideInitModule;
-
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetPlainNameCapture()"), PlainNameCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetPlainNamespaceCapture()"), PlainNamespaceCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetPlainModuleCapture()"), PlainModuleCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetScopedNameCapture()"), ScopedNameCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetScopedNamespaceCapture()"), ScopedNamespaceCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetScopedModuleCapture()"), ScopedModuleCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetOutsideInitName()"), OutsideInitName);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetOutsideInitNamespace()"), OutsideInitNamespace);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetOutsideInitModule()"), OutsideInitModule);
-
-	const FString ExpectedHotReloadPrefix = ScriptFunctionLibraryModuleName.ToString() + HotReloadMarker;
-
-	bPassed &= TestEqual(
-		TEXT("Plain global variable init should report the current variable name"),
-		PlainNameCapture,
-		TEXT("PlainNameCapture"));
-	bPassed &= TestEqual(
-		TEXT("Plain global variable init should report an empty namespace"),
-		PlainNamespaceCapture,
-		TEXT(""));
-	bPassed &= TestEqual(
-		TEXT("Namespaced global variable init should report the current variable name"),
-		ScopedNameCapture,
-		TEXT("ScopedNameCapture"));
-	bPassed &= TestEqual(
-		TEXT("Namespaced global variable init should report its namespace"),
-		ScopedNamespaceCapture,
-		ScriptFunctionLibraryNamespace);
-	bPassed &= TestEqual(
-		TEXT("Plain and namespaced module captures should agree on the active reload module name"),
-		ScopedModuleCapture,
-		PlainModuleCapture);
-	bPassed &= TestTrue(
-		TEXT("Global init module capture should preserve the hot-reload temporary module suffix"),
-		PlainModuleCapture.StartsWith(ExpectedHotReloadPrefix));
-	bPassed &= TestTrue(
-		TEXT("Global init module capture should keep the explicit user suffix when the reload temporary name is reported"),
-		PlainModuleCapture.Contains(TEXT("_HotReload_42_NEW_")));
-	bPassed &= TestEqual(
-		TEXT("Outside initialization the global-name helper should return an empty string"),
-		OutsideInitName,
-		TEXT(""));
-	bPassed &= TestEqual(
-		TEXT("Outside initialization the namespace helper should return an empty string"),
-		OutsideInitNamespace,
-		TEXT(""));
-	bPassed &= TestEqual(
-		TEXT("Outside initialization the module helper should return an empty string"),
-		OutsideInitModule,
-		TEXT(""));
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGlobalInitContextFunctionLibraryTest,
-	"Angelscript.TestModule.FunctionLibraries.GlobalInitContext",
+TEST_CLASS_WITH_FLAGS(FAngelscriptScriptFunctionLibraryTest,
+	"Angelscript.TestModule.FunctionLibraries.Script",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptGlobalInitContextFunctionLibraryTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	asIScriptModule* Module = nullptr;
-	ASTEST_BUILD_MODULE(
-		Engine,
-		"ASGlobalInitContext_Stable",
-		BuildDirectContextScriptSource(),
-		Module);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	FString PlainNameCapture;
-	FString PlainNamespaceCapture;
-	FString PlainModuleCapture;
-	FString ScopedNameCapture;
-	FString ScopedNamespaceCapture;
-	FString ScopedModuleCapture;
-	FString OutsideInitName;
-	FString OutsideInitNamespace;
-	FString OutsideInitModule;
+	// ====================================================================
+	// Section: GlobalInitContextHotReloadName
+	// ====================================================================
 
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetPlainNameCapture()"), PlainNameCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetPlainNamespaceCapture()"), PlainNamespaceCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetPlainModuleCapture()"), PlainModuleCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetScopedNameCapture()"), ScopedNameCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetScopedNamespaceCapture()"), ScopedNamespaceCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetScopedModuleCapture()"), ScopedModuleCapture);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetOutsideInitName()"), OutsideInitName);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetOutsideInitNamespace()"), OutsideInitNamespace);
-	bPassed &= ExecuteValueFunction(*this, Engine, *Module, TEXT("FString GetOutsideInitModule()"), OutsideInitModule);
+	TEST_METHOD(GlobalInitContextHotReloadName)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	bPassed &= TestEqual(
-		TEXT("Plain global variable init should report the current variable name"),
-		PlainNameCapture,
-		TEXT("PlainNameCapture"));
-	bPassed &= TestEqual(
-		TEXT("Plain global variable init should report an empty namespace"),
-		PlainNamespaceCapture,
-		TEXT(""));
-	bPassed &= TestEqual(
-		TEXT("Plain global variable init should report the direct module name"),
-		PlainModuleCapture,
-		DirectScriptFunctionLibraryModuleName);
-	bPassed &= TestEqual(
-		TEXT("Namespaced global variable init should report the current variable name"),
-		ScopedNameCapture,
-		TEXT("ScopedNameCapture"));
-	bPassed &= TestEqual(
-		TEXT("Namespaced global variable init should report its namespace"),
-		ScopedNamespaceCapture,
-		ScriptFunctionLibraryNamespace);
-	bPassed &= TestEqual(
-		TEXT("Namespaced global variable init should report the direct module name"),
-		ScopedModuleCapture,
-		DirectScriptFunctionLibraryModuleName);
-	bPassed &= TestEqual(
-		TEXT("Plain and namespaced global variable init should agree on the direct module name"),
-		ScopedModuleCapture,
-		PlainModuleCapture);
-	bPassed &= TestEqual(
-		TEXT("Outside initialization the global-name helper should return an empty string"),
-		OutsideInitName,
-		TEXT(""));
-	bPassed &= TestEqual(
-		TEXT("Outside initialization the namespace helper should return an empty string"),
-		OutsideInitNamespace,
-		TEXT(""));
-	bPassed &= TestEqual(
-		TEXT("Outside initialization the module helper should return an empty string"),
-		OutsideInitModule,
-		TEXT(""));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ScriptFunctionLibraryModuleName.ToString());
+		};
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+		ECompileResult InitialCompileResult = ECompileResult::Error;
+		if (!CompileModuleWithResult(
+				&Engine,
+				ECompileType::Initial,
+				ScriptFunctionLibraryModuleName,
+				ScriptFunctionLibraryFilename,
+				BuildScriptSource(1),
+				InitialCompileResult))
+		{
+			return;
+		}
+
+		int32 InitialVersion = 0;
+		if (!ExecuteIntFunction(&Engine, ScriptFunctionLibraryModuleName, TEXT("int GetVersion()"), InitialVersion))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Should load initial module before hot reload"),
+			InitialVersion,
+			1);
+
+		ECompileResult ReloadCompileResult = ECompileResult::Error;
+		if (!CompileModuleWithResult(
+				&Engine,
+				ECompileType::FullReload,
+				ScriptFunctionLibraryModuleName,
+				ScriptFunctionLibraryFilename,
+				BuildScriptSource(2),
+				ReloadCompileResult))
+		{
+			return;
+		}
+
+		asIScriptModule* Module = GetCompiledModule(*TestRunner, Engine);
+		if (Module == nullptr)
+		{
+			return;
+		}
+
+		int32 ReloadedVersion = 0;
+		if (!ExecuteIntFunction(&Engine, ScriptFunctionLibraryModuleName, TEXT("int GetVersion()"), ReloadedVersion))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Should expose the reloaded module version"),
+			ReloadedVersion,
+			2);
+
+		FString PlainNameCapture;
+		FString PlainNamespaceCapture;
+		FString PlainModuleCapture;
+		FString ScopedNameCapture;
+		FString ScopedNamespaceCapture;
+		FString ScopedModuleCapture;
+		FString OutsideInitName;
+		FString OutsideInitNamespace;
+		FString OutsideInitModule;
+
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetPlainNameCapture()"), PlainNameCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetPlainNamespaceCapture()"), PlainNamespaceCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetPlainModuleCapture()"), PlainModuleCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetScopedNameCapture()"), ScopedNameCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetScopedNamespaceCapture()"), ScopedNamespaceCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetScopedModuleCapture()"), ScopedModuleCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetOutsideInitName()"), OutsideInitName);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetOutsideInitNamespace()"), OutsideInitNamespace);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetOutsideInitModule()"), OutsideInitModule);
+
+		const FString ExpectedHotReloadPrefix = ScriptFunctionLibraryModuleName.ToString() + HotReloadMarker;
+
+		TestRunner->TestEqual(TEXT("Plain global init should report variable name"), PlainNameCapture, TEXT("PlainNameCapture"));
+		TestRunner->TestEqual(TEXT("Plain global init should report empty namespace"), PlainNamespaceCapture, TEXT(""));
+		TestRunner->TestEqual(TEXT("Namespaced global init should report variable name"), ScopedNameCapture, TEXT("ScopedNameCapture"));
+		TestRunner->TestEqual(TEXT("Namespaced global init should report its namespace"), ScopedNamespaceCapture, ScriptFunctionLibraryNamespace);
+		TestRunner->TestEqual(TEXT("Plain and namespaced module captures should agree"), ScopedModuleCapture, PlainModuleCapture);
+		TestRunner->TestTrue(TEXT("Module capture should preserve hot-reload suffix"), PlainModuleCapture.StartsWith(ExpectedHotReloadPrefix));
+		TestRunner->TestTrue(TEXT("Module capture should keep explicit user suffix"), PlainModuleCapture.Contains(TEXT("_HotReload_42_NEW_")));
+		TestRunner->TestEqual(TEXT("Outside init global-name helper should be empty"), OutsideInitName, TEXT(""));
+		TestRunner->TestEqual(TEXT("Outside init namespace helper should be empty"), OutsideInitNamespace, TEXT(""));
+		TestRunner->TestEqual(TEXT("Outside init module helper should be empty"), OutsideInitModule, TEXT(""));
+	}
+
+	// ====================================================================
+	// Section: GlobalInitContext
+	// ====================================================================
+
+	TEST_METHOD(GlobalInitContext)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		asIScriptModule* Module = AngelscriptTestSupport::BuildModule(
+			*TestRunner, Engine, "ASGlobalInitContext_Stable", BuildDirectContextScriptSource());
+		if (Module == nullptr) return;
+
+		FString PlainNameCapture;
+		FString PlainNamespaceCapture;
+		FString PlainModuleCapture;
+		FString ScopedNameCapture;
+		FString ScopedNamespaceCapture;
+		FString ScopedModuleCapture;
+		FString OutsideInitName;
+		FString OutsideInitNamespace;
+		FString OutsideInitModule;
+
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetPlainNameCapture()"), PlainNameCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetPlainNamespaceCapture()"), PlainNamespaceCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetPlainModuleCapture()"), PlainModuleCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetScopedNameCapture()"), ScopedNameCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetScopedNamespaceCapture()"), ScopedNamespaceCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetScopedModuleCapture()"), ScopedModuleCapture);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetOutsideInitName()"), OutsideInitName);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetOutsideInitNamespace()"), OutsideInitNamespace);
+		ExecuteValueFunction(*TestRunner, Engine, *Module, TEXT("FString GetOutsideInitModule()"), OutsideInitModule);
+
+		TestRunner->TestEqual(TEXT("Plain global init should report variable name"), PlainNameCapture, TEXT("PlainNameCapture"));
+		TestRunner->TestEqual(TEXT("Plain global init should report empty namespace"), PlainNamespaceCapture, TEXT(""));
+		TestRunner->TestEqual(TEXT("Plain global init should report direct module name"), PlainModuleCapture, DirectScriptFunctionLibraryModuleName);
+		TestRunner->TestEqual(TEXT("Namespaced global init should report variable name"), ScopedNameCapture, TEXT("ScopedNameCapture"));
+		TestRunner->TestEqual(TEXT("Namespaced global init should report its namespace"), ScopedNamespaceCapture, ScriptFunctionLibraryNamespace);
+		TestRunner->TestEqual(TEXT("Namespaced global init should report direct module name"), ScopedModuleCapture, DirectScriptFunctionLibraryModuleName);
+		TestRunner->TestEqual(TEXT("Plain and namespaced should agree on direct module name"), ScopedModuleCapture, PlainModuleCapture);
+		TestRunner->TestEqual(TEXT("Outside init global-name helper should be empty"), OutsideInitName, TEXT(""));
+		TestRunner->TestEqual(TEXT("Outside init namespace helper should be empty"), OutsideInitNamespace, TEXT(""));
+		TestRunner->TestEqual(TEXT("Outside init module helper should be empty"), OutsideInitModule, TEXT(""));
+	}
+};
 
 #endif

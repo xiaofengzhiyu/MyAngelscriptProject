@@ -1,144 +1,80 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+// ============================================================================
+// AngelscriptGASValueBindingsTests.cpp
+//
+// GAS value-type binding null-guard coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.GASValue.FAngelscriptGASValueBindingsTest.*
+//
+// Sections:
+//   GameplayEffectSpecNullDefGuard   — null UGameplayEffect should raise script exception
+//   GameplayTagPropertyMapNullGuards — null Owner / null ASC should raise script exceptions
+//
+// CQTest adaptation notes:
+//   Two IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   Exception tests use shared ExecuteFunctionExpectingScriptException from
+//   AngelscriptBindingsAssertions.h for no-arg void functions.
+//   Parameterised void functions (with &out / UObject args) use
+//   FASGlobalFunctionInvoker with manual context execution for exception capture.
+// ============================================================================
 
-#include "Misc/ScopeExit.h"
-#include "Templates/Function.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+
 #include "UObject/UObjectGlobals.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGameplayEffectSpecNullDefGuardBindingsTest,
-	"Angelscript.TestModule.Bindings.GameplayEffectSpecNullDefGuard",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GGASValueProfile{
+	TEXT("GASValue"),              // Theme
+	TEXT(""),                      // Variant
+	TEXT("ASGASValue"),            // ModulePrefix
+	TEXT("GASValue"),              // CasePrefix
+	TEXT("GASValueBindings"),      // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptGASValueBindingsTest,
+	"Angelscript.TestModule.Bindings.GASValue",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGameplayTagBlueprintPropertyMapInitializeNullGuardsBindingsTest,
-	"Angelscript.TestModule.Bindings.GameplayTagBlueprintPropertyMapInitializeNullGuards",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-namespace AngelscriptTest_Bindings_AngelscriptGASValueBindingsTests_Private
 {
-	static constexpr ANSICHAR GameplayEffectSpecNullDefGuardModuleName[] = "ASGameplayEffectSpecNullDefGuard";
-	static constexpr ANSICHAR GameplayTagBlueprintPropertyMapNullGuardsModuleName[] = "ASGameplayTagBlueprintPropertyMapInitializeNullGuards";
-
-	bool SetArgAddressChecked(
-		FAutomationTestBase& Test,
-		asIScriptContext& Context,
-		asUINT ArgumentIndex,
-		void* Address,
-		const TCHAR* ContextLabel)
+	BEFORE_ALL()
 	{
-		return Test.TestEqual(
-			*FString::Printf(TEXT("%s should bind address argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
-			Context.SetArgAddress(ArgumentIndex, Address),
-			static_cast<int32>(asSUCCESS));
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	bool SetArgObjectChecked(
-		FAutomationTestBase& Test,
-		asIScriptContext& Context,
-		asUINT ArgumentIndex,
-		void* Object,
-		const TCHAR* ContextLabel)
+	AFTER_ALL()
 	{
-		return Test.TestEqual(
-			*FString::Printf(TEXT("%s should bind object argument %u"), ContextLabel, static_cast<uint32>(ArgumentIndex)),
-			Context.SetArgObject(ArgumentIndex, Object),
-			static_cast<int32>(asSUCCESS));
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
 	}
 
-	bool ExecuteFunctionExpectingScriptException(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		asIScriptModule& Module,
-		const FString& FunctionDecl,
-		const TCHAR* ContextLabel,
-		const TCHAR* ExpectedException,
-		TFunctionRef<bool(asIScriptContext&)> BindArguments,
-		FString* OutExceptionString = nullptr)
+	// ====================================================================
+	// Section: GameplayEffectSpecNullDefGuard
+	// ====================================================================
+
+	TEST_METHOD(GameplayEffectSpecNullDefGuard)
 	{
-		asIScriptFunction* Function = GetFunctionByDecl(Test, Module, FunctionDecl);
-		if (Function == nullptr)
-		{
-			return false;
-		}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-		FAngelscriptEngineScope EngineScope(Engine);
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(*FString::Printf(TEXT("%s should create an execution context"), ContextLabel), Context))
-		{
-			return false;
-		}
+		TestRunner->AddExpectedError(TEXT("GameplayEffect was null."), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(TEXT("ASGASValue_EffectSpecNullDef"), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(TEXT("void TriggerNullEffectSpec() | Line 7 | Col 2"), EAutomationExpectedErrorFlags::Contains, 1);
 
-		ON_SCOPE_EXIT
-		{
-			Context->Release();
-		};
-
-		const int PrepareResult = Context->Prepare(Function);
-		if (!Test.TestEqual(
-				*FString::Printf(TEXT("%s should prepare successfully"), ContextLabel),
-				PrepareResult,
-				static_cast<int32>(asSUCCESS)))
-		{
-			return false;
-		}
-
-		if (!BindArguments(*Context))
-		{
-			return false;
-		}
-
-		const int ExecuteResult = Context->Execute();
-		const FString ExceptionString = UTF8_TO_TCHAR(
-			Context->GetExceptionString() != nullptr ? Context->GetExceptionString() : "");
-		const int32 ExceptionLine = Context->GetExceptionLineNumber();
-
-		const bool bThrew = Test.TestEqual(
-			*FString::Printf(TEXT("%s should fail as a script execution exception instead of crashing"), ContextLabel),
-			ExecuteResult,
-			static_cast<int32>(asEXECUTION_EXCEPTION));
-		const bool bHasMessage = Test.TestTrue(
-			*FString::Printf(TEXT("%s should report the expected exception message"), ContextLabel),
-			ExceptionString.Contains(ExpectedException));
-		const bool bHasLine = Test.TestTrue(
-			*FString::Printf(TEXT("%s should report a positive exception line"), ContextLabel),
-			ExceptionLine > 0);
-
-		if (OutExceptionString != nullptr)
-		{
-			*OutExceptionString = ExceptionString;
-		}
-
-		return bThrew && bHasMessage && bHasLine;
-	}
-}
-
-using namespace AngelscriptTest_Bindings_AngelscriptGASValueBindingsTests_Private;
-
-bool FAngelscriptGameplayEffectSpecNullDefGuardBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	AddExpectedError(TEXT("GameplayEffect was null."), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("ASGameplayEffectSpecNullDefGuard"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("void TriggerNullEffectSpec() | Line 7 | Col 2"), EAutomationExpectedErrorFlags::Contains, 1);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASGameplayEffectSpecNullDefGuard"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		GameplayEffectSpecNullDefGuardModuleName,
-		TEXT(R"(
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGASValueProfile, TEXT("EffectSpecNullDef"), TEXT(R"(
 void TriggerNullEffectSpec()
 {
 	TSubclassOf<UGameplayEffect> EmptyEffectClass;
@@ -147,49 +83,32 @@ void TriggerNullEffectSpec()
 	FGameplayEffectSpec Spec(NullEffect, Context, 1.0f);
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		AngelscriptTestBindings::ExecuteFunctionExpectingScriptException(
+			*TestRunner, Engine, M, GGASValueProfile,
+			TEXT("void TriggerNullEffectSpec()"),
+			TEXT("FGameplayEffectSpec null-def constructor should raise exception"),
+			TEXT("GameplayEffect was null."));
 	}
 
-	bPassed = ExecuteFunctionExpectingScriptException(
-		*this,
-		Engine,
-		*Module,
-		TEXT("void TriggerNullEffectSpec()"),
-		TEXT("FGameplayEffectSpec null-def constructor"),
-		TEXT("GameplayEffect was null."),
-		[](asIScriptContext&)
-		{
-			return true;
-		});
+	// ====================================================================
+	// Section: GameplayTagPropertyMapNullGuards
+	// ====================================================================
 
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
-}
-
-bool FAngelscriptGameplayTagBlueprintPropertyMapInitializeNullGuardsBindingsTest::RunTest(const FString& Parameters)
-{
-	AddExpectedError(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null Owner."), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null AbilitySystemComponent."), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("ASGameplayTagBlueprintPropertyMapInitializeNullGuards"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("TriggerNullOwnerAndASC"), EAutomationExpectedErrorFlags::Contains, 0, false);
-	AddExpectedError(TEXT("TriggerNullASC"), EAutomationExpectedErrorFlags::Contains, 0, false);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(GameplayTagPropertyMapNullGuards)
 	{
-		Engine.DiscardModule(TEXT("ASGameplayTagBlueprintPropertyMapInitializeNullGuards"));
-	};
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		GameplayTagBlueprintPropertyMapNullGuardsModuleName,
-		TEXT(R"(
+		TestRunner->AddExpectedError(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null Owner."), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null AbilitySystemComponent."), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("ASGASValue_TagPropMapNullGuards"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("TriggerNullOwnerAndASC"), EAutomationExpectedErrorFlags::Contains, 0, false);
+		TestRunner->AddExpectedError(TEXT("TriggerNullASC"), EAutomationExpectedErrorFlags::Contains, 0, false);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGASValueProfile, TEXT("TagPropMapNullGuards"), TEXT(R"(
 void TriggerNullOwnerAndASC(int& OutStep)
 {
 	OutStep = 1;
@@ -213,80 +132,69 @@ void TriggerNullASC(UObject Owner, int& OutStep)
 	OutStep = 3;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
-	}
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-	int32 NullOwnerStep = 0;
-	FString NullOwnerException;
-	if (!ExecuteFunctionExpectingScriptException(
-			*this,
-			Engine,
-			*Module,
-			TEXT("void TriggerNullOwnerAndASC(int& OutStep)"),
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize(null, null)"),
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null Owner."),
-			[this, &NullOwnerStep](asIScriptContext& Context)
+		// --- Test null Owner and null ASC ---
+		{
+			int32 NullOwnerStep = 0;
+			FASGlobalFunctionInvoker NullOwnerInvoker(*TestRunner, Engine, M,
+				TEXT("void TriggerNullOwnerAndASC(int& OutStep)"));
+			if (!NullOwnerInvoker.IsValid()) return;
+
+			NullOwnerInvoker.AddArgRef(NullOwnerStep);
+
+			// Expect exception — call via raw context
+			asIScriptContext* Ctx = NullOwnerInvoker.GetContext();
+			const int ExecResult = Ctx->Execute();
+			const FString ExceptionString = UTF8_TO_TCHAR(
+				Ctx->GetExceptionString() != nullptr ? Ctx->GetExceptionString() : "");
+
+			TestRunner->TestEqual(
+				TEXT("GameplayTagBlueprintPropertyMap.Initialize(null, null) should raise exception"),
+				ExecResult, static_cast<int32>(asEXECUTION_EXCEPTION));
+			TestRunner->TestEqual(
+				TEXT("GameplayTagBlueprintPropertyMap.Initialize(null, null) should surface the owner guard message"),
+				ExceptionString,
+				FString(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null Owner.")));
+			TestRunner->TestEqual(
+				TEXT("GameplayTagBlueprintPropertyMap.Initialize(null, null) should stop before post-initialize code runs"),
+				NullOwnerStep, 1);
+		}
+
+		// --- Test valid Owner with null ASC ---
+		{
+			UObject* Owner = GetTransientPackage();
+			if (!TestRunner->TestNotNull(TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should have a non-null owner fixture"), Owner))
 			{
-				return SetArgAddressChecked(*this, Context, 0, &NullOwnerStep, TEXT("TriggerNullOwnerAndASC"));
-			},
-			&NullOwnerException))
-	{
-		return false;
-	}
+				return;
+			}
 
-	if (!TestEqual(
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize(null, null) should surface the owner guard message"),
-			NullOwnerException,
-			FString(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null Owner.")))
-		|| !TestEqual(
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize(null, null) should stop before post-initialize code runs"),
-			NullOwnerStep,
-			1))
-	{
-		return false;
-	}
+			int32 NullASCStep = 0;
+			FASGlobalFunctionInvoker NullASCInvoker(*TestRunner, Engine, M,
+				TEXT("void TriggerNullASC(UObject Owner, int& OutStep)"));
+			if (!NullASCInvoker.IsValid()) return;
 
-	UObject* Owner = GetTransientPackage();
-	if (!TestNotNull(TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should have a non-null owner fixture"), Owner))
-	{
-		return false;
-	}
+			NullASCInvoker.AddArgObject(Owner);
+			NullASCInvoker.AddArgRef(NullASCStep);
 
-	int32 NullASCStep = 0;
-	FString NullASCException;
-	if (!ExecuteFunctionExpectingScriptException(
-			*this,
-			Engine,
-			*Module,
-			TEXT("void TriggerNullASC(UObject Owner, int& OutStep)"),
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null)"),
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null AbilitySystemComponent."),
-			[this, Owner, &NullASCStep](asIScriptContext& Context)
-			{
-				return SetArgObjectChecked(*this, Context, 0, Owner, TEXT("TriggerNullASC"))
-					&& SetArgAddressChecked(*this, Context, 1, &NullASCStep, TEXT("TriggerNullASC"));
-			},
-			&NullASCException))
-	{
-		return false;
-	}
+			asIScriptContext* Ctx = NullASCInvoker.GetContext();
+			const int ExecResult = Ctx->Execute();
+			const FString ExceptionString = UTF8_TO_TCHAR(
+				Ctx->GetExceptionString() != nullptr ? Ctx->GetExceptionString() : "");
 
-	if (!TestEqual(
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should surface the ASC guard message"),
-			NullASCException,
-			FString(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null AbilitySystemComponent.")))
-		|| !TestEqual(
-			TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should stop before ApplyCurrentTags runs"),
-			NullASCStep,
-			1))
-	{
-		return false;
+			TestRunner->TestEqual(
+				TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should raise exception"),
+				ExecResult, static_cast<int32>(asEXECUTION_EXCEPTION));
+			TestRunner->TestEqual(
+				TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should surface the ASC guard message"),
+				ExceptionString,
+				FString(TEXT("GameplayTagBlueprintPropertyMap.Initialize received a null AbilitySystemComponent.")));
+			TestRunner->TestEqual(
+				TEXT("GameplayTagBlueprintPropertyMap.Initialize(this, null) should stop before ApplyCurrentTags runs"),
+				NullASCStep, 1);
+		}
 	}
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+};
 
 #endif

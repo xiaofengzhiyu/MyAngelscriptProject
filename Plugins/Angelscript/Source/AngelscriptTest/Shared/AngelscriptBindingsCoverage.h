@@ -3,14 +3,14 @@
 #include "CoreMinimal.h"
 
 /**
- * AngelscriptBindingsCoverage — shared infrastructure for the "Bindings
- * Coverage Section" pattern across `AngelscriptTest/Bindings/`.
+ * AngelscriptBindingsCoverage — shared infrastructure for the "Coverage
+ * Section" test pattern used across `AngelscriptTest/`.
  *
  * Goal: replace the legacy "single big `int Entry()` + `if (...) return N;`"
  * test style with parameterised, self-describing per-case assertions that
- * route through `FASGlobalFunctionInvoker`. See the main plan
- * `Documents/Plans/Plan_BindingsTestSuiteRefactor.md` and the example helpers
- * in `AngelscriptBindingsExampleSection.h` for the canonical usage.
+ * route through `FASGlobalFunctionInvoker`. See `Template_CQTest.cpp` and
+ * the example helpers in `AngelscriptBindingsExampleSection.h` for the
+ * canonical usage.
  *
  * This header is intentionally tiny and dependency-free — it only carries the
  * shared profile/value descriptors. The mechanical bits live in the sibling
@@ -19,10 +19,8 @@
  *   - `AngelscriptBindingsAssertions.h`     (ExpectGlobalInt etc.)
  *
  * NOTE on namespacing: every helper is exposed in the `AngelscriptTestBindings`
- * namespace (a shorter-than-`AngelscriptTest::Bindings::Shared` form so that
- * the `using namespace` in test files stays manageable). The plan documents
- * the conceptual `AngelscriptTest::Bindings::Shared` namespace; the actual
- * symbol is `AngelscriptTestBindings`.
+ * namespace so that `using namespace` in test files stays manageable.
+ * The actual symbol is `AngelscriptTestBindings`.
  */
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -31,8 +29,7 @@ namespace AngelscriptTestBindings
 {
 	/**
 	 * Identifies one coverage execution for a single Automation ID. A test
-	 * file declares one (or more, see double-Profile usage in
-	 * `SubPlan_FileAndDelegate.md`) static instances and threads it through
+	 * file declares one (or more) static instances and threads it through
 	 * every section runner / assertion helper. The profile drives:
 	 *
 	 *   - the AS module name suffix (`<ModulePrefix>_<SectionName>`)

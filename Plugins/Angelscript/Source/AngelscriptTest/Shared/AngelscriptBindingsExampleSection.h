@@ -9,8 +9,8 @@
 #include "AngelscriptBindingsAssertions.h"
 
 /**
- * AngelscriptBindingsExampleSection — copy-paste starting point for any
- * SubPlan executor working through `Plan_BindingsTestSuiteRefactor`.
+ * AngelscriptBindingsExampleSection — copy-paste starting point for writing
+ * Coverage Section tests using the CQTest pattern.
  *
  * This file is *intentionally* tiny — it exists to demonstrate the canonical
  * shape of a Coverage Section: declare the profile, wrap the AS source in a

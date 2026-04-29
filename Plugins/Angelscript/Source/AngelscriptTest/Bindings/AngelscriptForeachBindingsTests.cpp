@@ -13,7 +13,7 @@
 //   - Angelscript.TestModule.Bindings.Container.ForeachConstRefPreservesOriginal
 //
 // Refactored from AngelscriptContainerBindingsTests.cpp using the
-// Bindings/Shared/ Coverage Section base layer.
+// Shared/ Coverage Section base layer.
 // ============================================================================
 
 #include "Shared/AngelscriptBindingsCoverage.h"

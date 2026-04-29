@@ -1,22 +1,57 @@
+// ============================================================================
+// AngelscriptAssetManagerFunctionLibraryTests.cpp
+//
+// AssetManager function library binding coverage — CQTest refactor.
+// Automation ID:
+//   Angelscript.TestModule.FunctionLibraries.AssetManager.FAngelscriptAssetManagerFunctionLibraryTest.*
+//
+// Sections:
+//   NullAndInvalidCallbackGuards — null-manager guards and callback dispatch
+//
+// CQTest adaptation notes:
+//   This test compiles annotated UCLASS modules and exercises native C++
+//   UAssetManagerMixinLibrary null-guard paths.  Because the AS source
+//   defines UCLASS/UPROPERTY/UFUNCTION types (not plain global functions),
+//   module lifecycle is managed manually via CompileAnnotatedModuleFromMemory
+//   and DiscardModule rather than through FCoverageModuleScope.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestEngineHelper.h"
-#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "FunctionLibraries/UAssetManagerMixinLibrary.h"
 
 #include "Engine/AssetManager.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-namespace AngelscriptTest_Bindings_AngelscriptAssetManagerFunctionLibraryTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GAssetManagerProfile{
+	TEXT("AssetManager"),          // Theme
+	TEXT(""),                      // Variant
+	TEXT("ASAssetMgr"),            // ModulePrefix
+	TEXT("AssetMgr"),              // CasePrefix
+	TEXT("AssetManagerBindings"),  // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace AngelscriptAssetManagerTestHelpers
 {
-	static constexpr ANSICHAR AssetManagerGuardModuleName[] = "ASAssetManagerNullAndInvalidCallbackGuards";
-	static constexpr TCHAR AssetManagerGuardFilename[] = TEXT("ASAssetManagerNullAndInvalidCallbackGuards.as");
 	static constexpr TCHAR ValidReceiverClassName[] = TEXT("UAssetManagerValidScanReceiver");
 	static constexpr TCHAR MissingReceiverClassName[] = TEXT("UAssetManagerMissingScanReceiver");
 	static constexpr TCHAR CallbackCountPropertyName[] = TEXT("CallbackCount");
@@ -41,23 +76,42 @@ namespace AngelscriptTest_Bindings_AngelscriptAssetManagerFunctionLibraryTests_P
 	}
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptAssetManagerFunctionLibraryTests_Private;
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptAssetManagerNullAndInvalidCallbackGuardsTest,
-	"Angelscript.TestModule.FunctionLibraries.AssetManagerNullAndInvalidCallbackGuards",
+TEST_CLASS_WITH_FLAGS(FAngelscriptAssetManagerFunctionLibraryTest,
+	"Angelscript.TestModule.FunctionLibraries.AssetManager",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptAssetManagerNullAndInvalidCallbackGuardsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(TEXT("ASAssetManagerNullAndInvalidCallbackGuards"));
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	const FString ReceiverScript = TEXT(R"AS(
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: NullAndInvalidCallbackGuards
+	// ====================================================================
+
+	TEST_METHOD(NullAndInvalidCallbackGuards)
+	{
+		using namespace AngelscriptAssetManagerTestHelpers;
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(TEXT("ASAssetManagerNullAndInvalidCallbackGuards"));
+		};
+
+		const FString ReceiverScript = TEXT(R"AS(
 UCLASS()
 class UAssetManagerValidScanReceiver : UObject
 {
@@ -85,136 +139,133 @@ class UAssetManagerMissingScanReceiver : UObject
 }
 )AS");
 
-	if (!TestTrue(
-			TEXT("AssetManager guard test should compile the callback receiver module"),
-			CompileAnnotatedModuleFromMemory(&Engine, TEXT("ASAssetManagerNullAndInvalidCallbackGuards"), AssetManagerGuardFilename, ReceiverScript)))
-	{
-		return false;
+		if (!TestRunner->TestTrue(
+				TEXT("AssetManager guard test should compile the callback receiver module"),
+				CompileAnnotatedModuleFromMemory(&Engine, TEXT("ASAssetManagerNullAndInvalidCallbackGuards"), TEXT("ASAssetManagerNullAndInvalidCallbackGuards.as"), ReceiverScript)))
+		{
+			return;
+		}
+
+		UClass* ValidReceiverClass = FindGeneratedClass(&Engine, ValidReceiverClassName);
+		UClass* MissingReceiverClass = FindGeneratedClass(&Engine, MissingReceiverClassName);
+		if (!TestRunner->TestNotNull(TEXT("AssetManager guard test should generate the valid callback receiver class"), ValidReceiverClass)
+			|| !TestRunner->TestNotNull(TEXT("AssetManager guard test should generate the missing-callback receiver class"), MissingReceiverClass))
+		{
+			return;
+		}
+
+		UObject* ValidReceiver = NewObject<UObject>(GetTransientPackage(), ValidReceiverClass);
+		UObject* MissingReceiver = NewObject<UObject>(GetTransientPackage(), MissingReceiverClass);
+		if (!TestRunner->TestNotNull(TEXT("AssetManager guard test should instantiate the valid callback receiver"), ValidReceiver)
+			|| !TestRunner->TestNotNull(TEXT("AssetManager guard test should instantiate the missing-callback receiver"), MissingReceiver))
+		{
+			return;
+		}
+
+		UAssetManager* AssetManager = UAssetManager::GetIfInitialized();
+		if (!TestRunner->TestNotNull(TEXT("AssetManager guard test should resolve an initialized asset manager"), AssetManager))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestTrue(TEXT("AssetManager guard test requires the asset manager initial scan to be complete"), AssetManager->HasInitialScanCompleted()))
+		{
+			return;
+		}
+
+		const FPrimaryAssetId DummyPrimaryAssetId(TEXT("MissingType"), TEXT("MissingName"));
+		const FPrimaryAssetType DummyPrimaryAssetType(TEXT("MissingType"));
+
+		FAssetData AssetData;
+		TArray<FAssetData> AssetDataList;
+		AssetDataList.AddDefaulted();
+		TArray<FPrimaryAssetId> PrimaryAssetIdList;
+		PrimaryAssetIdList.Add(DummyPrimaryAssetId);
+		FPrimaryAssetTypeInfo AssetTypeInfo(FName(TEXT("DirtyType")), UObject::StaticClass(), false, false);
+		TArray<FPrimaryAssetTypeInfo> AssetTypeInfoList;
+		AssetTypeInfoList.Add(FPrimaryAssetTypeInfo(FName(TEXT("DirtyListType")), UObject::StaticClass(), false, false));
+		const FPrimaryAssetRules DefaultRules;
+		const FPrimaryAssetTypeInfo DefaultTypeInfo;
+
+		if (!TestRunner->TestFalse(
+				TEXT("Null asset manager should fail GetPrimaryAssetData"),
+				UAssetManagerMixinLibrary::GetPrimaryAssetData(nullptr, DummyPrimaryAssetId, AssetData))
+			|| !TestRunner->TestFalse(
+				TEXT("Null asset manager should fail GetPrimaryAssetDataList"),
+				UAssetManagerMixinLibrary::GetPrimaryAssetDataList(nullptr, DummyPrimaryAssetType, AssetDataList))
+			|| !TestRunner->TestNull(
+				TEXT("Null asset manager should return null from GetPrimaryAssetObject"),
+				UAssetManagerMixinLibrary::GetPrimaryAssetObject(nullptr, DummyPrimaryAssetId))
+			|| !TestRunner->TestFalse(
+				TEXT("Null asset manager should return an invalid primary asset id for objects"),
+				UAssetManagerMixinLibrary::GetPrimaryAssetIdForObject(nullptr, ValidReceiver).IsValid())
+			|| !TestRunner->TestFalse(
+				TEXT("Null asset manager should fail GetPrimaryAssetIdList"),
+				UAssetManagerMixinLibrary::GetPrimaryAssetIdList(nullptr, DummyPrimaryAssetType, PrimaryAssetIdList))
+			|| !TestRunner->TestFalse(
+				TEXT("Null asset manager should fail GetPrimaryAssetTypeInfo"),
+				UAssetManagerMixinLibrary::GetPrimaryAssetTypeInfo(nullptr, DummyPrimaryAssetType, AssetTypeInfo)))
+		{
+			return;
+		}
+
+		UAssetManagerMixinLibrary::GetPrimaryAssetTypeInfoList(nullptr, AssetTypeInfoList);
+		const FPrimaryAssetRules Rules = UAssetManagerMixinLibrary::GetPrimaryAssetRules(nullptr, DummyPrimaryAssetId);
+
+		if (!TestRunner->TestFalse(TEXT("Null asset manager should leave asset data invalid"), AssetData.IsValid())
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should clear the asset data list"), AssetDataList.Num(), 0)
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should clear the primary asset id list"), PrimaryAssetIdList.Num(), 0)
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should reset the primary asset type info type"), AssetTypeInfo.PrimaryAssetType, DefaultTypeInfo.PrimaryAssetType)
+			|| !TestRunner->TestTrue(TEXT("Null asset manager should reset the primary asset type info base class to UObject"), AssetTypeInfo.AssetBaseClassLoaded.Get() == UObject::StaticClass())
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should reset the primary asset type info dynamic flag"), AssetTypeInfo.bIsDynamicAsset, DefaultTypeInfo.bIsDynamicAsset)
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should reset the primary asset type info asset count"), AssetTypeInfo.NumberOfAssets, DefaultTypeInfo.NumberOfAssets)
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should reset the primary asset type info scan paths"), AssetTypeInfo.AssetScanPaths.Num(), DefaultTypeInfo.AssetScanPaths.Num())
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should reset the primary asset type info rules"), AssetTypeInfo.Rules, DefaultRules)
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should clear the asset type info list"), AssetTypeInfoList.Num(), 0)
+			|| !TestRunner->TestEqual(TEXT("Null asset manager should return default primary asset rules"), Rules, DefaultRules))
+		{
+			return;
+		}
+
+		int32 ValidCallbackCount = INDEX_NONE;
+		int32 MissingCallbackCount = INDEX_NONE;
+		if (!ReadIntPropertyChecked(*TestRunner, *ValidReceiver, CallbackCountPropertyName, TEXT("Valid asset manager receiver"), ValidCallbackCount)
+			|| !ReadIntPropertyChecked(*TestRunner, *MissingReceiver, CallbackCountPropertyName, TEXT("Missing asset manager receiver"), MissingCallbackCount))
+		{
+			return;
+		}
+
+		UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(nullptr, ValidReceiver, TEXT("OnScanComplete"));
+		UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, nullptr, TEXT("OnScanComplete"));
+		UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, MissingReceiver, TEXT("OnScanComplete"));
+		UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, ValidReceiver, TEXT("DoesNotExist"));
+
+		if (!ReadIntPropertyChecked(*TestRunner, *ValidReceiver, CallbackCountPropertyName, TEXT("Valid asset manager receiver after invalid callbacks"), ValidCallbackCount)
+			|| !ReadIntPropertyChecked(*TestRunner, *MissingReceiver, CallbackCountPropertyName, TEXT("Missing asset manager receiver after invalid callbacks"), MissingCallbackCount))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestEqual(
+				TEXT("Invalid asset manager callback inputs should not trigger the valid receiver"),
+				ValidCallbackCount,
+				0)
+			|| !TestRunner->TestEqual(
+				TEXT("Invalid asset manager callback inputs should not trigger the missing-callback receiver"),
+				MissingCallbackCount,
+				0))
+		{
+			return;
+		}
+
+		UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, ValidReceiver, TEXT("OnScanComplete"));
+		if (!ReadIntPropertyChecked(*TestRunner, *ValidReceiver, CallbackCountPropertyName, TEXT("Valid asset manager receiver after baseline callback"), ValidCallbackCount))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Valid asset manager callback path should still trigger exactly once"), ValidCallbackCount, 1);
 	}
-
-	UClass* ValidReceiverClass = FindGeneratedClass(&Engine, ValidReceiverClassName);
-	UClass* MissingReceiverClass = FindGeneratedClass(&Engine, MissingReceiverClassName);
-	if (!TestNotNull(TEXT("AssetManager guard test should generate the valid callback receiver class"), ValidReceiverClass)
-		|| !TestNotNull(TEXT("AssetManager guard test should generate the missing-callback receiver class"), MissingReceiverClass))
-	{
-		return false;
-	}
-
-	UObject* ValidReceiver = NewObject<UObject>(GetTransientPackage(), ValidReceiverClass);
-	UObject* MissingReceiver = NewObject<UObject>(GetTransientPackage(), MissingReceiverClass);
-	if (!TestNotNull(TEXT("AssetManager guard test should instantiate the valid callback receiver"), ValidReceiver)
-		|| !TestNotNull(TEXT("AssetManager guard test should instantiate the missing-callback receiver"), MissingReceiver))
-	{
-		return false;
-	}
-
-	UAssetManager* AssetManager = UAssetManager::GetIfInitialized();
-	if (!TestNotNull(TEXT("AssetManager guard test should resolve an initialized asset manager"), AssetManager))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("AssetManager guard test requires the asset manager initial scan to be complete"), AssetManager->HasInitialScanCompleted()))
-	{
-		return false;
-	}
-
-	const FPrimaryAssetId DummyPrimaryAssetId(TEXT("MissingType"), TEXT("MissingName"));
-	const FPrimaryAssetType DummyPrimaryAssetType(TEXT("MissingType"));
-
-	FAssetData AssetData;
-	TArray<FAssetData> AssetDataList;
-	AssetDataList.AddDefaulted();
-	TArray<FPrimaryAssetId> PrimaryAssetIdList;
-	PrimaryAssetIdList.Add(DummyPrimaryAssetId);
-	FPrimaryAssetTypeInfo AssetTypeInfo(FName(TEXT("DirtyType")), UObject::StaticClass(), false, false);
-	TArray<FPrimaryAssetTypeInfo> AssetTypeInfoList;
-	AssetTypeInfoList.Add(FPrimaryAssetTypeInfo(FName(TEXT("DirtyListType")), UObject::StaticClass(), false, false));
-	const FPrimaryAssetRules DefaultRules;
-	const FPrimaryAssetTypeInfo DefaultTypeInfo;
-
-	if (!TestFalse(
-			TEXT("Null asset manager should fail GetPrimaryAssetData"),
-			UAssetManagerMixinLibrary::GetPrimaryAssetData(nullptr, DummyPrimaryAssetId, AssetData))
-		|| !TestFalse(
-			TEXT("Null asset manager should fail GetPrimaryAssetDataList"),
-			UAssetManagerMixinLibrary::GetPrimaryAssetDataList(nullptr, DummyPrimaryAssetType, AssetDataList))
-		|| !TestNull(
-			TEXT("Null asset manager should return null from GetPrimaryAssetObject"),
-			UAssetManagerMixinLibrary::GetPrimaryAssetObject(nullptr, DummyPrimaryAssetId))
-		|| !TestFalse(
-			TEXT("Null asset manager should return an invalid primary asset id for objects"),
-			UAssetManagerMixinLibrary::GetPrimaryAssetIdForObject(nullptr, ValidReceiver).IsValid())
-		|| !TestFalse(
-			TEXT("Null asset manager should fail GetPrimaryAssetIdList"),
-			UAssetManagerMixinLibrary::GetPrimaryAssetIdList(nullptr, DummyPrimaryAssetType, PrimaryAssetIdList))
-		|| !TestFalse(
-			TEXT("Null asset manager should fail GetPrimaryAssetTypeInfo"),
-			UAssetManagerMixinLibrary::GetPrimaryAssetTypeInfo(nullptr, DummyPrimaryAssetType, AssetTypeInfo)))
-	{
-		return false;
-	}
-
-	UAssetManagerMixinLibrary::GetPrimaryAssetTypeInfoList(nullptr, AssetTypeInfoList);
-	const FPrimaryAssetRules Rules = UAssetManagerMixinLibrary::GetPrimaryAssetRules(nullptr, DummyPrimaryAssetId);
-
-	if (!TestFalse(TEXT("Null asset manager should leave asset data invalid"), AssetData.IsValid())
-		|| !TestEqual(TEXT("Null asset manager should clear the asset data list"), AssetDataList.Num(), 0)
-		|| !TestEqual(TEXT("Null asset manager should clear the primary asset id list"), PrimaryAssetIdList.Num(), 0)
-		|| !TestEqual(TEXT("Null asset manager should reset the primary asset type info type"), AssetTypeInfo.PrimaryAssetType, DefaultTypeInfo.PrimaryAssetType)
-		|| !TestTrue(TEXT("Null asset manager should reset the primary asset type info base class to UObject"), AssetTypeInfo.AssetBaseClassLoaded.Get() == UObject::StaticClass())
-		|| !TestEqual(TEXT("Null asset manager should reset the primary asset type info dynamic flag"), AssetTypeInfo.bIsDynamicAsset, DefaultTypeInfo.bIsDynamicAsset)
-		|| !TestEqual(TEXT("Null asset manager should reset the primary asset type info asset count"), AssetTypeInfo.NumberOfAssets, DefaultTypeInfo.NumberOfAssets)
-		|| !TestEqual(TEXT("Null asset manager should reset the primary asset type info scan paths"), AssetTypeInfo.AssetScanPaths.Num(), DefaultTypeInfo.AssetScanPaths.Num())
-		|| !TestEqual(TEXT("Null asset manager should reset the primary asset type info rules"), AssetTypeInfo.Rules, DefaultRules)
-		|| !TestEqual(TEXT("Null asset manager should clear the asset type info list"), AssetTypeInfoList.Num(), 0)
-		|| !TestEqual(TEXT("Null asset manager should return default primary asset rules"), Rules, DefaultRules))
-	{
-		return false;
-	}
-
-	int32 ValidCallbackCount = INDEX_NONE;
-	int32 MissingCallbackCount = INDEX_NONE;
-	if (!ReadIntPropertyChecked(*this, *ValidReceiver, CallbackCountPropertyName, TEXT("Valid asset manager receiver"), ValidCallbackCount)
-		|| !ReadIntPropertyChecked(*this, *MissingReceiver, CallbackCountPropertyName, TEXT("Missing asset manager receiver"), MissingCallbackCount))
-	{
-		return false;
-	}
-
-	UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(nullptr, ValidReceiver, TEXT("OnScanComplete"));
-	UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, nullptr, TEXT("OnScanComplete"));
-	UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, MissingReceiver, TEXT("OnScanComplete"));
-	UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, ValidReceiver, TEXT("DoesNotExist"));
-
-	if (!ReadIntPropertyChecked(*this, *ValidReceiver, CallbackCountPropertyName, TEXT("Valid asset manager receiver after invalid callbacks"), ValidCallbackCount)
-		|| !ReadIntPropertyChecked(*this, *MissingReceiver, CallbackCountPropertyName, TEXT("Missing asset manager receiver after invalid callbacks"), MissingCallbackCount))
-	{
-		return false;
-	}
-
-	if (!TestEqual(
-			TEXT("Invalid asset manager callback inputs should not trigger the valid receiver"),
-			ValidCallbackCount,
-			0)
-		|| !TestEqual(
-			TEXT("Invalid asset manager callback inputs should not trigger the missing-callback receiver"),
-			MissingCallbackCount,
-			0))
-	{
-		return false;
-	}
-
-	UAssetManagerMixinLibrary::CallOrRegister_OnCompletedInitialScan(AssetManager, ValidReceiver, TEXT("OnScanComplete"));
-	if (!ReadIntPropertyChecked(*this, *ValidReceiver, CallbackCountPropertyName, TEXT("Valid asset manager receiver after baseline callback"), ValidCallbackCount))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Valid asset manager callback path should still trigger exactly once"), ValidCallbackCount, 1);
-	
-	ASTEST_END_SHARE_CLEAN
-
-	return true;
-}
+};
 
 #endif

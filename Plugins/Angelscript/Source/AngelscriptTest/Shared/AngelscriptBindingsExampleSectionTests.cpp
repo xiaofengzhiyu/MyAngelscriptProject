@@ -1,15 +1,15 @@
 #include "AngelscriptBindingsExampleSection.h"
 
-#include "Shared/AngelscriptTestEngineHelper.h"
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+#include "AngelscriptTestEngineHelper.h"
+#include "AngelscriptTestUtilities.h"
+#include "AngelscriptTestMacros.h"
 
 #include "Misc/ScopeExit.h"
 
 /**
  * AngelscriptBindingsExampleSectionTests — registers a single Automation ID
  * that drives `RunBindingsExampleSection` end-to-end. This is the
- * "self-test" for the Bindings/Shared/ base layer: if this test stays
+ * "self-test" for the Coverage Section base layer: if this test stays
  * green across the rest of the refactor, the base layer is sound.
  *
  * The Automation ID is intentionally namespaced under

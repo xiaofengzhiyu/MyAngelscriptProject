@@ -1,11 +1,29 @@
-#include "Shared/AngelscriptFunctionalTestUtils.h"
+// ============================================================================
+// AngelscriptSoftReferenceFunctionLibraryTests.cpp
+//
+// Soft reference async delegate binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.FunctionLibraries.SoftReference.FAngelscriptSoftReferenceFunctionLibraryTest.*
+//
+// Sections:
+//   AsyncDelegates — object/class success/failure async load callbacks
+//
+// CQTest adaptation notes:
+//   Single IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into TEST_CLASS.
+//   Async harness pattern preserved with object instantiation and pumped callbacks.
+//   Uses `*TestRunner` instead of `this` for assertions.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 
 #include "Async/TaskGraphInterfaces.h"
 #include "Containers/Ticker.h"
 #include "GameFramework/Actor.h"
 #include "HAL/PlatformProcess.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/Guid.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UObjectGlobals.h"
@@ -15,9 +33,26 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 using namespace AngelscriptFunctionalTestUtils;
 
-namespace AngelscriptTest_Bindings_AngelscriptSoftReferenceFunctionLibraryTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GSoftRefProfile{
+	TEXT("SoftRef"),               // Theme
+	TEXT(""),                      // Variant
+	TEXT("ASSoftRef"),             // ModulePrefix
+	TEXT("SoftRef"),               // CasePrefix
+	TEXT("SoftReferenceBindings"), // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace
 {
 	static const FName SoftReferenceAsyncModuleName(TEXT("ASoftReferenceAsyncDelegates"));
 	static const FString SoftReferenceAsyncFilename(TEXT("SoftReferenceAsyncDelegates.as"));
@@ -152,31 +187,47 @@ namespace AngelscriptTest_Bindings_AngelscriptSoftReferenceFunctionLibraryTests_
 	}
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptSoftReferenceFunctionLibraryTests_Private;
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptSoftReferenceAsyncDelegatesTest,
-	"Angelscript.TestModule.FunctionLibraries.SoftReferenceAsyncDelegates",
+TEST_CLASS_WITH_FLAGS(FAngelscriptSoftReferenceFunctionLibraryTest,
+	"Angelscript.TestModule.FunctionLibraries.SoftReference",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptSoftReferenceAsyncDelegatesTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(*SoftReferenceAsyncModuleName.ToString());
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	const FString SuccessClassPath = AActor::StaticClass()->GetPathName();
-	const FString MissingObjectName = FString::Printf(TEXT("MissingTexture_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits));
-	const FString MissingClassPackageName = FString::Printf(TEXT("MissingScriptPackage_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits));
-	const FString MissingClassName = FString::Printf(TEXT("MissingActor_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits));
-	const FString MissingObjectPath = FString::Printf(TEXT("/Engine/EngineResources/%s.%s"), *MissingObjectName, *MissingObjectName);
-	const FString MissingClassPath = FString::Printf(TEXT("/Script/%s.%s"), *MissingClassPackageName, *MissingClassName);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	const FString ScriptSource = FString::Printf(
-		TEXT(R"AS(
+	// ====================================================================
+	// Section: AsyncDelegates
+	// ====================================================================
+
+	TEST_METHOD(AsyncDelegates)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*SoftReferenceAsyncModuleName.ToString());
+		};
+
+		const FString SuccessClassPath = AActor::StaticClass()->GetPathName();
+		const FString MissingObjectName = FString::Printf(TEXT("MissingTexture_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits));
+		const FString MissingClassPackageName = FString::Printf(TEXT("MissingScriptPackage_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits));
+		const FString MissingClassName = FString::Printf(TEXT("MissingActor_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits));
+		const FString MissingObjectPath = FString::Printf(TEXT("/Engine/EngineResources/%s.%s"), *MissingObjectName, *MissingObjectName);
+		const FString MissingClassPath = FString::Printf(TEXT("/Script/%s.%s"), *MissingClassPackageName, *MissingClassName);
+
+		const FString ScriptSource = FString::Printf(
+			TEXT(R"AS(
 UCLASS()
 class USoftReferenceAsyncScriptHarness : UObject
 {
@@ -275,124 +326,122 @@ class USoftReferenceAsyncScriptHarness : UObject
 	}
 }
 )AS"),
-		*SuccessTexturePath,
-		*MissingObjectPath,
-		*SuccessClassPath,
-		*MissingClassPath);
+			*SuccessTexturePath,
+			*MissingObjectPath,
+			*SuccessClassPath,
+			*MissingClassPath);
 
-	UClass* ScriptHarnessClass = CompileScriptModule(
-		*this,
-		Engine,
-		SoftReferenceAsyncModuleName,
-		SoftReferenceAsyncFilename,
-		ScriptSource,
-		SoftReferenceAsyncClassName);
-	if (ScriptHarnessClass == nullptr)
-	{
-		return false;
-	}
-
-	if (!VerifyObjectCallbackSignature(*this, ScriptHarnessClass, TEXT("HandleObjectSuccess"), TEXT("LoadedObject"), UObject::StaticClass())
-		|| !VerifyObjectCallbackSignature(*this, ScriptHarnessClass, TEXT("HandleObjectFailure"), TEXT("LoadedObject"), UObject::StaticClass())
-		|| !VerifyClassCallbackSignature(*this, ScriptHarnessClass, TEXT("HandleClassSuccess"), TEXT("LoadedClass"), UObject::StaticClass())
-		|| !VerifyClassCallbackSignature(*this, ScriptHarnessClass, TEXT("HandleClassFailure"), TEXT("LoadedClass"), UObject::StaticClass()))
-	{
-		return false;
-	}
-
-	UObject* ScriptHarness = NewObject<UObject>(GetTransientPackage(), ScriptHarnessClass, TEXT("SoftReferenceAsyncHarness"));
-	if (!TestNotNull(TEXT("Soft-reference async harness should be created"), ScriptHarness))
-	{
-		return false;
-	}
-
-	ScriptHarness->AddToRoot();
-	ON_SCOPE_EXIT
-	{
-		ScriptHarness->RemoveFromRoot();
-	};
-
-	auto RunLoadAndWait = [this, &Engine, ScriptHarness, ScriptHarnessClass](
-		FName StartFunctionName,
-		FName CounterPropertyName,
-		const TCHAR* WaitContext) -> bool
-	{
-		int32 StartResult = 0;
-		if (!ExecuteGeneratedIntMethod(*this, Engine, ScriptHarness, ScriptHarnessClass, StartFunctionName, StartResult))
+		UClass* ScriptHarnessClass = CompileScriptModule(
+			*TestRunner,
+			Engine,
+			SoftReferenceAsyncModuleName,
+			SoftReferenceAsyncFilename,
+			ScriptSource,
+			SoftReferenceAsyncClassName);
+		if (ScriptHarnessClass == nullptr)
 		{
-			return false;
+			return;
 		}
 
-		if (!TestEqual(
-			*FString::Printf(TEXT("Soft-reference async starter '%s' should acknowledge launch"), *StartFunctionName.ToString()),
-			StartResult,
-			1))
+		if (!VerifyObjectCallbackSignature(*TestRunner, ScriptHarnessClass, TEXT("HandleObjectSuccess"), TEXT("LoadedObject"), UObject::StaticClass())
+			|| !VerifyObjectCallbackSignature(*TestRunner, ScriptHarnessClass, TEXT("HandleObjectFailure"), TEXT("LoadedObject"), UObject::StaticClass())
+			|| !VerifyClassCallbackSignature(*TestRunner, ScriptHarnessClass, TEXT("HandleClassSuccess"), TEXT("LoadedClass"), UObject::StaticClass())
+			|| !VerifyClassCallbackSignature(*TestRunner, ScriptHarnessClass, TEXT("HandleClassFailure"), TEXT("LoadedClass"), UObject::StaticClass()))
 		{
-			return false;
+			return;
 		}
 
-		return WaitUntil(
-			*this,
-			[this, ScriptHarness, CounterPropertyName]()
+		UObject* ScriptHarness = NewObject<UObject>(GetTransientPackage(), ScriptHarnessClass, TEXT("SoftReferenceAsyncHarness"));
+		if (!TestRunner->TestNotNull(TEXT("Soft-reference async harness should be created"), ScriptHarness))
+		{
+			return;
+		}
+
+		ScriptHarness->AddToRoot();
+		ON_SCOPE_EXIT
+		{
+			ScriptHarness->RemoveFromRoot();
+		};
+
+		auto RunLoadAndWait = [this, &Engine, ScriptHarness, ScriptHarnessClass](
+			FName StartFunctionName,
+			FName CounterPropertyName,
+			const TCHAR* WaitContext) -> bool
+		{
+			int32 StartResult = 0;
+			if (!ExecuteGeneratedIntMethod(*TestRunner, Engine, ScriptHarness, ScriptHarnessClass, StartFunctionName, StartResult))
 			{
-				int32 CallbackCount = 0;
-				return ReadIntPropertyChecked(*this, ScriptHarness, CounterPropertyName, CallbackCount) && CallbackCount >= 1;
-			},
-			SoftReferenceAsyncTimeoutSeconds,
-			WaitContext);
-	};
+				return false;
+			}
 
-	if (!RunLoadAndWait(TEXT("StartObjectSuccessLoad"), TEXT("ObjectSuccessCallbackCount"), TEXT("Soft object success callback"))
-		|| !RunLoadAndWait(TEXT("StartObjectFailureLoad"), TEXT("ObjectFailureCallbackCount"), TEXT("Soft object failure callback"))
-		|| !RunLoadAndWait(TEXT("StartClassSuccessLoad"), TEXT("ClassSuccessCallbackCount"), TEXT("Soft class success callback"))
-		|| !RunLoadAndWait(TEXT("StartClassFailureLoad"), TEXT("ClassFailureCallbackCount"), TEXT("Soft class failure callback")))
-	{
-		return false;
+			if (!TestRunner->TestEqual(
+				*FString::Printf(TEXT("Soft-reference async starter '%s' should acknowledge launch"), *StartFunctionName.ToString()),
+				StartResult,
+				1))
+			{
+				return false;
+			}
+
+			return WaitUntil(
+				*TestRunner,
+				[this, ScriptHarness, CounterPropertyName]()
+				{
+					int32 CallbackCount = 0;
+					return ReadIntPropertyChecked(*TestRunner, ScriptHarness, CounterPropertyName, CallbackCount) && CallbackCount >= 1;
+				},
+				SoftReferenceAsyncTimeoutSeconds,
+				WaitContext);
+		};
+
+		if (!RunLoadAndWait(TEXT("StartObjectSuccessLoad"), TEXT("ObjectSuccessCallbackCount"), TEXT("Soft object success callback"))
+			|| !RunLoadAndWait(TEXT("StartObjectFailureLoad"), TEXT("ObjectFailureCallbackCount"), TEXT("Soft object failure callback"))
+			|| !RunLoadAndWait(TEXT("StartClassSuccessLoad"), TEXT("ClassSuccessCallbackCount"), TEXT("Soft class success callback"))
+			|| !RunLoadAndWait(TEXT("StartClassFailureLoad"), TEXT("ClassFailureCallbackCount"), TEXT("Soft class failure callback")))
+		{
+			return;
+		}
+
+		int32 ObjectSuccessCallbackCount = 0;
+		int32 ObjectFailureCallbackCount = 0;
+		int32 ClassSuccessCallbackCount = 0;
+		int32 ClassFailureCallbackCount = 0;
+		int32 bObjectSuccessWasNonNull = 0;
+		int32 bObjectFailureWasNull = 0;
+		int32 bClassSuccessWasNonNull = 0;
+		int32 bClassFailureWasNull = 0;
+		int32 bObjectPayloadMatchesExpectedType = 0;
+		int32 bClassPayloadMatchesExpectedType = 0;
+		FString LastObjectName;
+		FString LastClassName;
+		if (!ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("ObjectSuccessCallbackCount"), ObjectSuccessCallbackCount)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("ObjectFailureCallbackCount"), ObjectFailureCallbackCount)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("ClassSuccessCallbackCount"), ClassSuccessCallbackCount)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("ClassFailureCallbackCount"), ClassFailureCallbackCount)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("bObjectSuccessWasNonNull"), bObjectSuccessWasNonNull)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("bObjectFailureWasNull"), bObjectFailureWasNull)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("bClassSuccessWasNonNull"), bClassSuccessWasNonNull)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("bClassFailureWasNull"), bClassFailureWasNull)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("bObjectPayloadMatchesExpectedType"), bObjectPayloadMatchesExpectedType)
+			|| !ReadIntPropertyChecked(*TestRunner, ScriptHarness, TEXT("bClassPayloadMatchesExpectedType"), bClassPayloadMatchesExpectedType)
+			|| !ReadStringPropertyChecked(*TestRunner, ScriptHarness, TEXT("LastObjectName"), LastObjectName)
+			|| !ReadStringPropertyChecked(*TestRunner, ScriptHarness, TEXT("LastClassName"), LastClassName))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Soft object success load should invoke the callback exactly once"), ObjectSuccessCallbackCount, 1);
+		TestRunner->TestEqual(TEXT("Soft object failure load should invoke the callback exactly once"), ObjectFailureCallbackCount, 1);
+		TestRunner->TestEqual(TEXT("Soft class success load should invoke the callback exactly once"), ClassSuccessCallbackCount, 1);
+		TestRunner->TestEqual(TEXT("Soft class failure load should invoke the callback exactly once"), ClassFailureCallbackCount, 1);
+		TestRunner->TestEqual(TEXT("Soft object success callback should receive a non-null payload"), bObjectSuccessWasNonNull, 1);
+		TestRunner->TestEqual(TEXT("Soft object failure callback should receive a null payload"), bObjectFailureWasNull, 1);
+		TestRunner->TestEqual(TEXT("Soft class success callback should receive a non-null payload"), bClassSuccessWasNonNull, 1);
+		TestRunner->TestEqual(TEXT("Soft class failure callback should receive a null payload"), bClassFailureWasNull, 1);
+		TestRunner->TestEqual(TEXT("Soft object success callback should deliver an object of the expected texture type"), bObjectPayloadMatchesExpectedType, 1);
+		TestRunner->TestEqual(TEXT("Soft class success callback should deliver a class of the expected actor type"), bClassPayloadMatchesExpectedType, 1);
+		TestRunner->TestEqual(TEXT("Soft object success callback should resolve the expected texture asset"), LastObjectName, FString(TEXT("DefaultTexture")));
+		TestRunner->TestEqual(TEXT("Soft class success callback should resolve the expected actor class"), LastClassName, AActor::StaticClass()->GetName());
 	}
-
-	int32 ObjectSuccessCallbackCount = 0;
-	int32 ObjectFailureCallbackCount = 0;
-	int32 ClassSuccessCallbackCount = 0;
-	int32 ClassFailureCallbackCount = 0;
-	int32 bObjectSuccessWasNonNull = 0;
-	int32 bObjectFailureWasNull = 0;
-	int32 bClassSuccessWasNonNull = 0;
-	int32 bClassFailureWasNull = 0;
-	int32 bObjectPayloadMatchesExpectedType = 0;
-	int32 bClassPayloadMatchesExpectedType = 0;
-	FString LastObjectName;
-	FString LastClassName;
-	if (!ReadIntPropertyChecked(*this, ScriptHarness, TEXT("ObjectSuccessCallbackCount"), ObjectSuccessCallbackCount)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("ObjectFailureCallbackCount"), ObjectFailureCallbackCount)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("ClassSuccessCallbackCount"), ClassSuccessCallbackCount)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("ClassFailureCallbackCount"), ClassFailureCallbackCount)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("bObjectSuccessWasNonNull"), bObjectSuccessWasNonNull)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("bObjectFailureWasNull"), bObjectFailureWasNull)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("bClassSuccessWasNonNull"), bClassSuccessWasNonNull)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("bClassFailureWasNull"), bClassFailureWasNull)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("bObjectPayloadMatchesExpectedType"), bObjectPayloadMatchesExpectedType)
-		|| !ReadIntPropertyChecked(*this, ScriptHarness, TEXT("bClassPayloadMatchesExpectedType"), bClassPayloadMatchesExpectedType)
-		|| !ReadStringPropertyChecked(*this, ScriptHarness, TEXT("LastObjectName"), LastObjectName)
-		|| !ReadStringPropertyChecked(*this, ScriptHarness, TEXT("LastClassName"), LastClassName))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Soft object success load should invoke the callback exactly once"), ObjectSuccessCallbackCount, 1);
-	TestEqual(TEXT("Soft object failure load should invoke the callback exactly once"), ObjectFailureCallbackCount, 1);
-	TestEqual(TEXT("Soft class success load should invoke the callback exactly once"), ClassSuccessCallbackCount, 1);
-	TestEqual(TEXT("Soft class failure load should invoke the callback exactly once"), ClassFailureCallbackCount, 1);
-	TestEqual(TEXT("Soft object success callback should receive a non-null payload"), bObjectSuccessWasNonNull, 1);
-	TestEqual(TEXT("Soft object failure callback should receive a null payload"), bObjectFailureWasNull, 1);
-	TestEqual(TEXT("Soft class success callback should receive a non-null payload"), bClassSuccessWasNonNull, 1);
-	TestEqual(TEXT("Soft class failure callback should receive a null payload"), bClassFailureWasNull, 1);
-	TestEqual(TEXT("Soft object success callback should deliver an object of the expected texture type"), bObjectPayloadMatchesExpectedType, 1);
-	TestEqual(TEXT("Soft class success callback should deliver a class of the expected actor type"), bClassPayloadMatchesExpectedType, 1);
-	TestEqual(TEXT("Soft object success callback should resolve the expected texture asset"), LastObjectName, FString(TEXT("DefaultTexture")));
-	TestEqual(TEXT("Soft class success callback should resolve the expected actor class"), LastClassName, AActor::StaticClass()->GetName());
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+};
 
 #endif

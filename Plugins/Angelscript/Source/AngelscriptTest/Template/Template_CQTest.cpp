@@ -61,18 +61,18 @@
 //
 //   CQTest header       : Engine/Source/Developer/CQTest/Public/CQTest.h
 //   Production example  : AngelscriptTest/Bindings/AngelscriptFStringBindingsTests.cpp
-//   Assertion helpers   : AngelscriptTest/Bindings/Shared/AngelscriptBindingsAssertions.h
-//   Module builder      : AngelscriptTest/Bindings/Shared/AngelscriptBindingsModuleBuilder.h
-//   Coverage profile    : AngelscriptTest/Bindings/Shared/AngelscriptBindingsCoverage.h
+//   Assertion helpers   : AngelscriptTest/Shared/AngelscriptBindingsAssertions.h
+//   Module builder      : AngelscriptTest/Shared/AngelscriptBindingsModuleBuilder.h
+//   Coverage profile    : AngelscriptTest/Shared/AngelscriptBindingsCoverage.h
 //   Function invoker    : AngelscriptTest/Shared/AngelscriptGlobalFunctionInvoker.h
 //   Engine macros       : AngelscriptTest/Shared/AngelscriptTestMacros.h
 // =============================================================================
 
 #include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
-#include "Bindings/Shared/AngelscriptBindingsCoverage.h"
-#include "Bindings/Shared/AngelscriptBindingsModuleBuilder.h"
-#include "Bindings/Shared/AngelscriptBindingsAssertions.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 

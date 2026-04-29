@@ -6,7 +6,7 @@
 //   - Angelscript.TestModule.Bindings.Container.MapFindFailureAndFindOrAddRefCompat
 //
 // Refactored from AngelscriptContainerBindingsTests.cpp using the
-// Bindings/Shared/ Coverage Section base layer.
+// Shared/ Coverage Section base layer.
 //
 // Coverage matrix for MapCompat (host for multiple sections):
 //   - RunMapSection             : FName→int / FName→FName baseline (16 cases)

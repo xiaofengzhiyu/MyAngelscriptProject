@@ -1,12 +1,38 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestEngineHelper.h"
+// ============================================================================
+// AngelscriptMathAndPlatformBindingsTests.cpp
+//
+// Math and platform binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.MathAndPlatform.FAngelscriptMathAndPlatformBindingsTest.*
+//
+// Sections:
+//   MathExtended         — extended Math helpers (rand, interp, cubic, etc.)
+//   MathDeterministic    — deterministic math comparison vs native baselines
+//   PlatformProcess      — FPlatformProcess directory/path queries
+//   Logging              — headless-safe logging helpers
+//
+// CQTest adaptation notes:
+//   Four IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   MathExtended: single int Entry() split into per-aspect functions.
+//   MathDeterministic: $TOKEN$ replacement pattern retained with single Entry().
+//   PlatformProcess: single int Entry() split into per-aspect functions.
+//   Logging: retained as single function with AddExpectedError.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
+
+// ----------------------------------------------------------------------------
+// Helper utilities (retained from original)
+// ----------------------------------------------------------------------------
 
 namespace AngelscriptTest_Bindings_AngelscriptMathAndPlatformBindingsTests_Private
 {
@@ -42,190 +68,235 @@ namespace AngelscriptTest_Bindings_AngelscriptMathAndPlatformBindingsTests_Priva
 
 using namespace AngelscriptTest_Bindings_AngelscriptMathAndPlatformBindingsTests_Private;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMathExtendedBindingsTest,
-	"Angelscript.TestModule.Bindings.MathExtendedCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMathDeterministicBindingsTest,
-	"Angelscript.TestModule.Bindings.MathDeterministicCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+static const FBindingsCoverageProfile GMathPlatProfile{
+	TEXT("MathPlatform"),              // Theme
+	TEXT(""),                          // Variant
+	TEXT("ASMathPlat"),                // ModulePrefix
+	TEXT("MathPlat"),                  // CasePrefix
+	TEXT("MathPlatformBindings"),      // LogCategory
+};
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptPlatformProcessBindingsTest,
-	"Angelscript.TestModule.Bindings.PlatformProcessCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptLoggingBindingsTest,
-	"Angelscript.TestModule.Bindings.Logging",
+TEST_CLASS_WITH_FLAGS(FAngelscriptMathAndPlatformBindingsTest,
+	"Angelscript.TestModule.Bindings.MathAndPlatform",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptMathExtendedBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASMathExtendedCompat",
-		TEXT(R"(
-int Entry()
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: MathExtended
+	// ====================================================================
+
+	TEST_METHOD(MathExtended)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GMathPlatProfile, TEXT("MathExtended"), TEXT(R"(
+int RandHelperInRange()
 {
 	int Helper = Math::RandHelper(10);
-	if (Helper < 0 || Helper >= 10)
-		return 10;
+	return (Helper >= 0 && Helper < 10) ? 1 : 0;
+}
 
-	if (!Math::IsPowerOfTwo(8))
-		return 20;
-	if (Math::IsPowerOfTwo(7))
-		return 30;
+int IsPowerOfTwoCorrect()
+{
+	return (Math::IsPowerOfTwo(8) && !Math::IsPowerOfTwo(7)) ? 1 : 0;
+}
 
-	FVector RandomUnit = Math::VRand();
-	if (RandomUnit.IsNearlyZero())
-		return 40;
+int VRandNotZero()
+{
+	return (!Math::VRand().IsNearlyZero()) ? 1 : 0;
+}
 
-	FVector RandomCone = Math::VRandCone(FVector::ForwardVector, 0.5f);
-	if (RandomCone.IsNearlyZero())
-		return 50;
+int VRandConeNotZero()
+{
+	return (!Math::VRandCone(FVector::ForwardVector, 0.5f).IsNearlyZero()) ? 1 : 0;
+}
 
-	FVector2D PointInCircle = Math::RandPointInCircle(10.0f);
-	if (PointInCircle.Size() > 10.01f)
-		return 60;
+int RandPointInCircleBounded()
+{
+	return (Math::RandPointInCircle(10.0f).Size() <= 10.01f) ? 1 : 0;
+}
 
-	if (Math::ClampAngle(370.0f, -180.0f, 180.0f) < -180.0f || Math::ClampAngle(370.0f, -180.0f, 180.0f) > 180.0f)
-		return 70;
-	if (Math::Clamp(int64(20), int64(0), int64(5)) != 5)
-		return 75;
-	if (Math::Clamp(uint64(20), uint64(0), uint64(5)) != 5)
-		return 77;
+int ClampAngleInRange()
+{
+	float Clamped = Math::ClampAngle(370.0f, -180.0f, 180.0f);
+	return (Clamped >= -180.0f && Clamped <= 180.0f) ? 1 : 0;
+}
 
-	if (Math::FindDeltaAngleDegrees(10.0f, 20.0f) != 10.0f)
-		return 80;
-	if (Math::UnwindDegrees(370.0f) != 10.0f)
-		return 90;
+int ClampInt64Works()
+{
+	return (Math::Clamp(int64(20), int64(0), int64(5)) == 5) ? 1 : 0;
+}
 
+int ClampUInt64Works()
+{
+	return (Math::Clamp(uint64(20), uint64(0), uint64(5)) == 5) ? 1 : 0;
+}
+
+int FindDeltaAngleDegreesCorrect()
+{
+	return (Math::FindDeltaAngleDegrees(10.0f, 20.0f) == 10.0f) ? 1 : 0;
+}
+
+int UnwindDegreesCorrect()
+{
+	return (Math::UnwindDegrees(370.0f) == 10.0f) ? 1 : 0;
+}
+
+int MakePulsatingValueBounded()
+{
 	float Pulse = Math::MakePulsatingValue(1.25, 2.0f, 0.0f);
-	if (Pulse < 0.0f || Pulse > 1.0f)
-		return 100;
+	return (Pulse >= 0.0f && Pulse <= 1.0f) ? 1 : 0;
+}
 
-	FVector Reflected = Math::GetReflectionVector(FVector(1.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f));
-	if (Reflected.IsNearlyZero())
-		return 110;
+int GetReflectionVectorNotZero()
+{
+	return (!Math::GetReflectionVector(FVector(1.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f)).IsNearlyZero()) ? 1 : 0;
+}
 
-	FVector Interped = Math::VInterpTo(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 0.1f, 5.0f);
-	if (Interped.IsNearlyZero())
-		return 120;
+int VInterpToAdvances()
+{
+	return (!Math::VInterpTo(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 0.1f, 5.0f).IsNearlyZero()) ? 1 : 0;
+}
 
-	FRotator RotInterp = Math::RInterpTo(FRotator::ZeroRotator, FRotator(0.0f, 90.0f, 0.0f), 0.1f, 5.0f);
-	if (RotInterp.IsNearlyZero())
-		return 130;
+int RInterpToAdvances()
+{
+	return (!Math::RInterpTo(FRotator::ZeroRotator, FRotator(0.0f, 90.0f, 0.0f), 0.1f, 5.0f).IsNearlyZero()) ? 1 : 0;
+}
 
-	float ScalarInterp = Math::FInterpTo(0.0f, 100.0f, 0.1f, 5.0f);
-	if (ScalarInterp <= 0.0f)
-		return 140;
+int FInterpToPositive()
+{
+	return (Math::FInterpTo(0.0f, 100.0f, 0.1f, 5.0f) > 0.0f) ? 1 : 0;
+}
 
-	FVector RandomPoint = Math::RandomPointInBoundingBox(FVector::ZeroVector, FVector(10.0f, 10.0f, 10.0f));
-	if (Math::Abs(RandomPoint.X) > 10.01f || Math::Abs(RandomPoint.Y) > 10.01f || Math::Abs(RandomPoint.Z) > 10.01f)
-		return 150;
+int RandomPointInBoundingBoxBounded()
+{
+	FVector P = Math::RandomPointInBoundingBox(FVector::ZeroVector, FVector(10.0f, 10.0f, 10.0f));
+	return (Math::Abs(P.X) <= 10.01f && Math::Abs(P.Y) <= 10.01f && Math::Abs(P.Z) <= 10.01f) ? 1 : 0;
+}
 
-	FRotator RandomRot = Math::RandomRotator(false);
-	if (RandomRot.IsNearlyZero())
-		return 160;
+int RandomRotatorNotZero()
+{
+	return (!Math::RandomRotator(false).IsNearlyZero()) ? 1 : 0;
+}
 
-	float32 ScalarCubic = Math::CubicInterp(0.0f, 1.0f, 10.0f, 0.0f, 0.5f);
-	if (ScalarCubic <= 0.0f)
-		return 170;
-	float32 ScalarDerivative = Math::CubicInterpDerivative(0.0f, 1.0f, 10.0f, 0.0f, 0.5f);
-	if (ScalarDerivative <= 0.0f)
-		return 180;
-	float64 ScalarCubic64 = Math::CubicInterp(0.0, 1.0, 10.0, 0.0, 0.5);
-	if (ScalarCubic64 <= 0.0)
-		return 190;
-	float64 ScalarDerivative64 = Math::CubicInterpDerivative(0.0, 1.0, 10.0, 0.0, 0.5);
-	if (ScalarDerivative64 <= 0.0)
-		return 200;
+int CubicInterpPositive()
+{
+	return (Math::CubicInterp(0.0f, 1.0f, 10.0f, 0.0f, 0.5f) > 0.0f) ? 1 : 0;
+}
 
+int CubicInterpDerivativePositive()
+{
+	return (Math::CubicInterpDerivative(0.0f, 1.0f, 10.0f, 0.0f, 0.5f) > 0.0f) ? 1 : 0;
+}
+
+int CubicInterp64Positive()
+{
+	return (Math::CubicInterp(0.0, 1.0, 10.0, 0.0, 0.5) > 0.0) ? 1 : 0;
+}
+
+int CubicInterpDerivative64Positive()
+{
+	return (Math::CubicInterpDerivative(0.0, 1.0, 10.0, 0.0, 0.5) > 0.0) ? 1 : 0;
+}
+
+int Vector2fToDirectionAndLengthCorrect()
+{
 	FVector2f Direction;
 	float32 DirectionLength = 0.0f;
 	FVector2f(3.0f, 4.0f).ToDirectionAndLength(Direction, DirectionLength);
-	if (!Direction.Equals(FVector2f(0.6f, 0.8f), 0.001f))
-		return 205;
-	if (!Math::IsNearlyEqual(DirectionLength, 5.0f, 0.001f))
-		return 210;
+	return (Direction.Equals(FVector2f(0.6f, 0.8f), 0.001f) && Math::IsNearlyEqual(DirectionLength, 5.0f, 0.001f)) ? 1 : 0;
+}
 
-	if (Math::Abs(int64(-7)) != 7)
-		return 215;
-	if (Math::Sign(int64(-7)) != -1 || Math::Sign(int64(0)) != 0 || Math::Sign(int64(7)) != 1)
-		return 220;
-	if (Math::Min(int64(7), int64(-3)) != -3)
-		return 225;
-	if (Math::Max(int64(7), int64(-3)) != 7)
-		return 230;
-	if (Math::Square(int64(9)) != 81)
-		return 235;
-
-	FVector PlaneIntersection = Math::LinePlaneIntersection(FVector(0.0f, 0.0f, -5.0f), FVector(0.0f, 0.0f, 5.0f), FPlane(FVector::ZeroVector, FVector::UpVector));
-	if (!PlaneIntersection.Equals(FVector::ZeroVector, 0.001f))
-		return 240;
-
+int Int64MathOps()
+{
+	if (Math::Abs(int64(-7)) != 7) return 0;
+	if (Math::Sign(int64(-7)) != -1 || Math::Sign(int64(0)) != 0 || Math::Sign(int64(7)) != 1) return 0;
+	if (Math::Min(int64(7), int64(-3)) != -3) return 0;
+	if (Math::Max(int64(7), int64(-3)) != 7) return 0;
+	if (Math::Square(int64(9)) != 81) return 0;
 	return 1;
 }
-)"));
-	if (Module == nullptr)
-	{
-		return false;
-	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Extended Math helpers should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
-
-bool FAngelscriptMathDeterministicBindingsTest::RunTest(const FString& Parameters)
+int LinePlaneIntersectionCorrect()
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+	FVector PlaneIntersection = Math::LinePlaneIntersection(FVector(0.0f, 0.0f, -5.0f), FVector(0.0f, 0.0f, 5.0f), FPlane(FVector::ZeroVector, FVector::UpVector));
+	return PlaneIntersection.Equals(FVector::ZeroVector, 0.001f) ? 1 : 0;
+}
+)"));
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-	constexpr float Tolerance = 0.001f;
-	const float ExpectedClampAngle = FMath::ClampAngle(370.0f, -180.0f, 180.0f);
-	const float ExpectedDeltaAngle = FMath::FindDeltaAngleDegrees(10.0f, 20.0f);
-	const float ExpectedUnwind = FMath::UnwindDegrees(370.0f);
-	const FVector ExpectedReflection = FMath::GetReflectionVector(FVector(1.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f));
-	const FVector ExpectedVectorInterp = FMath::VInterpTo(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 0.1f, 5.0f);
-	const FRotator ExpectedRotatorInterp = FMath::RInterpTo(FRotator::ZeroRotator, FRotator(0.0f, 90.0f, 0.0f), 0.1f, 5.0f);
-	const float ExpectedScalarInterp = FMath::FInterpTo(0.0f, 100.0f, 0.1f, 5.0f);
-
-	bPassed &= TestTrue(
-		TEXT("Native GetReflectionVector baseline should reflect X across the opposing normal into (-1, 0, 0)"),
-		ExpectedReflection.Equals(FVector(-1.0f, 0.0f, 0.0f), 0.0f));
-	bPassed &= TestTrue(
-		TEXT("Native VInterpTo baseline should advance toward the target on X only"),
-		ExpectedVectorInterp.Equals(FVector(ExpectedVectorInterp.X, 0.0f, 0.0f), 0.0f));
-	bPassed &= TestTrue(
-		TEXT("Native RInterpTo baseline should only accumulate yaw for this setup"),
-		ExpectedRotatorInterp.Equals(FRotator(0.0f, ExpectedRotatorInterp.Yaw, 0.0f), 0.0f));
-	if (!bPassed)
-	{
-		return false;
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int RandHelperInRange()"), TEXT("RandHelper should be in [0,10)"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int IsPowerOfTwoCorrect()"), TEXT("IsPowerOfTwo(8)=true, (7)=false"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int VRandNotZero()"), TEXT("VRand should not be zero"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int VRandConeNotZero()"), TEXT("VRandCone should not be zero"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int RandPointInCircleBounded()"), TEXT("RandPointInCircle should be within radius"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ClampAngleInRange()"), TEXT("ClampAngle should be in [-180,180]"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ClampInt64Works()"), TEXT("Clamp int64 should work"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ClampUInt64Works()"), TEXT("Clamp uint64 should work"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int FindDeltaAngleDegreesCorrect()"), TEXT("FindDeltaAngleDegrees should return 10"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int UnwindDegreesCorrect()"), TEXT("UnwindDegrees(370) should return 10"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int MakePulsatingValueBounded()"), TEXT("MakePulsatingValue should be in [0,1]"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int GetReflectionVectorNotZero()"), TEXT("GetReflectionVector should not be zero"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int VInterpToAdvances()"), TEXT("VInterpTo should advance"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int RInterpToAdvances()"), TEXT("RInterpTo should advance"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int FInterpToPositive()"), TEXT("FInterpTo should return positive"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int RandomPointInBoundingBoxBounded()"), TEXT("RandomPointInBoundingBox should be bounded"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int RandomRotatorNotZero()"), TEXT("RandomRotator should not be zero"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int CubicInterpPositive()"), TEXT("CubicInterp float32 should be positive"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int CubicInterpDerivativePositive()"), TEXT("CubicInterpDerivative float32 should be positive"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int CubicInterp64Positive()"), TEXT("CubicInterp float64 should be positive"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int CubicInterpDerivative64Positive()"), TEXT("CubicInterpDerivative float64 should be positive"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int Vector2fToDirectionAndLengthCorrect()"), TEXT("Vector2f ToDirectionAndLength should be correct"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int Int64MathOps()"), TEXT("int64 Abs/Sign/Min/Max/Square should work"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int LinePlaneIntersectionCorrect()"), TEXT("LinePlaneIntersection should be at origin"), 1);
 	}
 
-	FString Script = TEXT(R"(
+	// ====================================================================
+	// Section: MathDeterministic
+	// ====================================================================
+
+	TEST_METHOD(MathDeterministic)
+	{
+		constexpr float Tolerance = 0.001f;
+		const float ExpectedClampAngle = FMath::ClampAngle(370.0f, -180.0f, 180.0f);
+		const float ExpectedDeltaAngle = FMath::FindDeltaAngleDegrees(10.0f, 20.0f);
+		const float ExpectedUnwind = FMath::UnwindDegrees(370.0f);
+		const FVector ExpectedReflection = FMath::GetReflectionVector(FVector(1.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f));
+		const FVector ExpectedVectorInterp = FMath::VInterpTo(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 0.1f, 5.0f);
+		const FRotator ExpectedRotatorInterp = FMath::RInterpTo(FRotator::ZeroRotator, FRotator(0.0f, 90.0f, 0.0f), 0.1f, 5.0f);
+		const float ExpectedScalarInterp = FMath::FInterpTo(0.0f, 100.0f, 0.1f, 5.0f);
+
+		TestRunner->TestTrue(
+			TEXT("Native GetReflectionVector baseline should reflect X across the opposing normal into (-1, 0, 0)"),
+			ExpectedReflection.Equals(FVector(-1.0f, 0.0f, 0.0f), 0.0f));
+		TestRunner->TestTrue(
+			TEXT("Native VInterpTo baseline should advance toward the target on X only"),
+			ExpectedVectorInterp.Equals(FVector(ExpectedVectorInterp.X, 0.0f, 0.0f), 0.0f));
+		TestRunner->TestTrue(
+			TEXT("Native RInterpTo baseline should only accumulate yaw for this setup"),
+			ExpectedRotatorInterp.Equals(FRotator(0.0f, ExpectedRotatorInterp.Yaw, 0.0f), 0.0f));
+
+		FString Script = TEXT(R"(
 int Entry()
 {
 	if (!Math::IsNearlyEqual(Math::ClampAngle(370.0f, -180.0f, 180.0f), $EXPECTED_CLAMP_ANGLE$, $TOLERANCE$))
@@ -254,108 +325,73 @@ int Entry()
 }
 )");
 
-	Script.ReplaceInline(TEXT("$TOLERANCE$"), *FormatScriptFloatLiteral(Tolerance));
-	Script.ReplaceInline(TEXT("$EXPECTED_CLAMP_ANGLE$"), *FormatScriptFloatLiteral(ExpectedClampAngle));
-	Script.ReplaceInline(TEXT("$EXPECTED_DELTA_ANGLE$"), *FormatScriptFloatLiteral(ExpectedDeltaAngle));
-	Script.ReplaceInline(TEXT("$EXPECTED_UNWIND$"), *FormatScriptFloatLiteral(ExpectedUnwind));
-	Script.ReplaceInline(TEXT("$EXPECTED_VECTOR_INTERP$"), *FormatScriptVectorLiteral(ExpectedVectorInterp));
-	Script.ReplaceInline(TEXT("$EXPECTED_ROTATOR_INTERP$"), *FormatScriptRotatorLiteral(ExpectedRotatorInterp));
-	Script.ReplaceInline(TEXT("$EXPECTED_SCALAR_INTERP$"), *FormatScriptFloatLiteral(ExpectedScalarInterp));
+		Script.ReplaceInline(TEXT("$TOLERANCE$"), *FormatScriptFloatLiteral(Tolerance));
+		Script.ReplaceInline(TEXT("$EXPECTED_CLAMP_ANGLE$"), *FormatScriptFloatLiteral(ExpectedClampAngle));
+		Script.ReplaceInline(TEXT("$EXPECTED_DELTA_ANGLE$"), *FormatScriptFloatLiteral(ExpectedDeltaAngle));
+		Script.ReplaceInline(TEXT("$EXPECTED_UNWIND$"), *FormatScriptFloatLiteral(ExpectedUnwind));
+		Script.ReplaceInline(TEXT("$EXPECTED_VECTOR_INTERP$"), *FormatScriptVectorLiteral(ExpectedVectorInterp));
+		Script.ReplaceInline(TEXT("$EXPECTED_ROTATOR_INTERP$"), *FormatScriptRotatorLiteral(ExpectedRotatorInterp));
+		Script.ReplaceInline(TEXT("$EXPECTED_SCALAR_INTERP$"), *FormatScriptFloatLiteral(ExpectedScalarInterp));
 
-	asIScriptModule* Module = BuildModule(*this, Engine, "ASMathDeterministicCompat", Script);
-	if (Module == nullptr)
-	{
-		return false;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GMathPlatProfile, TEXT("MathDeterministic"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int Entry()"), TEXT("Deterministic Math should match native baselines"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: PlatformProcess
+	// ====================================================================
+
+	TEST_METHOD(PlatformProcess)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(TEXT("Deterministic Math helpers should match the native baseline"), Result, 1);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptPlatformProcessBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASPlatformProcessCompat",
-		TEXT(R"(
-int Entry()
-{
-	if (FPlatformProcess::UserDir().IsEmpty())
-		return 10;
-	if (FPlatformProcess::UserSettingsDir().IsEmpty())
-		return 20;
-	if (FPlatformProcess::UserTempDir().IsEmpty())
-		return 30;
-	if (FPlatformProcess::ApplicationSettingsDir().IsEmpty())
-		return 40;
-	if (FPlatformProcess::ExecutablePath().IsEmpty())
-		return 50;
-	if (FPlatformProcess::ExecutableName().IsEmpty())
-		return 60;
-	if (FPlatformProcess::CurrentWorkingDirectory().IsEmpty())
-		return 70;
-	if (FPlatformProcess::ComputerName().IsEmpty())
-		return 80;
-	if (FPlatformProcess::UserName().IsEmpty())
-		return 90;
-	if (FPlatformProcess::CanLaunchURL("https://example.com") == false)
-		return 100;
-
-	return 1;
-}
+		FCoverageModuleScope Mod(*TestRunner, Engine, GMathPlatProfile, TEXT("PlatformProcess"), TEXT(R"(
+int UserDirNotEmpty() { return (!FPlatformProcess::UserDir().IsEmpty()) ? 1 : 0; }
+int UserSettingsDirNotEmpty() { return (!FPlatformProcess::UserSettingsDir().IsEmpty()) ? 1 : 0; }
+int UserTempDirNotEmpty() { return (!FPlatformProcess::UserTempDir().IsEmpty()) ? 1 : 0; }
+int ApplicationSettingsDirNotEmpty() { return (!FPlatformProcess::ApplicationSettingsDir().IsEmpty()) ? 1 : 0; }
+int ExecutablePathNotEmpty() { return (!FPlatformProcess::ExecutablePath().IsEmpty()) ? 1 : 0; }
+int ExecutableNameNotEmpty() { return (!FPlatformProcess::ExecutableName().IsEmpty()) ? 1 : 0; }
+int CurrentWorkingDirectoryNotEmpty() { return (!FPlatformProcess::CurrentWorkingDirectory().IsEmpty()) ? 1 : 0; }
+int ComputerNameNotEmpty() { return (!FPlatformProcess::ComputerName().IsEmpty()) ? 1 : 0; }
+int UserNameNotEmpty() { return (!FPlatformProcess::UserName().IsEmpty()) ? 1 : 0; }
+int CanLaunchURLWorks() { return FPlatformProcess::CanLaunchURL("https://example.com") ? 1 : 0; }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int UserDirNotEmpty()"), TEXT("UserDir should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int UserSettingsDirNotEmpty()"), TEXT("UserSettingsDir should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int UserTempDirNotEmpty()"), TEXT("UserTempDir should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ApplicationSettingsDirNotEmpty()"), TEXT("ApplicationSettingsDir should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ExecutablePathNotEmpty()"), TEXT("ExecutablePath should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ExecutableNameNotEmpty()"), TEXT("ExecutableName should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int CurrentWorkingDirectoryNotEmpty()"), TEXT("CurrentWorkingDirectory should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int ComputerNameNotEmpty()"), TEXT("ComputerName should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int UserNameNotEmpty()"), TEXT("UserName should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int CanLaunchURLWorks()"), TEXT("CanLaunchURL should return true for https"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: Logging
+	// ====================================================================
+
+	TEST_METHOD(Logging)
 	{
-		return false;
-	}
+		TestRunner->AddExpectedError(TEXT("Test error message"), EAutomationExpectedErrorFlags::Contains, 1);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	TestEqual(TEXT("PlatformProcess compat operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
-
-bool FAngelscriptLoggingBindingsTest::RunTest(const FString& Parameters)
-{
-	AddExpectedError(TEXT("Test error message"), EAutomationExpectedErrorFlags::Contains, 1);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASLoggingCompat",
-		TEXT(R"(
-int Entry()
+		FCoverageModuleScope Mod(*TestRunner, Engine, GMathPlatProfile, TEXT("Logging"), TEXT(R"(
+int LoggingCallsSucceed()
 {
 	Log("Test log message");
 	LogDisplay("Test display message");
@@ -364,27 +400,11 @@ int Entry()
 	return 1;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GMathPlatProfile, TEXT("int LoggingCallsSucceed()"), TEXT("Headless-safe logging helpers should execute"), 1);
 	}
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Headless-safe logging helpers should execute successfully"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
+};
 
 #endif
