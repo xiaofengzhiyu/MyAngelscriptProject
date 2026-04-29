@@ -51,7 +51,6 @@ namespace UnrealBuildTool.Rules
 					"Sockets",
 					"UnrealEd",
 					"AngelscriptEditor",
-					"AngelscriptLoader",
 				});
 			}
 		}
