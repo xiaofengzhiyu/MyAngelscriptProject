@@ -1,21 +1,56 @@
+// ============================================================================
+// AngelscriptCurveFunctionLibraryTests.cpp
+//
+// Curve function library binding coverage — CQTest refactor.
+// Automation ID:
+//   Angelscript.TestModule.FunctionLibraries.Curve.*
+//
+// Sections:
+//   RuntimeCurveLinearColorAddDefaultKey — FRuntimeCurveLinearColor channel population
+//   RuntimeFloatCurveInstanceSurface     — FRuntimeFloatCurve + UCurveFloat instance API
+//
+// CQTest adaptation notes:
+//   Two original IMPLEMENT_SIMPLE_AUTOMATION_TEST classes merged into one
+//   TEST_CLASS with two TEST_METHODs. The address-based invocation helpers
+//   and $TOKEN$ replacement (for UCurveFloat path) are preserved.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Curves/CurveFloat.h"
 #include "Curves/CurveLinearColor.h"
 #include "Curves/RichCurve.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-namespace AngelscriptTest_Bindings_AngelscriptCurveFunctionLibraryTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GCurveProfile{
+	TEXT("Curve"),           // Theme
+	TEXT(""),               // Variant
+	TEXT("ASCurve"),        // ModulePrefix
+	TEXT("Curve"),          // CasePrefix
+	TEXT("CurveBindings"), // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Shared helpers
+// ----------------------------------------------------------------------------
+
+namespace CurveTestHelpers
 {
-	static constexpr ANSICHAR RuntimeCurveLinearColorModuleName[] = "ASRuntimeCurveLinearColorAddDefaultKey";
-	static constexpr ANSICHAR RuntimeFloatCurveInstanceModuleName[] = "ASRuntimeFloatCurveInstanceSurface";
-
 	bool SetArgAddressChecked(
 		FAutomationTestBase& Test,
 		asIScriptContext& Context,
@@ -107,130 +142,114 @@ namespace AngelscriptTest_Bindings_AngelscriptCurveFunctionLibraryTests_Private
 			FMath::IsNearlyEqual(Key.Value, ExpectedValue));
 		return bTimeMatches && bValueMatches;
 	}
-
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptCurveFunctionLibraryTests_Private;
+using namespace CurveTestHelpers;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeCurveLinearColorAddDefaultKeyTest,
-	"Angelscript.TestModule.FunctionLibraries.RuntimeCurveLinearColorAddDefaultKey",
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptCurveFunctionLibraryBindingsTest,
+	"Angelscript.TestModule.FunctionLibraries.Curve",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptRuntimeCurveLinearColorAddDefaultKeyTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(ANSI_TO_TCHAR(RuntimeCurveLinearColorModuleName));
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	asIScriptModule* Module = nullptr;
-	ASTEST_BUILD_MODULE(
-		Engine,
-		RuntimeCurveLinearColorModuleName,
-		TEXT(R"(
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: RuntimeCurveLinearColorAddDefaultKey
+	// ====================================================================
+
+	TEST_METHOD(RuntimeCurveLinearColorAddDefaultKey)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GCurveProfile, TEXT("LinearColorAddKey"), TEXT(R"(
 int PopulateCurve(FRuntimeCurveLinearColor& Curve)
 {
 	Curve.AddDefaultKey(0.0f, FLinearColor(1.0f, 0.0f, 0.0f, 0.25f));
 	Curve.AddDefaultKey(2.5f, FLinearColor(0.125f, 0.5f, 0.75f, 1.0f));
 	return 1;
 }
-)"),
-		Module);
+)"));
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-	FRuntimeCurveLinearColor Curve;
-	for (int32 ChannelIndex = 0; ChannelIndex < UE_ARRAY_COUNT(Curve.ColorCurves); ++ChannelIndex)
-	{
-		bPassed &= TestEqual(
-			*FString::Printf(TEXT("Curve channel %d should start empty"), ChannelIndex),
-			Curve.ColorCurves[ChannelIndex].Keys.Num(),
-			0);
-	}
-
-	int32 Result = INDEX_NONE;
-	if (!ExecuteIntFunctionWithAddressArg(
-		*this,
-		Engine,
-		*Module,
-		TEXT("int PopulateCurve(FRuntimeCurveLinearColor&)"),
-		&Curve,
-		TEXT("PopulateCurve"),
-		Result))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("RuntimeCurveLinearColor AddDefaultKey helper should execute successfully"),
-		Result,
-		1);
-
-	static const TCHAR* ChannelLabels[] = { TEXT("R"), TEXT("G"), TEXT("B"), TEXT("A") };
-	static const float ExpectedValues[4][2] =
-	{
-		{ 1.0f, 0.125f },
-		{ 0.0f, 0.5f },
-		{ 0.0f, 0.75f },
-		{ 0.25f, 1.0f },
-	};
-	static const float ExpectedTimes[2] = { 0.0f, 2.5f };
-
-	for (int32 ChannelIndex = 0; ChannelIndex < UE_ARRAY_COUNT(Curve.ColorCurves); ++ChannelIndex)
-	{
-		const FRichCurve& RichCurve = Curve.ColorCurves[ChannelIndex];
-		bPassed &= TestEqual(
-			*FString::Printf(TEXT("%s channel should contain two keys after two AddDefaultKey calls"), ChannelLabels[ChannelIndex]),
-			RichCurve.Keys.Num(),
-			2);
-		bPassed &= ExpectCurveKey(*this, RichCurve, 0, ExpectedTimes[0], ExpectedValues[ChannelIndex][0], ChannelLabels[ChannelIndex]);
-		bPassed &= ExpectCurveKey(*this, RichCurve, 1, ExpectedTimes[1], ExpectedValues[ChannelIndex][1], ChannelLabels[ChannelIndex]);
-	}
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeFloatCurveInstanceSurfaceTest,
-	"Angelscript.TestModule.FunctionLibraries.RuntimeFloatCurveInstanceSurface",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptRuntimeFloatCurveInstanceSurfaceTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	UCurveFloat* CurveAsset = nullptr;
-	bool bModuleCompiled = false;
-
-	ON_SCOPE_EXIT
-	{
-		if (bModuleCompiled)
+		FRuntimeCurveLinearColor Curve;
+		for (int32 ChannelIndex = 0; ChannelIndex < UE_ARRAY_COUNT(Curve.ColorCurves); ++ChannelIndex)
 		{
-			Engine.DiscardModule(ANSI_TO_TCHAR(RuntimeFloatCurveInstanceModuleName));
+			TestRunner->TestEqual(
+				*FString::Printf(TEXT("Curve channel %d should start empty"), ChannelIndex),
+				Curve.ColorCurves[ChannelIndex].Keys.Num(), 0);
 		}
 
-		if (CurveAsset != nullptr)
+		int32 Result = INDEX_NONE;
+		if (!ExecuteIntFunctionWithAddressArg(
+			*TestRunner, Engine, M,
+			TEXT("int PopulateCurve(FRuntimeCurveLinearColor&)"),
+			&Curve, TEXT("PopulateCurve"), Result))
 		{
-			CurveAsset->MarkAsGarbage();
+			return;
 		}
-	};
 
-	CurveAsset = NewObject<UCurveFloat>(
-		GetTransientPackage(),
-		MakeUniqueObjectName(GetTransientPackage(), UCurveFloat::StaticClass(), TEXT("RuntimeFloatCurveInstanceSurface")),
-		RF_Transient);
-	if (!TestNotNull(TEXT("RuntimeFloatCurve instance surface test should create a transient UCurveFloat"), CurveAsset))
-	{
-		return false;
+		TestRunner->TestEqual(
+			TEXT("RuntimeCurveLinearColor AddDefaultKey helper should execute successfully"),
+			Result, 1);
+
+		static const TCHAR* ChannelLabels[] = { TEXT("R"), TEXT("G"), TEXT("B"), TEXT("A") };
+		static const float ExpectedValues[4][2] =
+		{
+			{ 1.0f, 0.125f },
+			{ 0.0f, 0.5f },
+			{ 0.0f, 0.75f },
+			{ 0.25f, 1.0f },
+		};
+		static const float ExpectedTimes[2] = { 0.0f, 2.5f };
+
+		for (int32 ChannelIndex = 0; ChannelIndex < UE_ARRAY_COUNT(Curve.ColorCurves); ++ChannelIndex)
+		{
+			const FRichCurve& RichCurve = Curve.ColorCurves[ChannelIndex];
+			TestRunner->TestEqual(
+				*FString::Printf(TEXT("%s channel should contain two keys after two AddDefaultKey calls"), ChannelLabels[ChannelIndex]),
+				RichCurve.Keys.Num(), 2);
+			ExpectCurveKey(*TestRunner, RichCurve, 0, ExpectedTimes[0], ExpectedValues[ChannelIndex][0], ChannelLabels[ChannelIndex]);
+			ExpectCurveKey(*TestRunner, RichCurve, 1, ExpectedTimes[1], ExpectedValues[ChannelIndex][1], ChannelLabels[ChannelIndex]);
+		}
 	}
 
-	FString Script = TEXT(R"AS(
+	// ====================================================================
+	// Section: RuntimeFloatCurveInstanceSurface
+	// ====================================================================
+
+	TEST_METHOD(RuntimeFloatCurveInstanceSurface)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		UCurveFloat* CurveAsset = NewObject<UCurveFloat>(
+			GetTransientPackage(),
+			MakeUniqueObjectName(GetTransientPackage(), UCurveFloat::StaticClass(), TEXT("RuntimeFloatCurveInstanceSurface")),
+			RF_Transient);
+		ASSERT_THAT(IsNotNull(CurveAsset));
+		ON_SCOPE_EXIT
+		{
+			if (CurveAsset != nullptr)
+			{
+				CurveAsset->MarkAsGarbage();
+			}
+		};
+
+		FString Script = TEXT(R"AS(
 int PopulateCurve(FRuntimeFloatCurve& RuntimeCurve)
 {
 	RuntimeCurve.AddDefaultKey(0.5f, 1.25f);
@@ -256,73 +275,57 @@ int PopulateCurve(FRuntimeFloatCurve& RuntimeCurve)
 	return 1;
 }
 )AS");
-	Script.ReplaceInline(TEXT("__CURVE_PATH__"), *CurveAsset->GetPathName().ReplaceCharWithEscapedChar());
+		Script.ReplaceInline(TEXT("__CURVE_PATH__"), *CurveAsset->GetPathName().ReplaceCharWithEscapedChar());
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		RuntimeFloatCurveInstanceModuleName,
-		Script);
-	if (Module == nullptr)
-	{
-		return false;
-	}
-	bModuleCompiled = true;
+		FCoverageModuleScope Mod(*TestRunner, Engine, GCurveProfile, TEXT("FloatCurveInstance"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-	FRuntimeFloatCurve RuntimeCurve;
-	int32 Result = INDEX_NONE;
-	if (!ExecuteIntFunctionWithAddressArg(
-		*this,
-		Engine,
-		*Module,
-		TEXT("int PopulateCurve(FRuntimeFloatCurve&)"),
-		&RuntimeCurve,
-		TEXT("PopulateCurve"),
-		Result))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("RuntimeFloatCurve and UCurveFloat instance helper surface should compile and execute through instance syntax"),
-		Result,
-		1);
-
-	const FRichCurve& RuntimeRichCurve = RuntimeCurve.EditorCurveData;
-	bPassed &= TestEqual(
-		TEXT("FRuntimeFloatCurve.AddDefaultKey instance syntax should add two keys to the runtime curve"),
-		RuntimeRichCurve.Keys.Num(),
-		2);
-	bPassed &= ExpectCurveKey(*this, RuntimeRichCurve, 0, 0.5f, 1.25f, TEXT("RuntimeFloatCurve"));
-	bPassed &= ExpectCurveKey(*this, RuntimeRichCurve, 1, 3.0f, 9.5f, TEXT("RuntimeFloatCurve"));
-
-	float MinTime = 0.0f;
-	float MaxTime = 0.0f;
-	RuntimeCurve.GetRichCurveConst()->GetTimeRange(MinTime, MaxTime);
-	bPassed &= TestTrue(
-		TEXT("FRuntimeFloatCurve.GetTimeRange instance syntax should preserve the native time range"),
-		FMath::IsNearlyEqual(MinTime, 0.5f) && FMath::IsNearlyEqual(MaxTime, 3.0f));
-
-	if (Result == 1)
-	{
-		const FRichCurve& AssetCurve = CurveAsset->FloatCurve;
-		const int32 AssetKeyCount = AssetCurve.Keys.Num();
-		bPassed &= TestEqual(
-			TEXT("UCurveFloat.AddAutoCurveKey instance syntax should add one key to the asset curve"),
-			AssetKeyCount,
-			1);
-		if (AssetKeyCount > 0)
+		FRuntimeFloatCurve RuntimeCurve;
+		int32 Result = INDEX_NONE;
+		if (!ExecuteIntFunctionWithAddressArg(
+			*TestRunner, Engine, M,
+			TEXT("int PopulateCurve(FRuntimeFloatCurve&)"),
+			&RuntimeCurve, TEXT("PopulateCurve"), Result))
 		{
-			bPassed &= ExpectCurveKey(*this, AssetCurve, 0, 1.5f, 7.5f, TEXT("UCurveFloat"));
-			bPassed &= TestEqual(
-				TEXT("UCurveFloat.SetKeyInterpMode instance syntax should update the native key interpolation mode"),
-				AssetCurve.Keys[0].InterpMode,
-				ERichCurveInterpMode::RCIM_Constant);
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("RuntimeFloatCurve and UCurveFloat instance helper surface should compile and execute through instance syntax"),
+			Result, 1);
+
+		const FRichCurve& RuntimeRichCurve = RuntimeCurve.EditorCurveData;
+		TestRunner->TestEqual(
+			TEXT("FRuntimeFloatCurve.AddDefaultKey instance syntax should add two keys to the runtime curve"),
+			RuntimeRichCurve.Keys.Num(), 2);
+		ExpectCurveKey(*TestRunner, RuntimeRichCurve, 0, 0.5f, 1.25f, TEXT("RuntimeFloatCurve"));
+		ExpectCurveKey(*TestRunner, RuntimeRichCurve, 1, 3.0f, 9.5f, TEXT("RuntimeFloatCurve"));
+
+		float MinTime = 0.0f;
+		float MaxTime = 0.0f;
+		RuntimeCurve.GetRichCurveConst()->GetTimeRange(MinTime, MaxTime);
+		TestRunner->TestTrue(
+			TEXT("FRuntimeFloatCurve.GetTimeRange instance syntax should preserve the native time range"),
+			FMath::IsNearlyEqual(MinTime, 0.5f) && FMath::IsNearlyEqual(MaxTime, 3.0f));
+
+		if (Result == 1)
+		{
+			const FRichCurve& AssetCurve = CurveAsset->FloatCurve;
+			const int32 AssetKeyCount = AssetCurve.Keys.Num();
+			TestRunner->TestEqual(
+				TEXT("UCurveFloat.AddAutoCurveKey instance syntax should add one key to the asset curve"),
+				AssetKeyCount, 1);
+			if (AssetKeyCount > 0)
+			{
+				ExpectCurveKey(*TestRunner, AssetCurve, 0, 1.5f, 7.5f, TEXT("UCurveFloat"));
+				TestRunner->TestEqual(
+					TEXT("UCurveFloat.SetKeyInterpMode instance syntax should update the native key interpolation mode"),
+					AssetCurve.Keys[0].InterpMode,
+					ERichCurveInterpMode::RCIM_Constant);
+			}
 		}
 	}
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

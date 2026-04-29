@@ -1,43 +1,60 @@
+// ============================================================================
+// AngelscriptGameInstanceLocalPlayerBindingsTests.cpp
+//
+// GameInstance local player binding coverage — CQTest refactor.
+// Automation ID:
+//   Angelscript.TestModule.Bindings.GameInstanceLocalPlayer.*
+//
+// Sections:
+//   Compat — Full create/lookup/remove lifecycle through script bindings
+//
+// CQTest adaptation notes:
+//   Original single IMPLEMENT_SIMPLE_AUTOMATION_TEST converted to one
+//   TEST_CLASS with one TEST_METHOD. The $TOKEN$ replacement pattern is
+//   preserved via ReplaceInline. The custom fixture and argument-binding
+//   helpers are retained for the object-arg calling convention.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/Package.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-namespace AngelscriptTest_Bindings_AngelscriptGameInstanceLocalPlayerBindingsTests_Private
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GGameInstLPProfile{
+	TEXT("GameInstLP"),                       // Theme
+	TEXT(""),                                 // Variant
+	TEXT("ASGameInstLP"),                     // ModulePrefix
+	TEXT("GameInstLP"),                       // CasePrefix
+	TEXT("GameInstanceLocalPlayerBindings"),  // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Shared helpers
+// ----------------------------------------------------------------------------
+
+namespace GameInstanceLocalPlayerTestHelpers
 {
-	static constexpr ANSICHAR GameInstanceLocalPlayerModuleName[] = "ASGameInstanceLocalPlayerCompat";
 	static constexpr int32 LocalPlayerControllerId = 7;
-
-	enum EGameInstanceLocalPlayerMismatch : int32
-	{
-		WorldLookupFailed = 1 << 0,
-		GameInstanceLookupFailed = 1 << 1,
-		InitialCountMismatch = 1 << 2,
-		CreateLocalPlayerFailed = 1 << 3,
-		OutErrorNotEmpty = 1 << 4,
-		PostCreateCountMismatch = 1 << 5,
-		PlayerByIndexMismatch = 1 << 6,
-		PlayerByControllerIdMismatch = 1 << 7,
-		FirstGamePlayerMismatch = 1 << 8,
-		LocalPlayerGameInstanceMismatch = 1 << 9,
-		LocalPlayerWorldMismatch = 1 << 10,
-		ControllerIdMismatch = 1 << 11,
-		UnexpectedFirstLocalPlayerController = 1 << 12,
-		RemoveLocalPlayerFailed = 1 << 13,
-		PostRemoveCountMismatch = 1 << 14,
-		PostRemoveLookupMismatch = 1 << 15,
-	};
 
 	bool SetArgObjectChecked(
 		FAutomationTestBase& Test,
@@ -151,50 +168,60 @@ namespace AngelscriptTest_Bindings_AngelscriptGameInstanceLocalPlayerBindingsTes
 	};
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptGameInstanceLocalPlayerBindingsTests_Private;
+using namespace GameInstanceLocalPlayerTestHelpers;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGameInstanceLocalPlayerCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.GameInstanceLocalPlayerCompat",
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptGameInstanceLocalPlayerBindingsTest,
+	"Angelscript.TestModule.Bindings.GameInstanceLocalPlayer",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptGameInstanceLocalPlayerCompatBindingsTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
-	ASTEST_BEGIN_FULL
-
-	FGameInstanceLocalPlayerFixture Fixture;
-	if (!Fixture.Initialize(*this))
+	BEFORE_ALL()
 	{
-		return false;
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	UWorld* TestWorld = Fixture.World;
-	UGameInstance* GameInstance = Fixture.GameInstance;
-	if (!TestNotNull(TEXT("GameInstance local-player bindings test should access the spawned test world"), TestWorld)
-		|| !TestNotNull(TEXT("GameInstance local-player bindings test should expose the spawned test game instance"), GameInstance))
+	AFTER_ALL()
 	{
-		return false;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
 	}
 
-	const int32 InitialLocalPlayerCount = GameInstance->GetNumLocalPlayers();
-	if (!TestEqual(
-		TEXT("GameInstance local-player bindings test should start from a world without pre-existing local players"),
-		InitialLocalPlayerCount,
-		0))
-	{
-		return false;
-	}
+	// ====================================================================
+	// Section: Compat
+	// ====================================================================
 
-	if (!TestTrue(
-		TEXT("GameInstance local-player bindings test should reserve controller id 7 before script execution"),
-		GameInstance->FindLocalPlayerFromControllerId(LocalPlayerControllerId) == nullptr))
+	TEST_METHOD(Compat)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+		FAngelscriptEngineScope Scope(Engine);
 
-	FString Script = TEXT(R"(
+		FGameInstanceLocalPlayerFixture Fixture;
+		if (!Fixture.Initialize(*TestRunner)) return;
+
+		UWorld* TestWorld = Fixture.World;
+		UGameInstance* GameInstance = Fixture.GameInstance;
+		ASSERT_THAT(IsNotNull(TestWorld));
+		ASSERT_THAT(IsNotNull(GameInstance));
+
+		const int32 InitialLocalPlayerCount = GameInstance->GetNumLocalPlayers();
+		if (!TestRunner->TestEqual(
+			TEXT("GameInstance local-player bindings test should start from a world without pre-existing local players"),
+			InitialLocalPlayerCount, 0))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestTrue(
+			TEXT("GameInstance local-player bindings test should reserve controller id 7 before script execution"),
+			GameInstance->FindLocalPlayerFromControllerId(LocalPlayerControllerId) == nullptr))
+		{
+			return;
+		}
+
+		FString Script = TEXT(R"(
 int VerifyGameInstanceLocalPlayerCompat(UWorld ExpectedWorld, UGameInstance GameInstance)
 {
 	int MismatchMask = 0;
@@ -244,84 +271,68 @@ int VerifyGameInstanceLocalPlayerCompat(UWorld ExpectedWorld, UGameInstance Game
 	return MismatchMask;
 }
 )");
-	Script.ReplaceInline(TEXT("$INITIAL_COUNT$"), *LexToString(InitialLocalPlayerCount));
-	Script.ReplaceInline(TEXT("$CONTROLLER_ID$"), *LexToString(LocalPlayerControllerId));
+		Script.ReplaceInline(TEXT("$INITIAL_COUNT$"), *LexToString(InitialLocalPlayerCount));
+		Script.ReplaceInline(TEXT("$CONTROLLER_ID$"), *LexToString(LocalPlayerControllerId));
 
-	asIScriptModule* Module = BuildModule(*this, Engine, GameInstanceLocalPlayerModuleName, Script);
-	if (Module == nullptr)
-	{
-		return false;
-	}
+		asIScriptModule* Module = BuildModule(*TestRunner, Engine, "ASGameInstanceLocalPlayerCompat", Script);
+		if (Module == nullptr) return;
 
-	FScopedTestWorldContextScope WorldContextScope(TestWorld);
+		FScopedTestWorldContextScope WorldContextScope(TestWorld);
 
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(
-		*this,
-		*Module,
-		TEXT("int VerifyGameInstanceLocalPlayerCompat(UWorld, UGameInstance)"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
+		asIScriptFunction* EntryFunction = GetFunctionByDecl(
+			*TestRunner,
+			*Module,
+			TEXT("int VerifyGameInstanceLocalPlayerCompat(UWorld, UGameInstance)"));
+		if (EntryFunction == nullptr) return;
 
-	FAngelscriptEngineScope EngineScope(Engine);
-	asIScriptContext* Context = Engine.CreateContext();
-	if (!TestNotNull(TEXT("GameInstance local-player bindings test should create an execution context"), Context))
-	{
-		return false;
-	}
+		asIScriptContext* Context = Engine.CreateContext();
+		ASSERT_THAT(IsNotNull(Context));
 
-	ON_SCOPE_EXIT
-	{
-		if (Context != nullptr)
+		ON_SCOPE_EXIT
 		{
-			Context->Release();
+			if (Context != nullptr)
+			{
+				Context->Release();
+			}
+		};
+
+		const int PrepareResult = Context->Prepare(EntryFunction);
+		if (!TestRunner->TestEqual(
+			TEXT("GameInstance local-player bindings test should prepare the verification function"),
+			PrepareResult, static_cast<int32>(asSUCCESS)))
+		{
+			return;
 		}
-	};
 
-	const int PrepareResult = Context->Prepare(EntryFunction);
-	if (!TestEqual(
-		TEXT("GameInstance local-player bindings test should prepare the verification function"),
-		PrepareResult,
-		static_cast<int32>(asSUCCESS)))
-	{
-		return false;
+		if (!SetArgObjectChecked(*TestRunner, *Context, 0, TestWorld, TEXT("VerifyGameInstanceLocalPlayerCompat"))
+			|| !SetArgObjectChecked(*TestRunner, *Context, 1, GameInstance, TEXT("VerifyGameInstanceLocalPlayerCompat")))
+		{
+			return;
+		}
+
+		const int ExecuteResult = Context->Execute();
+		if (!TestRunner->TestEqual(
+			TEXT("GameInstance local-player bindings test should execute the verification function"),
+			ExecuteResult, static_cast<int32>(asEXECUTION_FINISHED)))
+		{
+			return;
+		}
+
+		const int32 ResultMask = static_cast<int32>(Context->GetReturnDWord());
+
+		TestRunner->TestEqual(
+			TEXT("GameInstance local-player bindings should preserve create, lookup, world/game-instance linkage and remove semantics"),
+			ResultMask, 0);
+		TestRunner->TestEqual(
+			TEXT("GameInstance local-player bindings test should restore the native local-player count after script removal"),
+			GameInstance->GetNumLocalPlayers(), InitialLocalPlayerCount);
+		TestRunner->TestTrue(
+			TEXT("GameInstance local-player bindings test should remove the created controller-id lookup after script cleanup"),
+			GameInstance->FindLocalPlayerFromControllerId(LocalPlayerControllerId) == nullptr);
+		TestRunner->TestTrue(
+			TEXT("GameInstance local-player bindings test should keep GetFirstLocalPlayerController native baseline at null when no controller is spawned"),
+			GameInstance->GetFirstLocalPlayerController(TestWorld) == nullptr);
 	}
-
-	if (!SetArgObjectChecked(*this, *Context, 0, TestWorld, TEXT("VerifyGameInstanceLocalPlayerCompat"))
-		|| !SetArgObjectChecked(*this, *Context, 1, GameInstance, TEXT("VerifyGameInstanceLocalPlayerCompat")))
-	{
-		return false;
-	}
-
-	const int ExecuteResult = Context->Execute();
-	if (!TestEqual(
-		TEXT("GameInstance local-player bindings test should execute the verification function"),
-		ExecuteResult,
-		static_cast<int32>(asEXECUTION_FINISHED)))
-	{
-		return false;
-	}
-
-	const int32 ResultMask = static_cast<int32>(Context->GetReturnDWord());
-
-	bPassed &= TestEqual(
-		TEXT("GameInstance local-player bindings should preserve create, lookup, world/game-instance linkage and remove semantics"),
-		ResultMask,
-		0);
-	bPassed &= TestEqual(
-		TEXT("GameInstance local-player bindings test should restore the native local-player count after script removal"),
-		GameInstance->GetNumLocalPlayers(),
-		InitialLocalPlayerCount);
-	bPassed &= TestTrue(
-		TEXT("GameInstance local-player bindings test should remove the created controller-id lookup after script cleanup"),
-		GameInstance->FindLocalPlayerFromControllerId(LocalPlayerControllerId) == nullptr);
-	bPassed &= TestTrue(
-		TEXT("GameInstance local-player bindings test should keep GetFirstLocalPlayerController native baseline at null when no controller is spawned"),
-		GameInstance->GetFirstLocalPlayerController(TestWorld) == nullptr);
-
-	ASTEST_END_FULL
-	return bPassed;
-}
+};
 
 #endif

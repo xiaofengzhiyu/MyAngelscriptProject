@@ -1,216 +1,277 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestEngineHelper.h"
+// ============================================================================
+// AngelscriptCoreMiscBindingsTests.cpp
+//
+// Core misc binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.CoreMisc.FAngelscriptCoreMiscBindingsTest.*
+//
+// Sections:
+//   GuidCompat               — FGuid construction, parse, compare, invalidate
+//   PathsCompat              — FPaths basic API round-trip
+//   PathsExactCompat         — FPaths deterministic results vs native baselines
+//   NumberFormattingOptions   — FNumberFormattingOptions builder and identity
+//
+// CQTest adaptation notes:
+//   Four IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   GuidCompat, PathsCompat, NumberFormattingOptions: bitmask int Entry() split
+//   into per-aspect functions. PathsExactCompat: token-replacement pattern
+//   retained with single Entry() invoked via ExpectGlobalInt.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGuidBindingsTest,
-	"Angelscript.TestModule.Bindings.GuidCompat",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GCoreMiscProfile{
+	TEXT("CoreMisc"),              // Theme
+	TEXT(""),                      // Variant
+	TEXT("ASCoreMisc"),            // ModulePrefix
+	TEXT("CoreMisc"),             // CasePrefix
+	TEXT("CoreMiscBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptCoreMiscBindingsTest,
+	"Angelscript.TestModule.Bindings.CoreMisc",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptPathsBindingsTest,
-	"Angelscript.TestModule.Bindings.PathsCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptPathsExactBindingsTest,
-	"Angelscript.TestModule.Bindings.PathsExactCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNumberFormattingOptionsBindingsTest,
-	"Angelscript.TestModule.Bindings.NumberFormattingOptionsCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptGuidBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASGuidCompat",
-		TEXT(R"(
-int Entry()
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: GuidCompat
+	// ====================================================================
+
+	TEST_METHOD(GuidCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GCoreMiscProfile, TEXT("GuidCompat"), TEXT(R"(
+int ExplicitGuidIsValid()
 {
 	FGuid ExplicitGuid(1, 2, 3, 4);
-	if (!ExplicitGuid.IsValid())
-		return 10;
+	return ExplicitGuid.IsValid() ? 1 : 0;
+}
 
+int GuidToStringNotEmpty()
+{
+	FGuid ExplicitGuid(1, 2, 3, 4);
 	FString GuidString = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
-	if (GuidString.IsEmpty())
-		return 20;
+	return (!GuidString.IsEmpty()) ? 1 : 0;
+}
 
+int GuidParseRoundTrip()
+{
+	FGuid ExplicitGuid(1, 2, 3, 4);
+	FString GuidString = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
 	FGuid ParsedGuid;
 	if (!FGuid::Parse(GuidString, ParsedGuid))
-		return 30;
-	if (!(ParsedGuid == ExplicitGuid))
-		return 40;
-	if (ParsedGuid.opCmp(ExplicitGuid) != 0)
-		return 50;
+		return 0;
+	return (ParsedGuid == ExplicitGuid) ? 1 : 0;
+}
 
+int GuidOpCmpEqual()
+{
+	FGuid ExplicitGuid(1, 2, 3, 4);
+	FString GuidString = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
+	FGuid ParsedGuid;
+	FGuid::Parse(GuidString, ParsedGuid);
+	return (ParsedGuid.opCmp(ExplicitGuid) == 0) ? 1 : 0;
+}
+
+int GuidParseExactRoundTrip()
+{
+	FGuid ExplicitGuid(1, 2, 3, 4);
+	FString GuidString = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
 	FGuid ParsedExactGuid;
 	if (!FGuid::ParseExact(GuidString, EGuidFormats::DigitsWithHyphens, ParsedExactGuid))
-		return 60;
-	if (!(ParsedExactGuid == ExplicitGuid))
-		return 70;
+		return 0;
+	return (ParsedExactGuid == ExplicitGuid) ? 1 : 0;
+}
 
+int GuidCopyEquality()
+{
+	FGuid ExplicitGuid(1, 2, 3, 4);
 	FGuid Copy = ExplicitGuid;
-	if (!(Copy == ExplicitGuid))
-		return 80;
+	return (Copy == ExplicitGuid) ? 1 : 0;
+}
 
+int GuidInvalidateWorks()
+{
+	FGuid ExplicitGuid(1, 2, 3, 4);
+	FGuid Copy = ExplicitGuid;
 	Copy.Invalidate();
-	if (Copy.IsValid())
-		return 90;
+	return (!Copy.IsValid()) ? 1 : 0;
+}
 
+int GuidNewGuidIsValid()
+{
 	FGuid NewGuid = FGuid::NewGuid();
-	if (!NewGuid.IsValid())
-		return 100;
-	if (NewGuid.GetTypeHash() == 0)
-		return 110;
+	return NewGuid.IsValid() ? 1 : 0;
+}
 
-	return 1;
+int GuidGetTypeHashNonZero()
+{
+	FGuid NewGuid = FGuid::NewGuid();
+	return (NewGuid.GetTypeHash() != 0) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int ExplicitGuidIsValid()"), TEXT("Explicit FGuid should be valid"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidToStringNotEmpty()"), TEXT("FGuid ToString should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidParseRoundTrip()"), TEXT("FGuid Parse round-trip should match"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidOpCmpEqual()"), TEXT("FGuid opCmp should return 0 for equal guids"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidParseExactRoundTrip()"), TEXT("FGuid ParseExact round-trip should match"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidCopyEquality()"), TEXT("FGuid copy should equal original"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidInvalidateWorks()"), TEXT("Invalidated FGuid should not be valid"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidNewGuidIsValid()"), TEXT("NewGuid should be valid"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GuidGetTypeHashNonZero()"), TEXT("NewGuid type hash should be non-zero"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: PathsCompat
+	// ====================================================================
+
+	TEST_METHOD(PathsCompat)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Guid compat operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
+		FCoverageModuleScope Mod(*TestRunner, Engine, GCoreMiscProfile, TEXT("PathsCompat"), TEXT(R"(
+int ProjectDirNotEmpty()
+{
+	return (!FPaths::ProjectDir().IsEmpty()) ? 1 : 0;
 }
 
-bool FAngelscriptPathsBindingsTest::RunTest(const FString& Parameters)
+int CombinePathsNotEmpty()
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASPathsCompat",
-		TEXT(R"(
-int Entry()
+	FString Combined = FPaths::CombinePaths(FPaths::ProjectDir(), "Script/Test.as");
+	return (!Combined.IsEmpty()) ? 1 : 0;
+}
+
+int IsRelativeWorks()
 {
-	FString ProjectDir = FPaths::ProjectDir();
-	if (ProjectDir.IsEmpty())
-		return 10;
+	return FPaths::IsRelative("Script/Test.as") ? 1 : 0;
+}
 
-	FString Combined = FPaths::CombinePaths(ProjectDir, "Script/Test.as");
-	if (Combined.IsEmpty())
-		return 20;
+int ConvertRelativeToFullNotEmpty()
+{
+	return (!FPaths::ConvertRelativePathToFull("Script/Test.as").IsEmpty()) ? 1 : 0;
+}
 
-	FString Relative = "Script/Test.as";
-	if (!FPaths::IsRelative(Relative))
-		return 30;
+int ConvertRelativeToFullFromBaseNotEmpty()
+{
+	return (!FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), "Script/Test.as").IsEmpty()) ? 1 : 0;
+}
 
-	FString FullPath = FPaths::ConvertRelativePathToFull(Relative);
-	if (FullPath.IsEmpty())
-		return 40;
+int GetExtensionCorrect()
+{
+	FString Combined = FPaths::CombinePaths(FPaths::ProjectDir(), "Script/Test.as");
+	return (FPaths::GetExtension(Combined, true) == ".as") ? 1 : 0;
+}
 
-	FString FullFromBase = FPaths::ConvertRelativePathToFull(ProjectDir, Relative);
-	if (FullFromBase.IsEmpty())
-		return 50;
+int GetCleanFilenameCorrect()
+{
+	FString Combined = FPaths::CombinePaths(FPaths::ProjectDir(), "Script/Test.as");
+	return (FPaths::GetCleanFilename(Combined) == "Test.as") ? 1 : 0;
+}
 
-	FString Extension = FPaths::GetExtension(Combined, true);
-	if (!(Extension == ".as"))
-		return 60;
+int GetBaseFilenameCorrect()
+{
+	FString Combined = FPaths::CombinePaths(FPaths::ProjectDir(), "Script/Test.as");
+	return (FPaths::GetBaseFilename(Combined, true) == "Test") ? 1 : 0;
+}
 
-	FString Clean = FPaths::GetCleanFilename(Combined);
-	if (!(Clean == "Test.as"))
-		return 70;
+int GetPathNotEmpty()
+{
+	FString Combined = FPaths::CombinePaths(FPaths::ProjectDir(), "Script/Test.as");
+	return (!FPaths::GetPath(Combined).IsEmpty()) ? 1 : 0;
+}
 
-	FString Base = FPaths::GetBaseFilename(Combined, true);
-	if (!(Base == "Test"))
-		return 80;
+int DirectoryExistsForProjectDir()
+{
+	return FPaths::DirectoryExists(FPaths::ProjectDir()) ? 1 : 0;
+}
 
-	FString PathOnly = FPaths::GetPath(Combined);
-	if (PathOnly.IsEmpty())
-		return 90;
-
-	if (!FPaths::DirectoryExists(ProjectDir))
-		return 100;
-	if (FPaths::FileExists(ProjectDir))
-		return 110;
-
-	return 1;
+int FileExistsForProjectDirIsFalse()
+{
+	return (!FPaths::FileExists(FPaths::ProjectDir())) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int ProjectDirNotEmpty()"), TEXT("ProjectDir should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int CombinePathsNotEmpty()"), TEXT("CombinePaths should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int IsRelativeWorks()"), TEXT("Relative path should be detected"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int ConvertRelativeToFullNotEmpty()"), TEXT("ConvertRelativePathToFull should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int ConvertRelativeToFullFromBaseNotEmpty()"), TEXT("ConvertRelativePathToFull from base should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GetExtensionCorrect()"), TEXT("GetExtension should return .as"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GetCleanFilenameCorrect()"), TEXT("GetCleanFilename should return Test.as"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GetBaseFilenameCorrect()"), TEXT("GetBaseFilename should return Test"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int GetPathNotEmpty()"), TEXT("GetPath should not be empty"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int DirectoryExistsForProjectDir()"), TEXT("DirectoryExists for ProjectDir should be true"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int FileExistsForProjectDirIsFalse()"), TEXT("FileExists for ProjectDir should be false"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: PathsExactCompat
+	// ====================================================================
+
+	TEST_METHOD(PathsExactCompat)
 	{
-		return false;
-	}
+		auto EscapeScriptString = [](const FString& Value) -> FString
+		{
+			FString Escaped = Value;
+			Escaped.ReplaceInline(TEXT("\\"), TEXT("\\\\"));
+			Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
+			Escaped.ReplaceInline(TEXT("\r"), TEXT("\\r"));
+			Escaped.ReplaceInline(TEXT("\n"), TEXT("\\n"));
+			return Escaped;
+		};
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
+		const FString ProjectDir = FPaths::ProjectDir();
+		const FString Relative = TEXT("Script/Test.as");
+		const FString ExpectedCombined = FPaths::Combine(ProjectDir, Relative);
+		const FString ExpectedFullFromRelative = FPaths::ConvertRelativePathToFull(Relative);
+		const FString ExpectedFullFromBase = FPaths::ConvertRelativePathToFull(ProjectDir, Relative);
+		const FString ExpectedPathOnly = FPaths::GetPath(ExpectedCombined);
+		const FString ExpectedExtension = FPaths::GetExtension(ExpectedCombined, true);
+		const FString ExpectedBase = FPaths::GetBaseFilename(ExpectedCombined, true);
+		const FString CaseVariantCombined = ExpectedCombined.ToUpper();
+		const FString PrefixCollisionPath = FPaths::Combine(ProjectDir, TEXT("ScriptBackup/Test.as"));
+		const bool bExpectedSamePathIgnoresCase = FPaths::IsSamePath(ExpectedCombined, CaseVariantCombined);
+		const bool bExpectedCombinedIsUnderScriptDir = FPaths::IsUnderDirectory(ExpectedCombined, ExpectedPathOnly);
+		const bool bExpectedPrefixCollisionIsUnderScriptDir = FPaths::IsUnderDirectory(PrefixCollisionPath, ExpectedPathOnly);
+		const bool bExpectedProjectDirExists = FPaths::DirectoryExists(ProjectDir);
+		const bool bExpectedProjectDirIsFile = FPaths::FileExists(ProjectDir);
 
-	TestEqual(TEXT("Paths compat operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
-
-bool FAngelscriptPathsExactBindingsTest::RunTest(const FString& Parameters)
-{
-	auto EscapeScriptString = [](const FString& Value) -> FString
-	{
-		FString Escaped = Value;
-		Escaped.ReplaceInline(TEXT("\\"), TEXT("\\\\"));
-		Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
-		Escaped.ReplaceInline(TEXT("\r"), TEXT("\\r"));
-		Escaped.ReplaceInline(TEXT("\n"), TEXT("\\n"));
-		return Escaped;
-	};
-
-	const FString ProjectDir = FPaths::ProjectDir();
-	const FString Relative = TEXT("Script/Test.as");
-	const FString ExpectedCombined = FPaths::Combine(ProjectDir, Relative);
-	const FString ExpectedFullFromRelative = FPaths::ConvertRelativePathToFull(Relative);
-	const FString ExpectedFullFromBase = FPaths::ConvertRelativePathToFull(ProjectDir, Relative);
-	const FString ExpectedPathOnly = FPaths::GetPath(ExpectedCombined);
-	const FString ExpectedExtension = FPaths::GetExtension(ExpectedCombined, true);
-	const FString ExpectedBase = FPaths::GetBaseFilename(ExpectedCombined, true);
-	const FString CaseVariantCombined = ExpectedCombined.ToUpper();
-	const FString PrefixCollisionPath = FPaths::Combine(ProjectDir, TEXT("ScriptBackup/Test.as"));
-	const bool bExpectedSamePathIgnoresCase = FPaths::IsSamePath(ExpectedCombined, CaseVariantCombined);
-	const bool bExpectedCombinedIsUnderScriptDir = FPaths::IsUnderDirectory(ExpectedCombined, ExpectedPathOnly);
-	const bool bExpectedPrefixCollisionIsUnderScriptDir = FPaths::IsUnderDirectory(PrefixCollisionPath, ExpectedPathOnly);
-	const bool bExpectedProjectDirExists = FPaths::DirectoryExists(ProjectDir);
-	const bool bExpectedProjectDirIsFile = FPaths::FileExists(ProjectDir);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	FString Script = TEXT(R"(
+		FString Script = TEXT(R"(
 int Entry()
 {
 	const FString Relative = "__RELATIVE__";
@@ -261,60 +322,43 @@ int Entry()
 }
 )");
 
-	Script.ReplaceInline(TEXT("__RELATIVE__"), *EscapeScriptString(Relative), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_PROJECT_DIR__"), *EscapeScriptString(ProjectDir), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_COMBINED__"), *EscapeScriptString(ExpectedCombined), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_FULL_FROM_RELATIVE__"), *EscapeScriptString(ExpectedFullFromRelative), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_FULL_FROM_BASE__"), *EscapeScriptString(ExpectedFullFromBase), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_PATH_ONLY__"), *EscapeScriptString(ExpectedPathOnly), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_EXTENSION__"), *EscapeScriptString(ExpectedExtension), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_BASE__"), *EscapeScriptString(ExpectedBase), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__CASE_VARIANT_COMBINED__"), *EscapeScriptString(CaseVariantCombined), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__PREFIX_COLLISION_PATH__"), *EscapeScriptString(PrefixCollisionPath), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_SAME_PATH_IGNORES_CASE__"), bExpectedSamePathIgnoresCase ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_COMBINED_UNDER_SCRIPT_DIR__"), bExpectedCombinedIsUnderScriptDir ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_PREFIX_COLLISION_UNDER_SCRIPT_DIR__"), bExpectedPrefixCollisionIsUnderScriptDir ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_PROJECT_DIR_EXISTS__"), bExpectedProjectDirExists ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
-	Script.ReplaceInline(TEXT("__EXPECTED_PROJECT_DIR_IS_FILE__"), bExpectedProjectDirIsFile ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__RELATIVE__"), *EscapeScriptString(Relative), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_PROJECT_DIR__"), *EscapeScriptString(ProjectDir), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_COMBINED__"), *EscapeScriptString(ExpectedCombined), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_FULL_FROM_RELATIVE__"), *EscapeScriptString(ExpectedFullFromRelative), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_FULL_FROM_BASE__"), *EscapeScriptString(ExpectedFullFromBase), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_PATH_ONLY__"), *EscapeScriptString(ExpectedPathOnly), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_EXTENSION__"), *EscapeScriptString(ExpectedExtension), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_BASE__"), *EscapeScriptString(ExpectedBase), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__CASE_VARIANT_COMBINED__"), *EscapeScriptString(CaseVariantCombined), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__PREFIX_COLLISION_PATH__"), *EscapeScriptString(PrefixCollisionPath), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_SAME_PATH_IGNORES_CASE__"), bExpectedSamePathIgnoresCase ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_COMBINED_UNDER_SCRIPT_DIR__"), bExpectedCombinedIsUnderScriptDir ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_PREFIX_COLLISION_UNDER_SCRIPT_DIR__"), bExpectedPrefixCollisionIsUnderScriptDir ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_PROJECT_DIR_EXISTS__"), bExpectedProjectDirExists ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXPECTED_PROJECT_DIR_IS_FILE__"), bExpectedProjectDirIsFile ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASPathsExactCompat",
-		Script);
-	if (Module == nullptr)
-	{
-		return false;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GCoreMiscProfile, TEXT("PathsExactCompat"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int Entry()"), TEXT("Paths exact compat should match native FPaths results"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: NumberFormattingOptions
+	// ====================================================================
+
+	TEST_METHOD(NumberFormattingOptions)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Paths exact compat operations should match native FPaths results"), Result, 1);
-	ASTEST_END_SHARE_CLEAN
-
-	return true;
-}
-
-bool FAngelscriptNumberFormattingOptionsBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASNumberFormattingOptionsCompat",
-		TEXT(R"(
-int Entry()
+		FCoverageModuleScope Mod(*TestRunner, Engine, GCoreMiscProfile, TEXT("NumberFormattingOptions"), TEXT(R"(
+int OptionsIdenticalAfterCopy()
 {
 	FNumberFormattingOptions Options;
 	Options.SetAlwaysSign(true)
@@ -323,42 +367,37 @@ int Entry()
 		.SetMaximumIntegralDigits(4)
 		.SetMinimumFractionalDigits(1)
 		.SetMaximumFractionalDigits(3);
-
 	FNumberFormattingOptions Copy = Options;
-	if (!Options.IsIdentical(Copy))
-		return 10;
-	if (!(Options.GetTypeHash() == Copy.GetTypeHash()))
-		return 20;
+	return Options.IsIdentical(Copy) ? 1 : 0;
+}
 
+int OptionsHashMatchAfterCopy()
+{
+	FNumberFormattingOptions Options;
+	Options.SetAlwaysSign(true)
+		.SetUseGrouping(false)
+		.SetMinimumIntegralDigits(2)
+		.SetMaximumIntegralDigits(4)
+		.SetMinimumFractionalDigits(1)
+		.SetMaximumFractionalDigits(3);
+	FNumberFormattingOptions Copy = Options;
+	return (Options.GetTypeHash() == Copy.GetTypeHash()) ? 1 : 0;
+}
+
+int DefaultGroupedNotIdenticalToUngrouped()
+{
 	FNumberFormattingOptions DefaultGrouped = FNumberFormattingOptions::DefaultWithGrouping();
 	FNumberFormattingOptions DefaultUngrouped = FNumberFormattingOptions::DefaultNoGrouping();
-	if (DefaultGrouped.IsIdentical(DefaultUngrouped))
-		return 30;
-
-	return 1;
+	return (!DefaultGrouped.IsIdentical(DefaultUngrouped)) ? 1 : 0;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int OptionsIdenticalAfterCopy()"), TEXT("Copied options should be identical"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int OptionsHashMatchAfterCopy()"), TEXT("Copied options type hash should match"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GCoreMiscProfile, TEXT("int DefaultGroupedNotIdenticalToUngrouped()"), TEXT("DefaultWithGrouping should differ from DefaultNoGrouping"), 1);
 	}
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("NumberFormattingOptions compat operations should behave as expected"), Result, 1);
-	ASTEST_END_SHARE
-
-	return true;
-}
+};
 
 #endif

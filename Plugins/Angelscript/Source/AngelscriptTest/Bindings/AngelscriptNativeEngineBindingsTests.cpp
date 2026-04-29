@@ -1,5 +1,28 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptNativeEngineBindingsTests.cpp
+//
+// Native engine/actor/component method binding coverage — CQTest refactor.
+// Automation IDs:
+//   Angelscript.TestModule.Bindings.NativeEngine.FAngelscriptNativeEngineBindingsTest.*
+//
+// Sections:
+//   NativeActorMethods              — AActor native method bridging
+//   NativeComponentMethods          — USceneComponent native method bridging
+//   ComponentDestroy                — DestroyComponent binding
+//   ComponentActivationAndTag       — Activate/Deactivate/ComponentHasTag
+//
+// CQTest adaptation notes:
+//   Four IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   Uses CompileAnnotatedModuleFromMemory + FindGeneratedClass pattern.
+//   ComponentActivationAndTag uses ASTEST_CREATE_ENGINE_FULL for world context.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+#include "Shared/AngelscriptTestUtilities.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "ClassGenerator/ASClass.h"
 
@@ -10,37 +33,53 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNativeActorBindingsTest,
-	"Angelscript.TestModule.Bindings.NativeActorMethods",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GNativeEngineProfile{
+	TEXT("NativeEngine"),              // Theme
+	TEXT(""),                          // Variant
+	TEXT("ASNativeEngine"),            // ModulePrefix
+	TEXT("NativeEngine"),              // CasePrefix
+	TEXT("NativeEngineBindings"),      // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptNativeEngineBindingsTest,
+	"Angelscript.TestModule.Bindings.NativeEngine",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNativeComponentBindingsTest,
-	"Angelscript.TestModule.Bindings.NativeComponentMethods",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptComponentDestroyBindingsTest,
-	"Angelscript.TestModule.Bindings.ComponentDestroyCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptComponentActivationAndTagBindingsTest,
-	"Angelscript.TestModule.Bindings.ComponentActivationAndTagCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptNativeActorBindingsTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	const bool bCompiled = CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("ASNativeActorBindingTest"),
-		TEXT("ASNativeActorBindingTest.as"),
-		TEXT(R"(
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: NativeActorMethods
+	// ====================================================================
+
+	TEST_METHOD(NativeActorMethods)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const bool bCompiled = CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("ASNativeActorBindingTest"),
+			TEXT("ASNativeActorBindingTest.as"),
+			TEXT(R"(
 UCLASS()
 class ABindingExampleActor : AActor
 {
@@ -61,51 +100,51 @@ class ABindingExampleActor : AActor
 	}
 }
 )"));
-	if (!TestTrue(TEXT("Compile annotated actor module using native bindings should succeed"), bCompiled))
-	{
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Compile annotated actor module using native bindings should succeed"), bCompiled))
+		{
+			return;
+		}
+
+		UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("ABindingExampleActor"));
+		if (!TestRunner->TestNotNull(TEXT("Generated actor class should exist"), RuntimeClass))
+		{
+			return;
+		}
+
+		UFunction* ReadNativeBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReadNativeBindings"));
+		if (!TestRunner->TestNotNull(TEXT("Native actor binding test function should exist"), ReadNativeBindingsFunction))
+		{
+			return;
+		}
+
+		AActor* RuntimeActor = RuntimeClass->GetDefaultObject<AActor>();
+		if (!TestRunner->TestNotNull(TEXT("Generated actor default object should exist"), RuntimeActor))
+		{
+			return;
+		}
+
+		int32 Result = 0;
+		if (!TestRunner->TestTrue(TEXT("Native actor binding reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeActor, ReadNativeBindingsFunction, Result)))
+		{
+			return;
+		}
+		TestRunner->TestEqual(TEXT("Script class should call bridged native AActor and UObject methods"), Result, 1);
 	}
 
-	UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("ABindingExampleActor"));
-	if (!TestNotNull(TEXT("Generated actor class should exist"), RuntimeClass))
+	// ====================================================================
+	// Section: NativeComponentMethods
+	// ====================================================================
+
+	TEST_METHOD(NativeComponentMethods)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	UFunction* ReadNativeBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReadNativeBindings"));
-	if (!TestNotNull(TEXT("Native actor binding test function should exist"), ReadNativeBindingsFunction))
-	{
-		return false;
-	}
-
-	AActor* RuntimeActor = RuntimeClass->GetDefaultObject<AActor>();
-	if (!TestNotNull(TEXT("Generated actor default object should exist"), RuntimeActor))
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!TestTrue(TEXT("Native actor binding reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeActor, ReadNativeBindingsFunction, Result)))
-	{
-		return false;
-	}
-	TestEqual(TEXT("Script class should call bridged native AActor and UObject methods"), Result, 1);
-	bPassed = Result == 1;
-	ASTEST_END_SHARE
-
-	return bPassed;
-}
-
-bool FAngelscriptNativeComponentBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	const bool bCompiled = CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("ASNativeComponentBindingTest"),
-		TEXT("ASNativeComponentBindingTest.as"),
-		TEXT(R"(
+		const bool bCompiled = CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("ASNativeComponentBindingTest"),
+			TEXT("ASNativeComponentBindingTest.as"),
+			TEXT(R"(
 UCLASS()
 class UBindingSceneComponent : USceneComponent
 {
@@ -174,59 +213,59 @@ class UBindingSceneComponent : USceneComponent
 	}
 }
 )"));
-	if (!TestTrue(TEXT("Compile annotated scene component module using native bindings should succeed"), bCompiled))
-	{
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Compile annotated scene component module using native bindings should succeed"), bCompiled))
+		{
+			return;
+		}
+
+		UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UBindingSceneComponent"));
+		if (!TestRunner->TestNotNull(TEXT("Generated scene component class should exist"), RuntimeClass))
+		{
+			return;
+		}
+
+		UFunction* ReadComponentBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReadComponentBindings"));
+		if (!TestRunner->TestNotNull(TEXT("Native component binding test function should exist"), ReadComponentBindingsFunction))
+		{
+			return;
+		}
+
+		AActor* OuterActor = NewObject<AActor>(GetTransientPackage(), AActor::StaticClass());
+		if (!TestRunner->TestNotNull(TEXT("Transient outer actor should be created"), OuterActor))
+		{
+			return;
+		}
+
+		USceneComponent* RuntimeComponent = NewObject<USceneComponent>(OuterActor, RuntimeClass, TEXT("ScriptScene"));
+		if (!TestRunner->TestNotNull(TEXT("Generated scene component instance should be created"), RuntimeComponent))
+		{
+			return;
+		}
+
+		OuterActor->AddOwnedComponent(RuntimeComponent);
+
+		int32 Result = 0;
+		if (!TestRunner->TestTrue(TEXT("Native component binding reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, ReadComponentBindingsFunction, Result)))
+		{
+			return;
+		}
+		TestRunner->TestEqual(TEXT("Script component should call bridged native component methods"), Result, 1);
 	}
 
-	UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UBindingSceneComponent"));
-	if (!TestNotNull(TEXT("Generated scene component class should exist"), RuntimeClass))
+	// ====================================================================
+	// Section: ComponentDestroy
+	// ====================================================================
+
+	TEST_METHOD(ComponentDestroy)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	UFunction* ReadComponentBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReadComponentBindings"));
-	if (!TestNotNull(TEXT("Native component binding test function should exist"), ReadComponentBindingsFunction))
-	{
-		return false;
-	}
-
-	AActor* OuterActor = NewObject<AActor>(GetTransientPackage(), AActor::StaticClass());
-	if (!TestNotNull(TEXT("Transient outer actor should be created"), OuterActor))
-	{
-		return false;
-	}
-
-	USceneComponent* RuntimeComponent = NewObject<USceneComponent>(OuterActor, RuntimeClass, TEXT("ScriptScene"));
-	if (!TestNotNull(TEXT("Generated scene component instance should be created"), RuntimeComponent))
-	{
-		return false;
-	}
-
-	OuterActor->AddOwnedComponent(RuntimeComponent);
-
-	int32 Result = 0;
-	if (!TestTrue(TEXT("Native component binding reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, ReadComponentBindingsFunction, Result)))
-	{
-		return false;
-	}
-	TestEqual(TEXT("Script component should call bridged native component methods"), Result, 1);
-	bPassed = Result == 1;
-	ASTEST_END_SHARE
-
-	return bPassed;
-}
-
-bool FAngelscriptComponentDestroyBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-	ASTEST_BEGIN_SHARE
-	const bool bCompiled = CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("ASComponentDestroyCompat"),
-		TEXT("ASComponentDestroyCompat.as"),
-		TEXT(R"(
+		const bool bCompiled = CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("ASComponentDestroyCompat"),
+			TEXT("ASComponentDestroyCompat.as"),
+			TEXT(R"(
 UCLASS()
 class UDestroyBindingComponent : UActorComponent
 {
@@ -238,71 +277,78 @@ class UDestroyBindingComponent : UActorComponent
 	}
 }
 )"));
-	if (!TestTrue(TEXT("Compile annotated destroy component module should succeed"), bCompiled))
-	{
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Compile annotated destroy component module should succeed"), bCompiled))
+		{
+			return;
+		}
+
+		UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UDestroyBindingComponent"));
+		if (!TestRunner->TestNotNull(TEXT("Generated destroy component class should exist"), RuntimeClass))
+		{
+			return;
+		}
+
+		UFunction* DestroySelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("DestroySelf"));
+		if (!TestRunner->TestNotNull(TEXT("Destroy component function should exist"), DestroySelfFunction))
+		{
+			return;
+		}
+
+		AActor* OuterActor = NewObject<AActor>(GetTransientPackage(), AActor::StaticClass());
+		if (!TestRunner->TestNotNull(TEXT("Transient actor should be created for destroy component test"), OuterActor))
+		{
+			return;
+		}
+
+		UActorComponent* RuntimeComponent = NewObject<UActorComponent>(OuterActor, RuntimeClass, TEXT("DestroyBindingComponent"));
+		if (!TestRunner->TestNotNull(TEXT("Destroy binding component should be created"), RuntimeComponent))
+		{
+			return;
+		}
+
+		OuterActor->AddOwnedComponent(RuntimeComponent);
+
+		int32 Result = 0;
+		if (!TestRunner->TestTrue(TEXT("Destroy component reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, DestroySelfFunction, Result)))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestEqual(TEXT("Destroy component function should return success"), Result, 1))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("DestroyComponent binding should mark the component as being destroyed"), RuntimeComponent->IsBeingDestroyed());
 	}
 
-	UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UDestroyBindingComponent"));
-	if (!TestNotNull(TEXT("Generated destroy component class should exist"), RuntimeClass))
+	// ====================================================================
+	// Section: ComponentActivationAndTag
+	// ====================================================================
+
+	TEST_METHOD(ComponentActivationAndTag)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+		FAngelscriptEngineScope Scope(Engine);
+		ON_SCOPE_EXIT
+		{
+			const TArray<TSharedRef<FAngelscriptModuleDesc>> ActiveModules = Engine.GetActiveModules();
+			for (const TSharedRef<FAngelscriptModuleDesc>& Module : ActiveModules)
+			{
+				Engine.DiscardModule(*Module->ModuleName);
+			}
+		};
 
-	UFunction* DestroySelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("DestroySelf"));
-	if (!TestNotNull(TEXT("Destroy component function should exist"), DestroySelfFunction))
-	{
-		return false;
-	}
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
 
-	AActor* OuterActor = NewObject<AActor>(GetTransientPackage(), AActor::StaticClass());
-	if (!TestNotNull(TEXT("Transient actor should be created for destroy component test"), OuterActor))
-	{
-		return false;
-	}
+		AActor& HostActor = Spawner.SpawnActor<AActor>();
 
-	UActorComponent* RuntimeComponent = NewObject<UActorComponent>(OuterActor, RuntimeClass, TEXT("DestroyBindingComponent"));
-	if (!TestNotNull(TEXT("Destroy binding component should be created"), RuntimeComponent))
-	{
-		return false;
-	}
-
-	OuterActor->AddOwnedComponent(RuntimeComponent);
-
-	int32 Result = 0;
-	if (!TestTrue(TEXT("Destroy component reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, DestroySelfFunction, Result)))
-	{
-		return false;
-	}
-
-	if (!TestEqual(TEXT("Destroy component function should return success"), Result, 1))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("DestroyComponent binding should mark the component as being destroyed"), RuntimeComponent->IsBeingDestroyed());
-	bPassed = RuntimeComponent->IsBeingDestroyed();
-	ASTEST_END_SHARE
-
-	return bPassed;
-}
-
-bool FAngelscriptComponentActivationAndTagBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
-	ASTEST_BEGIN_FULL
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-
-	AActor& HostActor = Spawner.SpawnActor<AActor>();
-
-	const bool bCompiled = CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("ASComponentActivationAndTagCompat"),
-		TEXT("ASComponentActivationAndTagCompat.as"),
-		TEXT(R"(
+		const bool bCompiled = CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("ASComponentActivationAndTagCompat"),
+			TEXT("ASComponentActivationAndTagCompat.as"),
+			TEXT(R"(
 UCLASS()
 class UBindingActivationComponent : UActorComponent
 {
@@ -331,86 +377,83 @@ class UBindingActivationComponent : UActorComponent
 	}
 }
 )"));
-	if (!TestTrue(TEXT("Compile annotated activation component module should succeed"), bCompiled))
-	{
-		return false;
-	}
+		if (!TestRunner->TestTrue(TEXT("Compile annotated activation component module should succeed"), bCompiled))
+		{
+			return;
+		}
 
-	UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UBindingActivationComponent"));
-	if (!TestNotNull(TEXT("Generated activation component class should exist"), RuntimeClass))
-	{
-		return false;
-	}
+		UClass* RuntimeClass = FindGeneratedClass(&Engine, TEXT("UBindingActivationComponent"));
+		if (!TestRunner->TestNotNull(TEXT("Generated activation component class should exist"), RuntimeClass))
+		{
+			return;
+		}
 
-	UFunction* VerifyTagBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("VerifyTagBindings"));
-	UFunction* DeactivateSelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("DeactivateSelf"));
-	UFunction* ReactivateSelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReactivateSelf"));
-	if (!TestNotNull(TEXT("VerifyTagBindings function should exist"), VerifyTagBindingsFunction)
-		|| !TestNotNull(TEXT("DeactivateSelf function should exist"), DeactivateSelfFunction)
-		|| !TestNotNull(TEXT("ReactivateSelf function should exist"), ReactivateSelfFunction))
-	{
-		return false;
-	}
+		UFunction* VerifyTagBindingsFunction = FindGeneratedFunction(RuntimeClass, TEXT("VerifyTagBindings"));
+		UFunction* DeactivateSelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("DeactivateSelf"));
+		UFunction* ReactivateSelfFunction = FindGeneratedFunction(RuntimeClass, TEXT("ReactivateSelf"));
+		if (!TestRunner->TestNotNull(TEXT("VerifyTagBindings function should exist"), VerifyTagBindingsFunction)
+			|| !TestRunner->TestNotNull(TEXT("DeactivateSelf function should exist"), DeactivateSelfFunction)
+			|| !TestRunner->TestNotNull(TEXT("ReactivateSelf function should exist"), ReactivateSelfFunction))
+		{
+			return;
+		}
 
-	UActorComponent* RuntimeComponent = NewObject<UActorComponent>(&HostActor, RuntimeClass, TEXT("ActivationBindingComponent"));
-	if (!TestNotNull(TEXT("Generated activation component instance should be created"), RuntimeComponent))
-	{
-		return false;
-	}
+		UActorComponent* RuntimeComponent = NewObject<UActorComponent>(&HostActor, RuntimeClass, TEXT("ActivationBindingComponent"));
+		if (!TestRunner->TestNotNull(TEXT("Generated activation component instance should be created"), RuntimeComponent))
+		{
+			return;
+		}
 
-	HostActor.AddInstanceComponent(RuntimeComponent);
-	RuntimeComponent->ComponentTags.Add(TEXT("Probe"));
-	RuntimeComponent->RegisterComponent();
-	if (!TestTrue(TEXT("Activation component should register into the spawned world"), RuntimeComponent->IsRegistered()))
-	{
-		return false;
-	}
+		HostActor.AddInstanceComponent(RuntimeComponent);
+		RuntimeComponent->ComponentTags.Add(TEXT("Probe"));
+		RuntimeComponent->RegisterComponent();
+		if (!TestRunner->TestTrue(TEXT("Activation component should register into the spawned world"), RuntimeComponent->IsRegistered()))
+		{
+			return;
+		}
 
-	RuntimeComponent->Activate(true);
-	if (!TestTrue(TEXT("Activation component should start active before script toggles it"), RuntimeComponent->IsActive()))
-	{
-		return false;
-	}
+		RuntimeComponent->Activate(true);
+		if (!TestRunner->TestTrue(TEXT("Activation component should start active before script toggles it"), RuntimeComponent->IsActive()))
+		{
+			return;
+		}
 
-	int32 TagResult = 0;
-	if (!TestTrue(TEXT("VerifyTagBindings reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, VerifyTagBindingsFunction, TagResult)))
-	{
-		return false;
-	}
-	if (!TestEqual(TEXT("Tag compatibility probe should initially fail during red phase"), TagResult, 1))
-	{
-		return false;
-	}
+		int32 TagResult = 0;
+		if (!TestRunner->TestTrue(TEXT("VerifyTagBindings reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, VerifyTagBindingsFunction, TagResult)))
+		{
+			return;
+		}
+		if (!TestRunner->TestEqual(TEXT("Tag compatibility probe should pass"), TagResult, 1))
+		{
+			return;
+		}
 
-	int32 DeactivateResult = 0;
-	if (!TestTrue(TEXT("DeactivateSelf reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, DeactivateSelfFunction, DeactivateResult)))
-	{
-		return false;
-	}
-	if (!TestEqual(TEXT("DeactivateSelf should report success"), DeactivateResult, 1))
-	{
-		return false;
-	}
-	if (!TestFalse(TEXT("Deactivate binding should clear the active state"), RuntimeComponent->IsActive()))
-	{
-		return false;
-	}
+		int32 DeactivateResult = 0;
+		if (!TestRunner->TestTrue(TEXT("DeactivateSelf reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, DeactivateSelfFunction, DeactivateResult)))
+		{
+			return;
+		}
+		if (!TestRunner->TestEqual(TEXT("DeactivateSelf should report success"), DeactivateResult, 1))
+		{
+			return;
+		}
+		if (!TestRunner->TestFalse(TEXT("Deactivate binding should clear the active state"), RuntimeComponent->IsActive()))
+		{
+			return;
+		}
 
-	int32 ReactivateResult = 0;
-	if (!TestTrue(TEXT("ReactivateSelf reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, ReactivateSelfFunction, ReactivateResult)))
-	{
-		return false;
-	}
-	if (!TestEqual(TEXT("ReactivateSelf should report success"), ReactivateResult, 1))
-	{
-		return false;
-	}
+		int32 ReactivateResult = 0;
+		if (!TestRunner->TestTrue(TEXT("ReactivateSelf reflected call should execute on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, RuntimeComponent, ReactivateSelfFunction, ReactivateResult)))
+		{
+			return;
+		}
+		if (!TestRunner->TestEqual(TEXT("ReactivateSelf should report success"), ReactivateResult, 1))
+		{
+			return;
+		}
 
-	TestTrue(TEXT("Activate(true) binding should restore the active state"), RuntimeComponent->IsActive());
-	bPassed = TagResult == 1 && DeactivateResult == 1 && ReactivateResult == 1 && RuntimeComponent->IsActive();
-	ASTEST_END_FULL
-
-	return bPassed;
-}
+		TestRunner->TestTrue(TEXT("Activate(true) binding should restore the active state"), RuntimeComponent->IsActive());
+	}
+};
 
 #endif

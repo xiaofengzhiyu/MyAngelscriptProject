@@ -1,27 +1,54 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptJsonBindingsTests.cpp
+//
+// JSON binding coverage — CQTest refactor.
+// Automation ID:
+//   Angelscript.TestModule.Bindings.Json.*
+//
+// Sections:
+//   ObjectRoundTrip — Full JSON object create/serialize/parse round-trip
+//   ErrorPaths      — Type mismatch, out-of-bounds, iterator mutation exceptions
+//
+// CQTest adaptation notes:
+//   Two original IMPLEMENT_SIMPLE_AUTOMATION_TEST classes merged into one
+//   TEST_CLASS with two TEST_METHODs. The custom exception execution helper
+//   is retained for the error-path tests. The round-trip test uses
+//   ExpectGlobalInt via standard `int Entry()` → `int RoundTrip()` rename.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
+using namespace AngelscriptReflectiveAccess;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptJsonObjectRoundTripBindingsTest,
-	"Angelscript.TestModule.Bindings.JsonObjectRoundTrip",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptJsonErrorPathsBindingsTest,
-	"Angelscript.TestModule.Bindings.JsonErrorPaths",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+static const FBindingsCoverageProfile GJsonProfile{
+	TEXT("Json"),            // Theme
+	TEXT(""),              // Variant
+	TEXT("ASJson"),        // ModulePrefix
+	TEXT("Json"),          // CasePrefix
+	TEXT("JsonBindings"), // LogCategory
+};
 
-namespace AngelscriptTest_Bindings_AngelscriptJsonBindingsTests_Private
+// ----------------------------------------------------------------------------
+// Shared helpers
+// ----------------------------------------------------------------------------
+
+namespace JsonTestHelpers
 {
-	static constexpr ANSICHAR JsonObjectRoundTripModuleName[] = "ASJsonObjectRoundTrip";
-	static constexpr ANSICHAR JsonErrorPathsModuleName[] = "ASJsonErrorPaths";
-
 	bool ExecuteFunctionExpectingException(
 		FAutomationTestBase& Test,
 		FAngelscriptEngine& Engine,
@@ -79,24 +106,38 @@ namespace AngelscriptTest_Bindings_AngelscriptJsonBindingsTests_Private
 	}
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptJsonBindingsTests_Private;
+using namespace JsonTestHelpers;
 
-bool FAngelscriptJsonObjectRoundTripBindingsTest::RunTest(const FString& Parameters)
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptJsonBindingsTest,
+	"Angelscript.TestModule.Bindings.Json",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		Engine.DiscardModule(TEXT("ASJsonObjectRoundTrip"));
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		JsonObjectRoundTripModuleName,
-		TEXT(R"(
-int Entry()
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: ObjectRoundTrip
+	// ====================================================================
+
+	TEST_METHOD(ObjectRoundTrip)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GJsonProfile, TEXT("ObjectRoundTrip"), TEXT(R"(
+int RoundTrip()
 {
 	FJsonObject Root;
 	Root.SetStringField("Name", "Alice");
@@ -180,47 +221,25 @@ int Entry()
 	return 1;
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GJsonProfile,
+			TEXT("int RoundTrip()"),
+			TEXT("Json object round-trip operations should preserve field values and JSON type strings"),
+			1);
 	}
 
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
+	// ====================================================================
+	// Section: ErrorPaths
+	// ====================================================================
+
+	TEST_METHOD(ErrorPaths)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("Json object round-trip operations should preserve field values and JSON type strings"),
-		Result,
-		1);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
-}
-
-bool FAngelscriptJsonErrorPathsBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASJsonErrorPaths"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		JsonErrorPathsModuleName,
-		TEXT(R"(
+		FCoverageModuleScope Mod(*TestRunner, Engine, GJsonProfile, TEXT("ErrorPaths"), TEXT(R"(
 void TriggerTypeError()
 {
 	FJsonObject Root;
@@ -267,87 +286,77 @@ void TriggerIteratorMutation()
 	}
 }
 )"));
-	if (Module == nullptr)
-	{
-		return false;
-	}
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-	AddExpectedError(TEXT("Json Value of type 'Object' used as a 'String'."), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("ASJsonErrorPaths"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("void TriggerTypeError()"), EAutomationExpectedErrorFlags::Contains, 0, false);
+		// Type error path
+		TestRunner->AddExpectedError(TEXT("Json Value of type 'Object' used as a 'String'."), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("ASJson_ErrorPaths"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("void TriggerTypeError()"), EAutomationExpectedErrorFlags::Contains, 0, false);
 
-	FString ExceptionString;
-	int32 ExceptionLine = INDEX_NONE;
-	if (!ExecuteFunctionExpectingException(
-			*this,
-			Engine,
-			*Module,
-			TEXT("void TriggerTypeError()"),
-			TEXT("Json type-error path"),
+		FString ExceptionString;
+		int32 ExceptionLine = INDEX_NONE;
+		if (!ExecuteFunctionExpectingException(
+				*TestRunner, Engine, M,
+				TEXT("void TriggerTypeError()"),
+				TEXT("Json type-error path"),
+				ExceptionString, ExceptionLine))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Json GetStringField type mismatch should surface the expected runtime exception"),
 			ExceptionString,
-			ExceptionLine))
-	{
-		return false;
-	}
+			FString(TEXT("Json Value of type 'Object' used as a 'String'.")));
+		TestRunner->TestTrue(
+			TEXT("Json GetStringField type mismatch should report a script source line"),
+			ExceptionLine > 0);
 
-	bPassed = TestEqual(
-		TEXT("Json GetStringField type mismatch should surface the expected runtime exception"),
-		ExceptionString,
-		FString(TEXT("Json Value of type 'Object' used as a 'String'.")));
-	bPassed &= TestTrue(
-		TEXT("Json GetStringField type mismatch should report a script source line"),
-		ExceptionLine > 0);
+		// Out-of-bounds path
+		TestRunner->AddExpectedError(TEXT("Array index is out of bounds"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("ASJson_ErrorPaths"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("void TriggerOutOfBounds()"), EAutomationExpectedErrorFlags::Contains, 0, false);
 
-	AddExpectedError(TEXT("Array index is out of bounds"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("ASJsonErrorPaths"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("void TriggerOutOfBounds()"), EAutomationExpectedErrorFlags::Contains, 0, false);
+		if (!ExecuteFunctionExpectingException(
+				*TestRunner, Engine, M,
+				TEXT("void TriggerOutOfBounds()"),
+				TEXT("Json out-of-bounds path"),
+				ExceptionString, ExceptionLine))
+		{
+			return;
+		}
 
-	if (!ExecuteFunctionExpectingException(
-			*this,
-			Engine,
-			*Module,
-			TEXT("void TriggerOutOfBounds()"),
-			TEXT("Json out-of-bounds path"),
+		TestRunner->TestEqual(
+			TEXT("Json GetValueAt out-of-bounds access should surface the expected runtime exception"),
 			ExceptionString,
-			ExceptionLine))
-	{
-		return false;
-	}
+			FString(TEXT("Array index is out of bounds")));
+		TestRunner->TestTrue(
+			TEXT("Json GetValueAt out-of-bounds access should report a script source line"),
+			ExceptionLine > 0);
 
-	bPassed &= TestEqual(
-		TEXT("Json GetValueAt out-of-bounds access should surface the expected runtime exception"),
-		ExceptionString,
-		FString(TEXT("Array index is out of bounds")));
-	bPassed &= TestTrue(
-		TEXT("Json GetValueAt out-of-bounds access should report a script source line"),
-		ExceptionLine > 0);
+		// Iterator mutation path
+		TestRunner->AddExpectedError(TEXT("FJsonObject is being modified during for loop iteration"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("ASJson_ErrorPaths"), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("void TriggerIteratorMutation()"), EAutomationExpectedErrorFlags::Contains, 0, false);
 
-	AddExpectedError(TEXT("FJsonObject is being modified during for loop iteration"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("ASJsonErrorPaths"), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("void TriggerIteratorMutation()"), EAutomationExpectedErrorFlags::Contains, 0, false);
+		if (!ExecuteFunctionExpectingException(
+				*TestRunner, Engine, M,
+				TEXT("void TriggerIteratorMutation()"),
+				TEXT("Json iterator-mutation path"),
+				ExceptionString, ExceptionLine))
+		{
+			return;
+		}
 
-	if (!ExecuteFunctionExpectingException(
-			*this,
-			Engine,
-			*Module,
-			TEXT("void TriggerIteratorMutation()"),
-			TEXT("Json iterator-mutation path"),
+		TestRunner->TestEqual(
+			TEXT("Json iterator mutation should surface the expected runtime exception"),
 			ExceptionString,
-			ExceptionLine))
-	{
-		return false;
+			FString(TEXT("FJsonObject is being modified during for loop iteration")));
+		TestRunner->TestTrue(
+			TEXT("Json iterator mutation should report a script source line"),
+			ExceptionLine > 0);
 	}
-
-	bPassed &= TestEqual(
-		TEXT("Json iterator mutation should surface the expected runtime exception"),
-		ExceptionString,
-		FString(TEXT("FJsonObject is being modified during for loop iteration")));
-	bPassed &= TestTrue(
-		TEXT("Json iterator mutation should report a script source line"),
-		ExceptionLine > 0);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif
