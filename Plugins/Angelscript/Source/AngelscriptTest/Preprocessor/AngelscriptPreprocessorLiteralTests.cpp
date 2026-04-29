@@ -190,10 +190,16 @@ int Entry()
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/LiteralAssets/GenerateGetterAndPostInitRegistration.as"),
-			TEXT("asset PreviewAsset of UObject\n")
-			TEXT("{\n}\n\n")
-			TEXT("int Entry()\n{\n    return 7;\n}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/LiteralAssets/GenerateGetterAndPostInitRegistration.as"), TEXT(R"(
+asset PreviewAsset of UObject
+{
+}
+
+int Entry()
+{
+    return 7;
+}
+)"));
 
 		auto Session = RunPreprocessSession(Engine, File);
 
@@ -241,12 +247,20 @@ int Entry()
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/LiteralAssets/SkipStringAndCommentDecoys.as"),
-			TEXT("asset RealAsset of UObject\n\n")
-			TEXT("FString BuildAssetText()\n{\n")
-			TEXT("    return \"asset FakeAsset of UObject\";\n}\n\n")
-			TEXT("// asset CommentAsset of UObject\n")
-			TEXT("int Entry()\n{\n    return BuildAssetText().Len();\n}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/LiteralAssets/SkipStringAndCommentDecoys.as"), TEXT(R"(
+asset RealAsset of UObject
+
+FString BuildAssetText()
+{
+    return "asset FakeAsset of UObject";
+}
+
+// asset CommentAsset of UObject
+int Entry()
+{
+    return BuildAssetText().Len();
+}
+)"));
 
 		auto Session = RunPreprocessSession(Engine, File);
 

@@ -45,10 +45,12 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorClassTest,
 		Engine.ResetDiagnostics();
 		Engine.LastEmittedDiagnostics.Empty();
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/Classes/UnknownSuperType.as"),
-			TEXT("UCLASS()\n")
-			TEXT("class UUnknownSuperCarrier : UMissingBaseType\n")
-			TEXT("{\n}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/Classes/UnknownSuperType.as"), TEXT(R"(
+UCLASS()
+class UUnknownSuperCarrier : UMissingBaseType
+{
+}
+)"));
 
 		auto Result = RunPreprocess(Engine, File);
 
@@ -94,7 +96,17 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorClassTest,
 			&Engine, ECompileType::FullReload,
 			FName(TEXT("Tests.Preprocessor.First")),
 			TEXT("Tests/Preprocessor/First.as"),
-			TEXT("UCLASS()\nclass UDuplicateCarrier : UObject\n{\n    UFUNCTION()\n    int GetSeedValue()\n    {\n        return 1;\n    }\n}\n"),
+			TEXT(R"(
+UCLASS()
+class UDuplicateCarrier : UObject
+{
+    UFUNCTION()
+    int GetSeedValue()
+    {
+        return 1;
+    }
+}
+)"),
 			true, SeedSummary);
 
 		if (!TestRunner->TestTrue(TEXT("Seed should compile"), bSeedCompiled))
@@ -112,11 +124,24 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorClassTest,
 			TEXT("Cannot declare class UDuplicateCarrier in module Tests.Preprocessor.Second. A class with this name already exists in module Tests.Preprocessor.First."),
 			EAutomationExpectedErrorFlags::Contains, 1);
 
-		FFixtureFile FirstFile(TEXT("Tests/Preprocessor/First.as"),
-			TEXT("UCLASS()\nclass UDuplicateCarrier : UObject\n{\n    UFUNCTION()\n    int GetHotReloadValue()\n    {\n        return 2;\n    }\n}\n"));
+		FFixtureFile FirstFile(TEXT("Tests/Preprocessor/First.as"), TEXT(R"(
+UCLASS()
+class UDuplicateCarrier : UObject
+{
+    UFUNCTION()
+    int GetHotReloadValue()
+    {
+        return 2;
+    }
+}
+)"));
 
-		FFixtureFile SecondFile(TEXT("Tests/Preprocessor/Second.as"),
-			TEXT("UCLASS()\nclass UDuplicateCarrier : UObject\n{\n}\n"));
+		FFixtureFile SecondFile(TEXT("Tests/Preprocessor/Second.as"), TEXT(R"(
+UCLASS()
+class UDuplicateCarrier : UObject
+{
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(FirstFile));

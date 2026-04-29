@@ -53,13 +53,32 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorFunctionMacroTest,
 			{
 				TEXT("Function in unsupported conditional"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidConditionalFunction.as"),
-				TEXT("UCLASS()\nclass UBadFunctionConditionalCarrier : UObject\n{\n#ifndef UNKNOWN_FLAG\n    UFUNCTION()\n    int BadFunction()\n    {\n        return 1;\n    }\n#endif\n}\n"),
+				TEXT(R"(UCLASS()
+class UBadFunctionConditionalCarrier : UObject
+{
+#ifndef UNKNOWN_FLAG
+    UFUNCTION()
+    int BadFunction()
+    {
+        return 1;
+    }
+#endif
+}
+)"),
 				5
 			},
 			{
 				TEXT("Property in unsupported conditional"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidConditionalProperty.as"),
-				TEXT("UCLASS()\nclass UBadPropertyConditionalCarrier : UObject\n{\n#ifndef UNKNOWN_FLAG\n    UPROPERTY()\n    int BadValue;\n#endif\n}\n"),
+				TEXT(R"(UCLASS()
+class UBadPropertyConditionalCarrier : UObject
+{
+#ifndef UNKNOWN_FLAG
+    UPROPERTY()
+    int BadValue;
+#endif
+}
+)"),
 				5
 			}
 		};
@@ -89,21 +108,22 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorFunctionMacroTest,
 		Engine.SetUseEditorScriptsForTesting(true);
 		ON_SCOPE_EXIT { Engine.SetUseEditorScriptsForTesting(bOriginalUseEditorScripts); };
 
-		FFixtureFile EditorFile(TEXT("Tests/Preprocessor/FunctionMacros/EditorConditionalMembers.as"),
-			TEXT("UCLASS()\n")
-			TEXT("class UEditorConditionalCarrier : UObject\n")
-			TEXT("{\n")
-			TEXT("#if EDITOR\n")
-			TEXT("    UPROPERTY()\n")
-			TEXT("    int EditorValue;\n")
-			TEXT("\n")
-			TEXT("    UFUNCTION()\n")
-			TEXT("    int ReadEditorValue()\n")
-			TEXT("    {\n")
-			TEXT("        return 7;\n")
-			TEXT("    }\n")
-			TEXT("#endif\n")
-			TEXT("}\n"));
+		FFixtureFile EditorFile(TEXT("Tests/Preprocessor/FunctionMacros/EditorConditionalMembers.as"), TEXT(R"(
+UCLASS()
+class UEditorConditionalCarrier : UObject
+{
+#if EDITOR
+    UPROPERTY()
+    int EditorValue;
+
+    UFUNCTION()
+    int ReadEditorValue()
+    {
+        return 7;
+    }
+#endif
+}
+)"));
 
 		auto EditorResult = RunPreprocess(Engine, EditorFile);
 
@@ -169,21 +189,43 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorFunctionMacroTest,
 			{
 				TEXT("Global BlueprintEvent"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidSpecifierGlobalBlueprintEvent.as"),
-				TEXT("UFUNCTION(BlueprintEvent)\nint BadGlobalEvent()\n{\n    return 1;\n}\n"),
+				TEXT(R"(UFUNCTION(BlueprintEvent)
+int BadGlobalEvent()
+{
+    return 1;
+}
+)"),
 				TEXT("Global UFUNCTION() BadGlobalEvent may not be marked BlueprintEvent."),
 				1
 			},
 			{
 				TEXT("Conflicting BlueprintEvent+Override"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidSpecifierBlueprintConflict.as"),
-				TEXT("UCLASS()\nclass UBadCarrier : UObject\n{\n    UFUNCTION(BlueprintEvent, BlueprintOverride)\n    int Conflict()\n    {\n        return 1;\n    }\n}\n"),
+				TEXT(R"(UCLASS()
+class UBadCarrier : UObject
+{
+    UFUNCTION(BlueprintEvent, BlueprintOverride)
+    int Conflict()
+    {
+        return 1;
+    }
+}
+)"),
 				TEXT("UFUNCTION() Conflict cannot be both BlueprintEvent and BlueprintOverride."),
 				4
 			},
 			{
 				TEXT("Unknown function specifier"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidSpecifierUnknown.as"),
-				TEXT("UCLASS()\nclass UBadCarrier : UObject\n{\n    UFUNCTION(DefinitelyUnknownSpecifier)\n    void Unknown()\n    {\n    }\n}\n"),
+				TEXT(R"(UCLASS()
+class UBadCarrier : UObject
+{
+    UFUNCTION(DefinitelyUnknownSpecifier)
+    void Unknown()
+    {
+    }
+}
+)"),
 				TEXT("Unknown function specifier DefinitelyUnknownSpecifier on method UBadCarrier::Unknown."),
 				4
 			}

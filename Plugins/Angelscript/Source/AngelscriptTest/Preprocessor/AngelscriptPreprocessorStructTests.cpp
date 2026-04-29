@@ -43,11 +43,12 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorStructTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/Structs/InvalidInheritance.as"),
-			TEXT("USTRUCT() struct FDerivedStruct : FBaseStruct\n")
-			TEXT("{\n")
-			TEXT("    UPROPERTY() int Value;\n")
-			TEXT("}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/Structs/InvalidInheritance.as"), TEXT(R"(
+USTRUCT() struct FDerivedStruct : FBaseStruct
+{
+    UPROPERTY() int Value;
+}
+)"));
 
 		auto Result = RunPreprocess(Engine, File);
 
@@ -87,17 +88,19 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorStructTest,
 		Settings->DefaultPropertyEditSpecifier = EAngelscriptPropertyEditSpecifier::NotEditable;
 		Settings->DefaultPropertyEditSpecifierForStructs = EAngelscriptPropertyEditSpecifier::EditDefaultsOnly;
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/Structs/DefaultPropertySpecifierUsesStructSettings.as"),
-			TEXT("USTRUCT()\n")
-			TEXT("struct FStructDefaultSpecifierCarrier\n")
-			TEXT("{\n")
-			TEXT("    UPROPERTY() int StructValue;\n")
-			TEXT("}\n\n")
-			TEXT("UCLASS()\n")
-			TEXT("class UClassDefaultSpecifierCarrier : UObject\n")
-			TEXT("{\n")
-			TEXT("    UPROPERTY() int ClassValue;\n")
-			TEXT("}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/Structs/DefaultPropertySpecifierUsesStructSettings.as"), TEXT(R"(
+USTRUCT()
+struct FStructDefaultSpecifierCarrier
+{
+    UPROPERTY() int StructValue;
+}
+
+UCLASS()
+class UClassDefaultSpecifierCarrier : UObject
+{
+    UPROPERTY() int ClassValue;
+}
+)"));
 
 		auto Session = RunPreprocessSession(Engine, File);
 

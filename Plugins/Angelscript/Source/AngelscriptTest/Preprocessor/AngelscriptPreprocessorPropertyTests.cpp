@@ -130,10 +130,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorPropertyTest,
 		Engine.ResetDiagnostics();
 		Engine.LastEmittedDiagnostics.Empty();
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/PropertyMacros/InvalidUnknownReplicationConditionSpecifier.as"),
-			TEXT("UCLASS()\nclass UBadPropertyCarrier : UObject\n{\n")
-			TEXT("    UPROPERTY(Replicated, ReplicationCondition=DefinitelyUnknown)\n")
-			TEXT("    int TrackedValue;\n}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/PropertyMacros/InvalidUnknownReplicationConditionSpecifier.as"), TEXT(R"(
+UCLASS()
+class UBadPropertyCarrier : UObject
+{
+    UPROPERTY(Replicated, ReplicationCondition=DefinitelyUnknown)
+    int TrackedValue;
+}
+)"));
 
 		auto Result = RunPreprocess(Engine, File);
 
@@ -169,13 +173,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorPropertyTest,
 
 		Settings->DefaultPropertyBlueprintSpecifier = EAngelscriptPropertyBlueprintSpecifier::BlueprintReadOnly;
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/Properties/DefaultBlueprintAccessUsesSettings.as"),
-			TEXT("UCLASS()\n")
-			TEXT("class UBlueprintAccessDefaultSpecifierCarrier : UObject\n")
-			TEXT("{\n")
-			TEXT("    UPROPERTY() int ImplicitAccess;\n")
-			TEXT("    UPROPERTY(BlueprintReadWrite) int ExplicitAccess;\n")
-			TEXT("}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/Properties/DefaultBlueprintAccessUsesSettings.as"), TEXT(R"(
+UCLASS()
+class UBlueprintAccessDefaultSpecifierCarrier : UObject
+{
+    UPROPERTY() int ImplicitAccess;
+    UPROPERTY(BlueprintReadWrite) int ExplicitAccess;
+}
+)"));
 
 		auto Session = RunPreprocessSession(Engine, File);
 
@@ -236,13 +241,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorPropertyTest,
 			Engine.ResetDiagnostics();
 			Engine.LastEmittedDiagnostics.Empty();
 
-			FFixtureFile File(TEXT("Tests/Preprocessor/Components/ShowOnActorRequiresDefaultComponent_Invalid.as"),
-				TEXT("UCLASS()\n")
-				TEXT("class AShowOnActorInvalidCarrier : AActor\n")
-				TEXT("{\n")
-				TEXT("    UPROPERTY(ShowOnActor)\n")
-				TEXT("    int PlainValue;\n")
-				TEXT("}\n"));
+			FFixtureFile File(TEXT("Tests/Preprocessor/Components/ShowOnActorRequiresDefaultComponent_Invalid.as"), TEXT(R"(
+UCLASS()
+class AShowOnActorInvalidCarrier : AActor
+{
+    UPROPERTY(ShowOnActor)
+    int PlainValue;
+}
+)"));
 
 			auto Result = RunPreprocess(Engine, File);
 
@@ -259,13 +265,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorPropertyTest,
 			Engine.ResetDiagnostics();
 			Engine.LastEmittedDiagnostics.Empty();
 
-			FFixtureFile File(TEXT("Tests/Preprocessor/Components/ShowOnActorRequiresDefaultComponent_Valid.as"),
-				TEXT("UCLASS()\n")
-				TEXT("class AShowOnActorValidCarrier : AActor\n")
-				TEXT("{\n")
-				TEXT("    UPROPERTY(DefaultComponent, ShowOnActor, RootComponent)\n")
-				TEXT("    USceneComponent RootScene;\n")
-				TEXT("}\n"));
+			FFixtureFile File(TEXT("Tests/Preprocessor/Components/ShowOnActorRequiresDefaultComponent_Valid.as"), TEXT(R"(
+UCLASS()
+class AShowOnActorValidCarrier : AActor
+{
+    UPROPERTY(DefaultComponent, ShowOnActor, RootComponent)
+    USceneComponent RootScene;
+}
+)"));
 
 			auto Session = RunPreprocessSession(Engine, File);
 

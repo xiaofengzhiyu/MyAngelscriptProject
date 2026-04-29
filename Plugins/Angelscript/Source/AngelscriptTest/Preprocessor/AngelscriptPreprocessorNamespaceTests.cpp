@@ -54,17 +54,18 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorNamespaceTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/Namespace/InvalidDeclarationReportsSyntax.as"),
-			TEXT("namespace Gameplay\n")
-			TEXT("UCLASS()\n")
-			TEXT("class UBrokenNamespaceCarrier : UObject\n")
-			TEXT("{\n")
-			TEXT("}\n")
-			TEXT("\n")
-			TEXT("int Entry()\n")
-			TEXT("{\n")
-			TEXT("    return 7;\n")
-			TEXT("}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/Namespace/InvalidDeclarationReportsSyntax.as"), TEXT(R"(
+namespace Gameplay
+UCLASS()
+class UBrokenNamespaceCarrier : UObject
+{
+}
+
+int Entry()
+{
+    return 7;
+}
+)"));
 
 		auto Session = RunPreprocessSession(Engine, File);
 		const auto& Result = Session.Result;
@@ -152,14 +153,15 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorNamespaceTest,
 			FAngelscriptEngine::ShouldUseEditorScriptsForCurrentContext());
 
 		FFixtureFile File(
-			TEXT("Game/Preprocessor/RestrictUsage/InactiveBranchIgnored.as"),
-			TEXT("#if !EDITOR\n")
-			TEXT("#restrict usage disallow Runtime.*\n")
-			TEXT("#endif\n")
-			TEXT("int Entry()\n")
-			TEXT("{\n")
-			TEXT("    return 7;\n")
-			TEXT("}\n"));
+			TEXT("Game/Preprocessor/RestrictUsage/InactiveBranchIgnored.as"), TEXT(R"(
+#if !EDITOR
+#restrict usage disallow Runtime.*
+#endif
+int Entry()
+{
+    return 7;
+}
+)"));
 
 		auto Result = RunPreprocess(Engine, File);
 
@@ -197,14 +199,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorNamespaceTest,
 
 		Engine.ResetDiagnostics();
 
-		const FString ScriptSource =
-			TEXT("#if !EDITOR\n")
-			TEXT("#restrict usage disallow Runtime.*\n")
-			TEXT("#endif\n")
-			TEXT("int Entry()\n")
-			TEXT("{\n")
-			TEXT("    return 7;\n")
-			TEXT("}\n");
+		const FString ScriptSource = TEXT(R"(#if !EDITOR
+#restrict usage disallow Runtime.*
+#endif
+int Entry()
+{
+    return 7;
+}
+)");
 
 		FAngelscriptCompileTraceSummary Summary;
 		const bool bCompiled = CompileModuleWithSummary(
@@ -253,10 +255,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorNamespaceTest,
 		FAngelscriptEngine& Engine = *OwnedEngine;
 		ASTEST_BEGIN_FULL
 
-		FFixtureFile File(TEXT("Game/Preprocessor/Namespace/RestrictAllow.as"),
-			TEXT("#restrict usage allow Game.UI.*\n")
-			TEXT("#restrict usage disallow Game.Internal.*\n")
-			TEXT("int Entry()\n{\n    return 42;\n}\n"));
+		FFixtureFile File(TEXT("Game/Preprocessor/Namespace/RestrictAllow.as"), TEXT(R"(
+#restrict usage allow Game.UI.*
+#restrict usage disallow Game.Internal.*
+int Entry()
+{
+    return 42;
+}
+)"));
 
 		auto Result = RunPreprocess(Engine, File);
 

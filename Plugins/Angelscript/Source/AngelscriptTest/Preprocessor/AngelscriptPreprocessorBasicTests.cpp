@@ -36,11 +36,12 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorBasicTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/BasicModule.as"),
-			TEXT("int ReturnSeven()\n")
-			TEXT("{\n")
-			TEXT("    return 7;\n")
-			TEXT("}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/BasicModule.as"), TEXT(R"(
+int ReturnSeven()
+{
+    return 7;
+}
+)"));
 
 		auto Result = RunPreprocess(Engine, File);
 
@@ -73,16 +74,18 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorBasicTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile File(TEXT("Tests/Preprocessor/MacroActor.as"),
-			TEXT("class AMacroActor : AActor\n")
-			TEXT("{\n")
-			TEXT("    UPROPERTY(EditAnywhere, BlueprintReadWrite)\n")
-			TEXT("    UStaticMesh Mesh;\n\n")
-			TEXT("    UFUNCTION(BlueprintOverride)\n")
-			TEXT("    void BeginPlay()\n")
-			TEXT("    {\n")
-			TEXT("    }\n")
-			TEXT("}\n"));
+		FFixtureFile File(TEXT("Tests/Preprocessor/MacroActor.as"), TEXT(R"(
+class AMacroActor : AActor
+{
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UStaticMesh Mesh;
+
+    UFUNCTION(BlueprintOverride)
+    void BeginPlay()
+    {
+    }
+}
+)"));
 
 		auto Session = RunPreprocessSession(Engine, File);
 
@@ -117,18 +120,20 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorBasicTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/Shared.as"),
-			TEXT("int SharedValue()\n")
-			TEXT("{\n")
-			TEXT("    return 11;\n")
-			TEXT("}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 11;
+}
+)"));
 
-		FFixtureFile ImportingFile(TEXT("Tests/Preprocessor/UsesImport.as"),
-			TEXT("import Tests.Preprocessor.Shared;\n")
-			TEXT("int UseShared()\n")
-			TEXT("{\n")
-			TEXT("    return SharedValue();\n")
-			TEXT("}\n"));
+		FFixtureFile ImportingFile(TEXT("Tests/Preprocessor/UsesImport.as"), TEXT(R"(
+import Tests.Preprocessor.Shared;
+int UseShared()
+{
+    return SharedValue();
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(SharedFile));
@@ -269,11 +274,19 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorBasicTest,
 
 		Engine.ResetDiagnostics();
 
-		FFixtureFile FirstFile(TEXT("Tests/Preprocessor/ApiContract/First.as"),
-			TEXT("int Entry()\n{\n    return 7;\n}\n"));
+		FFixtureFile FirstFile(TEXT("Tests/Preprocessor/ApiContract/First.as"), TEXT(R"(
+int Entry()
+{
+    return 7;
+}
+)"));
 
-		FFixtureFile SecondFile(TEXT("Tests/Preprocessor/ApiContract/Second.as"),
-			TEXT("int Entry()\n{\n    return 11;\n}\n"));
+		FFixtureFile SecondFile(TEXT("Tests/Preprocessor/ApiContract/Second.as"), TEXT(R"(
+int Entry()
+{
+    return 11;
+}
+)"));
 
 		// First: normal preprocess with one file
 		TOptional<TGuardValue<bool>> ImportGuard;

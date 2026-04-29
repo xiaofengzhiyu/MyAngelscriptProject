@@ -52,13 +52,21 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 			TEXT("=> Tests.Preprocessor.ImportCycles.CircularA"),
 			EAutomationExpectedErrorFlags::Contains, 1);
 
-		FFixtureFile FileA(TEXT("Tests/Preprocessor/ImportCycles/CircularA.as"),
-			TEXT("import Tests.Preprocessor.ImportCycles.CircularB;\n")
-			TEXT("int FromA()\n{\n    return FromB();\n}\n"));
+		FFixtureFile FileA(TEXT("Tests/Preprocessor/ImportCycles/CircularA.as"), TEXT(R"(
+import Tests.Preprocessor.ImportCycles.CircularB;
+int FromA()
+{
+    return FromB();
+}
+)"));
 
-		FFixtureFile FileB(TEXT("Tests/Preprocessor/ImportCycles/CircularB.as"),
-			TEXT("import Tests.Preprocessor.ImportCycles.CircularA;\n")
-			TEXT("int FromB()\n{\n    return FromA();\n}\n"));
+		FFixtureFile FileB(TEXT("Tests/Preprocessor/ImportCycles/CircularB.as"), TEXT(R"(
+import Tests.Preprocessor.ImportCycles.CircularA;
+int FromB()
+{
+    return FromA();
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(FileA));
@@ -93,12 +101,20 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 			TEXT("Should run with automatic imports enabled"),
 			Engine.ShouldUseAutomaticImportMethod());
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/AutomaticImportCompat/Shared.as"),
-			TEXT("int SharedValue()\n{\n    return 11;\n}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/AutomaticImportCompat/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 11;
+}
+)"));
 
-		FFixtureFile ImportingFile(TEXT("Tests/Preprocessor/AutomaticImportCompat/UsesManualImport.as"),
-			TEXT("import Tests.Preprocessor.AutomaticImportCompat.Shared;\n")
-			TEXT("int UseShared()\n{\n    return SharedValue();\n}\n"));
+		FFixtureFile ImportingFile(TEXT("Tests/Preprocessor/AutomaticImportCompat/UsesManualImport.as"), TEXT(R"(
+import Tests.Preprocessor.AutomaticImportCompat.Shared;
+int UseShared()
+{
+    return SharedValue();
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(SharedFile));
@@ -161,12 +177,20 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 			TEXT("Import statement is missing terminating ';'."),
 			EAutomationExpectedErrorFlags::Contains, 1);
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/MissingSemicolon/Shared.as"),
-			TEXT("int SharedValue()\n{\n    return 11;\n}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/MissingSemicolon/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 11;
+}
+)"));
 
-		FFixtureFile BrokenFile(TEXT("Tests/Preprocessor/MissingSemicolon/BrokenImport.as"),
-			TEXT("import Tests.Preprocessor.MissingSemicolon.Shared\n")
-			TEXT("int UseShared()\n{\n    return SharedValue();\n}\n"));
+		FFixtureFile BrokenFile(TEXT("Tests/Preprocessor/MissingSemicolon/BrokenImport.as"), TEXT(R"(
+import Tests.Preprocessor.MissingSemicolon.Shared
+int UseShared()
+{
+    return SharedValue();
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(SharedFile));
@@ -200,12 +224,20 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportTrailingBlockComment/Shared.as"),
-			TEXT("int SharedValue()\n{\n    return 11;\n}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportTrailingBlockComment/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 11;
+}
+)"));
 
-		FFixtureFile ImportingFile(TEXT("Tests/Preprocessor/ImportTrailingBlockComment/UsesShared.as"),
-			TEXT("import Tests.Preprocessor.ImportTrailingBlockComment.Shared /* shared helpers */;\n")
-			TEXT("int Entry()\n{\n    return SharedValue();\n}\n"));
+		FFixtureFile ImportingFile(TEXT("Tests/Preprocessor/ImportTrailingBlockComment/UsesShared.as"), TEXT(R"(
+import Tests.Preprocessor.ImportTrailingBlockComment.Shared /* shared helpers */;
+int Entry()
+{
+    return SharedValue();
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(SharedFile));
@@ -279,13 +311,21 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportDedup/Shared.as"),
-			TEXT("int SharedValue()\n{\n    return 17;\n}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportDedup/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 17;
+}
+)"));
 
-		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportDedup/Consumer.as"),
-			TEXT("import Tests.Preprocessor.ImportDedup.Shared;\n")
-			TEXT("import Tests.Preprocessor.ImportDedup.Shared;\n")
-			TEXT("int Entry()\n{\n    return SharedValue();\n}\n"));
+		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportDedup/Consumer.as"), TEXT(R"(
+import Tests.Preprocessor.ImportDedup.Shared;
+import Tests.Preprocessor.ImportDedup.Shared;
+int Entry()
+{
+    return SharedValue();
+}
+)"));
 
 		TArray<FFixtureFile> Files;
 		Files.Emplace(MoveTemp(ConsumerFile));
@@ -364,16 +404,28 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile BaseFile(TEXT("Tests/Preprocessor/ImportTopology/Base.as"),
-			TEXT("int BaseValue()\n{\n    return 2;\n}\n"));
+		FFixtureFile BaseFile(TEXT("Tests/Preprocessor/ImportTopology/Base.as"), TEXT(R"(
+int BaseValue()
+{
+    return 2;
+}
+)"));
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportTopology/Shared.as"),
-			TEXT("import Tests.Preprocessor.ImportTopology.Base;\n")
-			TEXT("int SharedValue()\n{\n    return BaseValue() + 3;\n}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportTopology/Shared.as"), TEXT(R"(
+import Tests.Preprocessor.ImportTopology.Base;
+int SharedValue()
+{
+    return BaseValue() + 3;
+}
+)"));
 
-		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportTopology/Consumer.as"),
-			TEXT("import Tests.Preprocessor.ImportTopology.Shared;\n")
-			TEXT("int Entry()\n{\n    return SharedValue() + 5;\n}\n"));
+		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportTopology/Consumer.as"), TEXT(R"(
+import Tests.Preprocessor.ImportTopology.Shared;
+int Entry()
+{
+    return SharedValue() + 5;
+}
+)"));
 
 		// Add in reverse order to test topological sort
 		TArray<FFixtureFile> Files;
@@ -466,12 +518,20 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 			Settings->bWarnOnManualImportStatements = Case.bWarnOnManualImport;
 			Engine.ResetDiagnostics();
 
-			FFixtureFile ProviderFile(TEXT("Tests/Preprocessor/ImportMode/Shared.as"),
-				TEXT("int SharedValue()\n{\n    return 11;\n}\n"));
+			FFixtureFile ProviderFile(TEXT("Tests/Preprocessor/ImportMode/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 11;
+}
+)"));
 
-			FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportMode/Consumer.as"),
-				TEXT("import Tests.Preprocessor.ImportMode.Shared;\n")
-				TEXT("int Entry()\n{\n    return SharedValue();\n}\n"));
+			FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportMode/Consumer.as"), TEXT(R"(
+import Tests.Preprocessor.ImportMode.Shared;
+int Entry()
+{
+    return SharedValue();
+}
+)"));
 
 			TArray<FFixtureFile> Files;
 			Files.Emplace(MoveTemp(ProviderFile));
@@ -527,37 +587,49 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportConditional/Shared.as"),
-			TEXT("int SharedValue()\n{\n    return 42;\n}\n"));
+		FFixtureFile SharedFile(TEXT("Tests/Preprocessor/ImportConditional/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 42;
+}
+)"));
 
-		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportConditional/Consumer.as"),
-			TEXT("#ifdef USESHARED\n")
-			TEXT("import Tests.Preprocessor.ImportConditional.Shared;\n")
-			TEXT("#endif\n")
-			TEXT("int Entry()\n{\n")
-			TEXT("#ifdef USESHARED\n")
-			TEXT("    return SharedValue();\n")
-			TEXT("#else\n")
-			TEXT("    return 99;\n")
-			TEXT("#endif\n")
-			TEXT("}\n"));
+		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/ImportConditional/Consumer.as"), TEXT(R"(
+#ifdef USESHARED
+import Tests.Preprocessor.ImportConditional.Shared;
+#endif
+int Entry()
+{
+#ifdef USESHARED
+    return SharedValue();
+#else
+    return 99;
+#endif
+}
+)"));
 
 		// Case 1: USESHARED=true → import is active
 		{
 			TArray<FFixtureFile> Files;
-			Files.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Shared.as"),
-				TEXT("int SharedValue()\n{\n    return 42;\n}\n"));
-			Files.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Consumer.as"),
-				TEXT("#ifdef USESHARED\n")
-				TEXT("import Tests.Preprocessor.ImportConditional.Shared;\n")
-				TEXT("#endif\n")
-				TEXT("int Entry()\n{\n")
-				TEXT("#ifdef USESHARED\n")
-				TEXT("    return SharedValue();\n")
-				TEXT("#else\n")
-				TEXT("    return 99;\n")
-				TEXT("#endif\n")
-				TEXT("}\n"));
+			Files.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Shared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 42;
+}
+)"));
+			Files.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Consumer.as"), TEXT(R"(
+#ifdef USESHARED
+import Tests.Preprocessor.ImportConditional.Shared;
+#endif
+int Entry()
+{
+#ifdef USESHARED
+    return SharedValue();
+#else
+    return 99;
+#endif
+}
+)"));
 
 			auto Result = RunPreprocess(Engine, Files, {{TEXT("USESHARED"), true}});
 
@@ -579,19 +651,25 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 		// Case 2: USESHARED=false → import is in dead branch, ignored
 		{
 			TArray<FFixtureFile> Files2;
-			Files2.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Shared2.as"),
-				TEXT("int SharedValue()\n{\n    return 42;\n}\n"));
-			Files2.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Consumer2.as"),
-				TEXT("#ifdef USESHARED\n")
-				TEXT("import Tests.Preprocessor.ImportConditional.Shared2;\n")
-				TEXT("#endif\n")
-				TEXT("int Entry()\n{\n")
-				TEXT("#ifdef USESHARED\n")
-				TEXT("    return SharedValue();\n")
-				TEXT("#else\n")
-				TEXT("    return 99;\n")
-				TEXT("#endif\n")
-				TEXT("}\n"));
+			Files2.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Shared2.as"), TEXT(R"(
+int SharedValue()
+{
+    return 42;
+}
+)"));
+			Files2.Emplace(TEXT("Tests/Preprocessor/ImportConditional/Consumer2.as"), TEXT(R"(
+#ifdef USESHARED
+import Tests.Preprocessor.ImportConditional.Shared2;
+#endif
+int Entry()
+{
+#ifdef USESHARED
+    return SharedValue();
+#else
+    return 99;
+#endif
+}
+)"));
 
 			auto Result2 = RunPreprocess(Engine, Files2, {{TEXT("USESHARED"), false}});
 
@@ -621,26 +699,46 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorImportTest,
 
 		// Graph: Root has no imports. A/B/C all import Root. Consumer imports A, B, C.
 		// Expected order: Root → A/B/C (any order) → Consumer
-		FFixtureFile RootFile(TEXT("Tests/Preprocessor/WideGraph/Root.as"),
-			TEXT("int RootValue()\n{\n    return 1;\n}\n"));
+		FFixtureFile RootFile(TEXT("Tests/Preprocessor/WideGraph/Root.as"), TEXT(R"(
+int RootValue()
+{
+    return 1;
+}
+)"));
 
-		FFixtureFile FileA(TEXT("Tests/Preprocessor/WideGraph/A.as"),
-			TEXT("import Tests.Preprocessor.WideGraph.Root;\n")
-			TEXT("int ValueA()\n{\n    return RootValue() + 10;\n}\n"));
+		FFixtureFile FileA(TEXT("Tests/Preprocessor/WideGraph/A.as"), TEXT(R"(
+import Tests.Preprocessor.WideGraph.Root;
+int ValueA()
+{
+    return RootValue() + 10;
+}
+)"));
 
-		FFixtureFile FileB(TEXT("Tests/Preprocessor/WideGraph/B.as"),
-			TEXT("import Tests.Preprocessor.WideGraph.Root;\n")
-			TEXT("int ValueB()\n{\n    return RootValue() + 20;\n}\n"));
+		FFixtureFile FileB(TEXT("Tests/Preprocessor/WideGraph/B.as"), TEXT(R"(
+import Tests.Preprocessor.WideGraph.Root;
+int ValueB()
+{
+    return RootValue() + 20;
+}
+)"));
 
-		FFixtureFile FileC(TEXT("Tests/Preprocessor/WideGraph/C.as"),
-			TEXT("import Tests.Preprocessor.WideGraph.Root;\n")
-			TEXT("int ValueC()\n{\n    return RootValue() + 30;\n}\n"));
+		FFixtureFile FileC(TEXT("Tests/Preprocessor/WideGraph/C.as"), TEXT(R"(
+import Tests.Preprocessor.WideGraph.Root;
+int ValueC()
+{
+    return RootValue() + 30;
+}
+)"));
 
-		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/WideGraph/Consumer.as"),
-			TEXT("import Tests.Preprocessor.WideGraph.A;\n")
-			TEXT("import Tests.Preprocessor.WideGraph.B;\n")
-			TEXT("import Tests.Preprocessor.WideGraph.C;\n")
-			TEXT("int Entry()\n{\n    return ValueA() + ValueB() + ValueC();\n}\n"));
+		FFixtureFile ConsumerFile(TEXT("Tests/Preprocessor/WideGraph/Consumer.as"), TEXT(R"(
+import Tests.Preprocessor.WideGraph.A;
+import Tests.Preprocessor.WideGraph.B;
+import Tests.Preprocessor.WideGraph.C;
+int Entry()
+{
+    return ValueA() + ValueB() + ValueC();
+}
+)"));
 
 		// Add in reverse order to test topological sort
 		TArray<FFixtureFile> Files;

@@ -55,7 +55,26 @@ namespace PreprocessorTestHelpers
 	}
 
 	/** RAII fixture file: writes a .as file on construction, deletes on destruction.
-	 *  Replaces 25 per-file WriteFixture / Write*Fixture functions. */
+	 *  Replaces 25 per-file WriteFixture / Write*Fixture functions.
+	 *
+	 *  Content normalization: the constructor strips at most ONE leading newline
+	 *  (\r?\n) from Content before writing to disk. Trailing newlines are
+	 *  preserved verbatim. This makes TEXT(R"(...)") raw-string literals
+	 *  practical without changing the byte layout that legacy
+	 *      TEXT("...\n") TEXT("...\n")
+	 *  fixtures wrote (their trailing \n is significant: many tests embed code
+	 *  whose last line ends with a newline, and that final \n must be kept).
+	 *  A typical raw-string fixture therefore looks like:
+	 *
+	 *      FFixtureFile File(TEXT("Tests/PP/Foo.as"), TEXT(R"(
+	 *      int Entry() { return 7; }
+	 *      )"));
+	 *
+	 *  which writes "int Entry() { return 7; }\n" to disk — byte-equivalent to
+	 *      TEXT("int Entry() { return 7; }\n").
+	 *
+	 *  Trim is intentionally limited to one outer leading newline so callers can
+	 *  still embed deliberate leading blank lines by adding extra newlines. */
 	struct FFixtureFile
 	{
 		FString RelativePath;
@@ -67,7 +86,7 @@ namespace PreprocessorTestHelpers
 			, bOwnsFile(true)
 		{
 			IFileManager::Get().MakeDirectory(*FPaths::GetPath(AbsolutePath), true);
-			FFileHelper::SaveStringToFile(Content, *AbsolutePath);
+			FFileHelper::SaveStringToFile(TrimLeadingNewline(Content), *AbsolutePath);
 		}
 
 		~FFixtureFile()
@@ -107,6 +126,22 @@ namespace PreprocessorTestHelpers
 			return *this;
 		}
 
+		/** Derive the dot-separated module name the preprocessor will emit for this
+		 *  fixture, based purely on RelativePath. Mirrors the runtime convention:
+		 *      "Tests/Preprocessor/Foo.as" -> "Tests.Preprocessor.Foo"
+		 *  Strips a trailing ".as" if present, normalizes both '\\' and '/' to '.'. */
+		FString ExpectedModuleName() const
+		{
+			FString Name = RelativePath;
+			if (Name.EndsWith(TEXT(".as"), ESearchCase::IgnoreCase))
+			{
+				Name.LeftChopInline(3, EAllowShrinking::No);
+			}
+			Name.ReplaceInline(TEXT("\\"), TEXT("."));
+			Name.ReplaceInline(TEXT("/"), TEXT("."));
+			return Name;
+		}
+
 		/** Factory for zero-byte fixture files (true 0 bytes on disk). */
 		static FFixtureFile CreateZeroByte(const FString& InRelativePath)
 		{
@@ -128,6 +163,34 @@ namespace PreprocessorTestHelpers
 	private:
 		FFixtureFile() = default;
 		bool bOwnsFile = false;
+
+		/** Strip at most ONE leading newline (\r?\n). Trailing whitespace is
+		 *  preserved verbatim — many AngelScript fixtures rely on a final '\n'. */
+		static FString TrimLeadingNewline(const FString& In)
+		{
+			int32 Start = 0;
+			const int32 Len = In.Len();
+			if (Start < Len && In[Start] == TCHAR('\r'))
+			{
+				++Start;
+			}
+			if (Start < Len && In[Start] == TCHAR('\n'))
+			{
+				++Start;
+			}
+			else
+			{
+				// Only strip a leading "\n" or "\r\n" pair; a lone leading '\r'
+				// must not be consumed.
+				Start = 0;
+			}
+
+			if (Start == 0)
+			{
+				return In;
+			}
+			return In.Mid(Start, Len - Start);
+		}
 	};
 
 	/** Batch-write multiple fixture files. */
@@ -680,6 +743,115 @@ namespace PreprocessorTestHelpers
 	{
 		const FFixtureFile* FilePtr = &File;
 		return RunPreprocessSession(Engine, MakeArrayView(&FilePtr, 1), FlagOverrides, bDisableAutomaticImports);
+	}
+
+	// =========================================================================
+	// 6. Debug: Dump Preprocessing Result To Disk
+	// =========================================================================
+
+	namespace Detail
+	{
+		/** Replace characters illegal on common file systems with '_'. Does NOT
+		 *  collapse path separators on purpose: the caller controls the layout. */
+		inline FString SanitizeFilenameComponent(const FString& In)
+		{
+			FString Out = In;
+			static const TCHAR* Illegal = TEXT("\\/:*?\"<>|");
+			for (int32 i = 0; Illegal[i] != 0; ++i)
+			{
+				const TCHAR Bad = Illegal[i];
+				const TCHAR Replacement = TCHAR('_');
+				for (int32 j = 0; j < Out.Len(); ++j)
+				{
+					if (Out[j] == Bad)
+					{
+						Out[j] = Replacement;
+					}
+				}
+			}
+			return Out;
+		}
+	}
+
+	/** Root directory for ad-hoc preprocessor result dumps. */
+	inline FString GetDumpRoot()
+	{
+		return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), TEXT("PreprocessorDumps"));
+	}
+
+	/** Dump a preprocessing result to disk for human inspection.
+	 *
+	 *  Layout (under Saved/Automation/PreprocessorDumps/<Subdir>/):
+	 *    Index.txt                         -- one line per module + summary
+	 *    <ModuleName>/_meta.txt            -- per-module metadata
+	 *    <ModuleName>/<i>_<file>.as        -- each FCodeSection's processed code
+	 *
+	 *  This helper is intentionally NOT invoked by any TEST_METHOD; it is for
+	 *  on-demand developer use. All filesystem failures are silent so the helper
+	 *  never alters test outcomes. */
+	inline void DumpPreprocessResult(const FPreprocessResult& Result, const FString& Subdir)
+	{
+		const FString DumpDir = FPaths::Combine(GetDumpRoot(), Subdir);
+		IFileManager& FM = IFileManager::Get();
+		FM.MakeDirectory(*DumpDir, true);
+
+		FString Index;
+		Index += FString::Printf(TEXT("# PreprocessResult dump\n"));
+		Index += FString::Printf(TEXT("Subdir         : %s\n"), *Subdir);
+		Index += FString::Printf(TEXT("bSuccess       : %s\n"), Result.bSuccess ? TEXT("true") : TEXT("false"));
+		Index += FString::Printf(TEXT("ModuleCount    : %d\n"), Result.Modules.Num());
+		Index += FString::Printf(TEXT("ErrorCount     : %d\n"), Result.ErrorCount);
+		Index += FString::Printf(TEXT("DiagnosticCount: %d\n\n"), Result.AllDiagnostics.Num());
+
+		for (const TSharedRef<FAngelscriptModuleDesc>& ModuleRef : Result.Modules)
+		{
+			const FAngelscriptModuleDesc& Module = ModuleRef.Get();
+			const FString SafeModuleName = Detail::SanitizeFilenameComponent(Module.ModuleName);
+			const FString ModuleDir = FPaths::Combine(DumpDir, SafeModuleName);
+			FM.MakeDirectory(*ModuleDir, true);
+
+			Index += FString::Printf(
+				TEXT("- %s  sections=%d  hash=%lld  combined=%lld\n"),
+				*Module.ModuleName,
+				Module.Code.Num(),
+				static_cast<long long>(Module.CodeHash),
+				static_cast<long long>(Module.CombinedDependencyHash));
+
+			FString Meta;
+			Meta += FString::Printf(TEXT("ModuleName             : %s\n"), *Module.ModuleName);
+			Meta += FString::Printf(TEXT("CodeHash               : %lld\n"), static_cast<long long>(Module.CodeHash));
+			Meta += FString::Printf(TEXT("CombinedDependencyHash : %lld\n"), static_cast<long long>(Module.CombinedDependencyHash));
+			Meta += FString::Printf(TEXT("CodeSectionCount       : %d\n\n"), Module.Code.Num());
+			for (int32 i = 0; i < Module.Code.Num(); ++i)
+			{
+				const FAngelscriptModuleDesc::FCodeSection& Section = Module.Code[i];
+				Meta += FString::Printf(
+					TEXT("[%d] relative=%s\n    absolute=%s\n    hash=%lld  bytes=%d\n"),
+					i, *Section.RelativeFilename, *Section.AbsoluteFilename,
+					static_cast<long long>(Section.CodeHash), Section.Code.Len());
+
+				const FString SectionLeaf = Detail::SanitizeFilenameComponent(
+					FPaths::GetCleanFilename(Section.RelativeFilename));
+				const FString SectionFile = FPaths::Combine(
+					ModuleDir, FString::Printf(TEXT("%d_%s"), i, *SectionLeaf));
+				FFileHelper::SaveStringToFile(Section.Code, *SectionFile);
+			}
+			FFileHelper::SaveStringToFile(Meta, *FPaths::Combine(ModuleDir, TEXT("_meta.txt")));
+		}
+
+		if (Result.AllDiagnostics.Num() > 0)
+		{
+			Index += TEXT("\n# Diagnostics\n");
+			for (const FAngelscriptEngine::FDiagnostic& D : Result.AllDiagnostics)
+			{
+				Index += FString::Printf(
+					TEXT("[%s] (%d:%d) %s\n"),
+					D.bIsError ? TEXT("error") : (D.bIsInfo ? TEXT("info") : TEXT("warn")),
+					D.Row, D.Column, *D.Message);
+			}
+		}
+
+		FFileHelper::SaveStringToFile(Index, *FPaths::Combine(DumpDir, TEXT("Index.txt")));
 	}
 
 } // namespace PreprocessorTestHelpers

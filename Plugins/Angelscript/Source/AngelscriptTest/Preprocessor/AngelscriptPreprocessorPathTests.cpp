@@ -1,218 +1,138 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+// ============================================================================
+// AngelscriptPreprocessorPathTests.cpp
+//
+// Preprocessor tests for path normalization: backslash separators in relative
+// paths normalize to dotted module names, and FilenameToModuleName only strips
+// the terminal '.as' extension (intermediate '.as' folder segments survive).
+//
+// Refactored from IMPLEMENT_SIMPLE_AUTOMATION_TEST -> TEST_CLASS_WITH_FLAGS,
+// reusing the shared PreprocessorTestHelpers (FFixtureFile / FPreprocessResult /
+// RunPreprocess) for the file-based scenarios. The file-local namespace
+// helpers from the previous revision were retired in favor of those shared
+// utilities.
+//
+// Automation prefix: Angelscript.TestModule.Preprocessor.Paths.*
+// ============================================================================
 
-#include "Preprocessor/AngelscriptPreprocessor.h"
-
-#include "HAL/FileManager.h"
-#include "Misc/AutomationTest.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
+#include "CQTest.h"
+#include "Preprocessor/AngelscriptPreprocessorTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-namespace AngelscriptTest_Preprocessor_AngelscriptPreprocessorPathTests_Private
+using namespace PreprocessorTestHelpers;
+using namespace AngelscriptTestSupport;
+
+// ============================================================================
+// Test class
+// ============================================================================
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorPathTest,
+	"Angelscript.TestModule.Preprocessor.Paths",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	FString GetPreprocessorPathFixtureRoot()
+	// ========================================================================
+	// BackslashRelativePathNormalizesModuleName — Windows-style backslash
+	// relative paths still produce dotted module names; manual import via the
+	// dotted form resolves to the matching provider module.
+	// ========================================================================
+	TEST_METHOD(BackslashRelativePathNormalizesModuleName)
 	{
-		return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"), TEXT("PreprocessorPathFixtures"));
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
+		ASTEST_BEGIN_MODULE_CLEAN
 
-	FString WritePreprocessorPathFixture(const FString& RelativeScriptPath, const FString& Contents)
-	{
-		const FString AbsolutePath = FPaths::Combine(GetPreprocessorPathFixtureRoot(), RelativeScriptPath);
-		IFileManager::Get().MakeDirectory(*FPaths::GetPath(AbsolutePath), true);
-		FFileHelper::SaveStringToFile(Contents, *AbsolutePath);
-		return AbsolutePath;
-	}
+		FFixtureFile SharedFile(TEXT("Tests\\Preprocessor\\PathNormalization\\WinShared.as"), TEXT(R"(
+int SharedValue()
+{
+    return 11;
+}
+)"));
 
-	TArray<FString> CollectPathDiagnosticMessages(
-		const FAngelscriptEngine& Engine,
-		const TArray<FString>& AbsoluteFilenames,
-		int32& OutErrorCount)
-	{
-		TArray<FString> Messages;
-		OutErrorCount = 0;
+		FFixtureFile ImportingFile(TEXT("Tests\\Preprocessor\\PathNormalization\\WinUse.as"), TEXT(R"(
+import Tests.Preprocessor.PathNormalization.WinShared;
+int UseShared()
+{
+    return SharedValue();
+}
+)"));
 
-		for (const FString& AbsoluteFilename : AbsoluteFilenames)
+		TArray<FFixtureFile> Files;
+		Files.Emplace(MoveTemp(SharedFile));
+		Files.Emplace(MoveTemp(ImportingFile));
+
+		auto Result = RunPreprocess(Engine, Files);
+
+		const FString ModuleNames = FString::JoinBy(
+			Result.Modules,
+			TEXT(" | "),
+			[](const TSharedRef<FAngelscriptModuleDesc>& Module)
+			{
+				return Module->ModuleName;
+			});
+
+		AssertPreprocessSucceeded(*TestRunner, Result);
+		AssertModuleCount(*TestRunner, Result, 2);
+		AssertErrorCount(*TestRunner, Result, 0);
+		AssertNoDiagnostics(*TestRunner, Result);
+
+		const FAngelscriptModuleDesc* SharedModule = AssertModuleExists(
+			*TestRunner, Result, TEXT("Tests.Preprocessor.PathNormalization.WinShared"));
+		const FAngelscriptModuleDesc* ImportingModule = AssertModuleExists(
+			*TestRunner, Result, TEXT("Tests.Preprocessor.PathNormalization.WinUse"));
+
+		TestRunner->TestFalse(
+			TEXT("Normalized module names should not preserve raw backslashes"),
+			ModuleNames.Contains(TEXT("\\")));
+
+		if (SharedModule != nullptr)
 		{
-			const FAngelscriptEngine::FDiagnostics* Diagnostics = Engine.Diagnostics.Find(AbsoluteFilename);
-			if (Diagnostics == nullptr)
-			{
-				continue;
-			}
-
-			for (const FAngelscriptEngine::FDiagnostic& Diagnostic : Diagnostics->Diagnostics)
-			{
-				Messages.Add(Diagnostic.Message);
-				if (Diagnostic.bIsError)
-				{
-					++OutErrorCount;
-				}
-			}
+			TestRunner->TestEqual(
+				TEXT("Normalized provider module should not record any imports"),
+				SharedModule->ImportedModules.Num(), 0);
 		}
 
-		return Messages;
-	}
-
-	const FAngelscriptModuleDesc* FindPathModuleByName(
-		const TArray<TSharedRef<FAngelscriptModuleDesc>>& Modules,
-		const FString& ModuleName)
-	{
-		for (const TSharedRef<FAngelscriptModuleDesc>& Module : Modules)
+		if (ImportingModule != nullptr)
 		{
-			if (Module->ModuleName == ModuleName)
-			{
-				return &Module.Get();
-			}
+			TestRunner->TestEqual(
+				TEXT("Normalized importer module should record exactly one imported module"),
+				ImportingModule->ImportedModules.Num(), 1);
+			TestRunner->TestTrue(
+				TEXT("Normalized importer module should reference the dotted provider module name"),
+				ImportingModule->ImportedModules.Contains(TEXT("Tests.Preprocessor.PathNormalization.WinShared")));
+			TestRunner->TestFalse(
+				TEXT("Normalized importer module should not record backslash-based import names"),
+				ImportingModule->ImportedModules.Contains(TEXT("Tests\\Preprocessor\\PathNormalization\\WinShared")));
 		}
 
-		return nullptr;
+		ASTEST_END_MODULE_CLEAN
 	}
-}
 
-using namespace AngelscriptTest_Preprocessor_AngelscriptPreprocessorPathTests_Private;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptPreprocessorBackslashRelativePathNormalizesModuleNameTest,
-	"Angelscript.TestModule.Preprocessor.Paths.BackslashRelativePathNormalizesModuleName",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptPreprocessorFilenameToModuleNameOnlyStripsTerminalExtensionTest,
-	"Angelscript.TestModule.Preprocessor.Paths.FilenameToModuleNameOnlyStripsTerminalExtension",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptPreprocessorBackslashRelativePathNormalizesModuleNameTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
-	ASTEST_BEGIN_MODULE_CLEAN
-
-	Engine.ResetDiagnostics();
-
-	const FString SharedRelativePath = TEXT("Tests\\Preprocessor\\PathNormalization\\WinShared.as");
-	const FString SharedAbsolutePath = WritePreprocessorPathFixture(
-		SharedRelativePath,
-		TEXT("int SharedValue()\n")
-		TEXT("{\n")
-		TEXT("    return 11;\n")
-		TEXT("}\n"));
-
-	const FString ImportingRelativePath = TEXT("Tests\\Preprocessor\\PathNormalization\\WinUse.as");
-	const FString ImportingAbsolutePath = WritePreprocessorPathFixture(
-		ImportingRelativePath,
-		TEXT("import Tests.Preprocessor.PathNormalization.WinShared;\n")
-		TEXT("int UseShared()\n")
-		TEXT("{\n")
-		TEXT("    return SharedValue();\n")
-		TEXT("}\n"));
-
-	TGuardValue<bool> AutomaticImportGuard(Engine.bUseAutomaticImportMethod, false);
-	FAngelscriptPreprocessor Preprocessor;
-	Preprocessor.AddFile(SharedRelativePath, SharedAbsolutePath);
-	Preprocessor.AddFile(ImportingRelativePath, ImportingAbsolutePath);
-
-	const bool bPreprocessSucceeded = Preprocessor.Preprocess();
-	const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
-	const FString ModuleNames = FString::JoinBy(
-		Modules,
-		TEXT(" | "),
-		[](const TSharedRef<FAngelscriptModuleDesc>& Module)
-		{
-			return Module->ModuleName;
-		});
-
-	int32 ErrorCount = 0;
-	const TArray<FString> DiagnosticMessages = CollectPathDiagnosticMessages(
-		Engine,
-		{SharedAbsolutePath, ImportingAbsolutePath},
-		ErrorCount);
-	const FString DiagnosticSummary = FString::Join(DiagnosticMessages, TEXT("\n"));
-
-	const FAngelscriptModuleDesc* SharedModule = FindPathModuleByName(
-		Modules,
-		TEXT("Tests.Preprocessor.PathNormalization.WinShared"));
-	const FAngelscriptModuleDesc* ImportingModule = FindPathModuleByName(
-		Modules,
-		TEXT("Tests.Preprocessor.PathNormalization.WinUse"));
-
-	bPassed &= TestTrue(
-		TEXT("Backslash relative paths should preprocess successfully in manual import mode"),
-		bPreprocessSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Backslash relative paths should produce exactly two module descriptors"),
-		Modules.Num(),
-		2);
-	bPassed &= TestEqual(
-		TEXT("Backslash relative paths should not emit preprocessing errors"),
-		ErrorCount,
-		0);
-	bPassed &= TestTrue(
-		TEXT("Backslash relative paths should keep diagnostics empty"),
-		DiagnosticSummary.IsEmpty());
-	bPassed &= TestNotNull(
-		TEXT("Backslash relative provider path should normalize to a dotted module name"),
-		SharedModule);
-	bPassed &= TestNotNull(
-		TEXT("Backslash relative importer path should normalize to a dotted module name"),
-		ImportingModule);
-	bPassed &= TestFalse(
-		TEXT("Normalized module names should not preserve raw backslashes"),
-		ModuleNames.Contains(TEXT("\\")));
-
-	if (SharedModule != nullptr)
+	// ========================================================================
+	// FilenameToModuleNameOnlyStripsTerminalExtension — FilenameToModuleName
+	// only strips the trailing '.as' suffix; intermediate '.as' folder
+	// segments survive verbatim, and asset-like '.asset.as' filenames keep
+	// the '.asset' part.
+	// ========================================================================
+	TEST_METHOD(FilenameToModuleNameOnlyStripsTerminalExtension)
 	{
-		bPassed &= TestEqual(
-			TEXT("Normalized provider module should not record any imports"),
-			SharedModule->ImportedModules.Num(),
-			0);
+		FAngelscriptPreprocessor Preprocessor;
+
+		const FString FolderAsModuleName    = Preprocessor.FilenameToModuleName(TEXT("Tests/Foo.as/Bar.as"));
+		const FString RegularModuleName     = Preprocessor.FilenameToModuleName(TEXT("Tests/Foo/Bar.as"));
+		const FString AssetSuffixModuleName = Preprocessor.FilenameToModuleName(TEXT("Tests/Foo.as/Baz.asset.as"));
+
+		TestRunner->TestEqual(
+			TEXT("FilenameToModuleName should preserve '.as' when it appears in an intermediate path segment"),
+			FolderAsModuleName, FString(TEXT("Tests.Foo.as.Bar")));
+		TestRunner->TestEqual(
+			TEXT("FilenameToModuleName should continue normalizing a standard script filename"),
+			RegularModuleName, FString(TEXT("Tests.Foo.Bar")));
+		TestRunner->TestTrue(
+			TEXT("FilenameToModuleName should keep intermediate '.as' segments distinct from plain folders"),
+			FolderAsModuleName != RegularModuleName);
+		TestRunner->TestEqual(
+			TEXT("FilenameToModuleName should strip only the terminal extension from asset-like script filenames"),
+			AssetSuffixModuleName, FString(TEXT("Tests.Foo.as.Baz.asset")));
 	}
+};
 
-	if (ImportingModule != nullptr)
-	{
-		bPassed &= TestEqual(
-			TEXT("Normalized importer module should record exactly one imported module"),
-			ImportingModule->ImportedModules.Num(),
-			1);
-		bPassed &= TestTrue(
-			TEXT("Normalized importer module should reference the dotted provider module name"),
-			ImportingModule->ImportedModules.Contains(TEXT("Tests.Preprocessor.PathNormalization.WinShared")));
-		bPassed &= TestFalse(
-			TEXT("Normalized importer module should not record backslash-based import names"),
-			ImportingModule->ImportedModules.Contains(TEXT("Tests\\Preprocessor\\PathNormalization\\WinShared")));
-	}
-
-	ASTEST_END_MODULE_CLEAN
-
-	return bPassed;
-}
-
-bool FAngelscriptPreprocessorFilenameToModuleNameOnlyStripsTerminalExtensionTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptPreprocessor Preprocessor;
-
-	const FString FolderAsModuleName = Preprocessor.FilenameToModuleName(TEXT("Tests/Foo.as/Bar.as"));
-	const FString RegularModuleName = Preprocessor.FilenameToModuleName(TEXT("Tests/Foo/Bar.as"));
-	const FString AssetSuffixModuleName = Preprocessor.FilenameToModuleName(TEXT("Tests/Foo.as/Baz.asset.as"));
-
-	bool bPassed = true;
-	bPassed &= TestEqual(
-		TEXT("FilenameToModuleName should preserve '.as' when it appears in an intermediate path segment"),
-		FolderAsModuleName,
-		TEXT("Tests.Foo.as.Bar"));
-	bPassed &= TestEqual(
-		TEXT("FilenameToModuleName should continue normalizing a standard script filename"),
-		RegularModuleName,
-		TEXT("Tests.Foo.Bar"));
-	bPassed &= TestTrue(
-		TEXT("FilenameToModuleName should keep intermediate '.as' segments distinct from plain folders"),
-		FolderAsModuleName != RegularModuleName);
-	bPassed &= TestEqual(
-		TEXT("FilenameToModuleName should strip only the terminal extension from asset-like script filenames"),
-		AssetSuffixModuleName,
-		TEXT("Tests.Foo.as.Baz.asset"));
-
-	return bPassed;
-}
-
-#endif
+#endif // WITH_DEV_AUTOMATION_TESTS

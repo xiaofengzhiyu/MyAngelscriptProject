@@ -315,25 +315,27 @@ public:
 		const FString SharedPadding = MakeAsyncLoadPadding(60000);
 		const FString ProviderRelativePath = TEXT("Tests/Preprocessor/AsyncLoad/Provider.as");
 		const FString ProviderContents =
-			FString(TEXT("const int ProviderMultiplier = 3;\n"))
-			+ TEXT("int ProvideValue()\n")
-			+ TEXT("{\n")
-			+ TEXT("    return 7;\n")
-			+ TEXT("}\n")
+			FString(TEXT(R"(const int ProviderMultiplier = 3;
+int ProvideValue()
+{
+    return 7;
+}
+)"))
 			+ SharedPadding;
 
 		const FString ConsumerRelativePath = TEXT("Tests/Preprocessor/AsyncLoad/Consumer.as");
 		const FString ConsumerContents =
-			FString(TEXT("import Tests.Preprocessor.AsyncLoad.Provider;\n"))
-			+ TEXT("class AAsyncLoadMacroActor : AActor\n")
-			+ TEXT("{\n")
-			+ TEXT("    UPROPERTY(EditAnywhere, BlueprintReadWrite)\n")
-			+ TEXT("    int StoredValue = ProviderMultiplier;\n")
-			+ TEXT("}\n")
-			+ TEXT("int UseProvider()\n")
-			+ TEXT("{\n")
-			+ TEXT("    return ProvideValue() * ProviderMultiplier;\n")
-			+ TEXT("}\n")
+			FString(TEXT(R"(import Tests.Preprocessor.AsyncLoad.Provider;
+class AAsyncLoadMacroActor : AActor
+{
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int StoredValue = ProviderMultiplier;
+}
+int UseProvider()
+{
+    return ProvideValue() * ProviderMultiplier;
+}
+)"))
 			+ SharedPadding;
 
 		FFixtureFile ProviderFile(ProviderRelativePath, ProviderContents);
@@ -508,17 +510,18 @@ public:
 		Engine.ResetDiagnostics();
 
 		const FString RelativeScriptPath = TEXT("Tests/Preprocessor/DeletedFile/TreatAsDeletedProducesEmptyModule.as");
-		FFixtureFile DeletedFile(RelativeScriptPath,
-			TEXT("import Tests.Preprocessor.DeletedFile.MissingProvider;\n")
-			TEXT("UCLASS()\n")
-			TEXT("class UDeletedFileProbe : UObject\n")
-			TEXT("{\n")
-			TEXT("    UFUNCTION()\n")
-			TEXT("    int Entry()\n")
-			TEXT("    {\n")
-			TEXT("        return 7;\n")
-			TEXT("    }\n")
-			TEXT("}\n"));
+		FFixtureFile DeletedFile(RelativeScriptPath, TEXT(R"(
+import Tests.Preprocessor.DeletedFile.MissingProvider;
+UCLASS()
+class UDeletedFileProbe : UObject
+{
+    UFUNCTION()
+    int Entry()
+    {
+        return 7;
+    }
+}
+)"));
 
 		FAngelscriptPreprocessor Preprocessor;
 		Preprocessor.AddFile(DeletedFile.RelativePath, DeletedFile.AbsolutePath, false, true);
