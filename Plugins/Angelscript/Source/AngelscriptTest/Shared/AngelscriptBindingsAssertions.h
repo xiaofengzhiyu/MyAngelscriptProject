@@ -6,7 +6,7 @@
 #include "Misc/ScopeExit.h"
 
 #include "AngelscriptBindingsCoverage.h"
-#include "Shared/AngelscriptGlobalFunctionInvoker.h"
+#include "AngelscriptGlobalFunctionInvoker.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_context.h"

@@ -42,9 +42,9 @@
 
 #include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
-#include "Bindings/Shared/AngelscriptBindingsCoverage.h"
-#include "Bindings/Shared/AngelscriptBindingsModuleBuilder.h"
-#include "Bindings/Shared/AngelscriptBindingsAssertions.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 

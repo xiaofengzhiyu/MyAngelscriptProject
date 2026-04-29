@@ -5,7 +5,7 @@
 //   - Angelscript.TestModule.Bindings.Container.SetCompat
 //
 // Refactored from AngelscriptContainerBindingsTests.cpp using the
-// Bindings/Shared/ Coverage Section base layer.
+// Shared/ Coverage Section base layer.
 //
 // Coverage matrix (all sections live under the single SetCompat ID):
 //   - RunSetSection            : int / FName baseline (9 cases)
