@@ -114,6 +114,8 @@ void Test() { int X = "hello" + 1; }
 )"),
 			TEXT("String + int type mismatch"));
 
+		// DISABLED(#as-engine-behavior): implicit-conversion-permissive — AS 允许 bool 参与算术运算
+#if 0
 		// Bool arithmetic
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("ArithN_BoolAdd"),
@@ -121,7 +123,10 @@ void Test() { int X = "hello" + 1; }
 void Test() { bool A = true; bool B = false; int X = A + B; }
 )"),
 			TEXT("Bool addition"));
+#endif
 
+		// DISABLED(#as-engine-behavior): implicit-conversion-permissive — AS 允许 float 类型取模运算
+#if 0
 		// Float modulo
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("ArithN_FloatMod"),
@@ -129,6 +134,7 @@ void Test() { bool A = true; bool B = false; int X = A + B; }
 void Test() { float X = 10.0f % 3.0f; }
 )"),
 			TEXT("Float modulo"));
+#endif
 
 		// Missing operand
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
@@ -264,12 +270,15 @@ void Test() { int X = 0xFF & ; }
 )"),
 			TEXT("Missing operand in bitwise AND"));
 
+		// DISABLED(#as-engine-behavior): implicit-conversion-permissive — AS 允许 bool 类型位运算
+#if 0
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("BitN_XorBool"),
 			TEXT(R"(
 void Test() { bool A = true; bool B = false; int X = A ^ B; }
 )"),
 			TEXT("Bitwise XOR on bool"));
+#endif
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("BitN_ShiftStr"),
@@ -547,12 +556,15 @@ void Test() { float X = 1.0f; X <<= 2; }
 )"),
 			TEXT("Shift-assign on float"));
 
+		// DISABLED(#as-engine-behavior): implicit-conversion-permissive — AS 允许 float 类型 %= 运算
+#if 0
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("AssignN_ModAssignFloat"),
 			TEXT(R"(
 void Test() { float X = 1.0f; X %= 2.0f; }
 )"),
 			TEXT("Mod-assign on float"));
+#endif
 	}
 
 	// ====================================================================

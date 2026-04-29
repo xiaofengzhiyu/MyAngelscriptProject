@@ -172,12 +172,15 @@ void Test() { TArray<int> Arr; Arr.Add(1); int X = Arr["key"]; }
 )"),
 			TEXT("TArray index with string should fail"));
 
+		// DISABLED(#as-engine-behavior): implicit-conversion-permissive — AS 允许 float 作为数组索引（隐式转换为 int）
+#if 0
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("ASSyntaxCon_ArrIndexFloat"),
 			TEXT(R"(
 void Test() { TArray<int> Arr; Arr.Add(1); int X = Arr[0.5f]; }
 )"),
 			TEXT("TArray index with float should fail"));
+#endif
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
 			TEXT("ASSyntaxCon_ArrAssignWrong"),

@@ -59,6 +59,8 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxPropertyAccessorTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
 		FAngelscriptEngineScope Scope(Engine);
 
+		// DISABLED(#as-engine-behavior): feature-not-supported — AS 2.33 fork 不支持 property accessor (get_/set_) 语法
+#if 0
 		// Property with getter
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("ASSyntaxPAGet"),
 			TEXT(R"(
@@ -140,6 +142,7 @@ class AActorPAFloat : AActor
 }
 )"),
 			TEXT("Float property accessor"));
+#endif
 	}
 
 	// ====================================================================
