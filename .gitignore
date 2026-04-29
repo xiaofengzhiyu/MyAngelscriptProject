@@ -103,6 +103,9 @@ DerivedDataCache/*
 # Sisyphus
 .sisyphus/
 
+# CodeBuddy local plans
+.codebuddy/
+
 # Local git worktrees
 .worktrees/
 
