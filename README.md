@@ -51,7 +51,7 @@ AngelscriptUHTTool  (C# UBT 插件, 独立; 接入 Unreal Header Tool 流水线)
 | **预处理器** | `Preprocessor/` | `#include` / `#if` / 条件编译 / 注释式文档提取 |
 | **Static JIT** | `StaticJIT/` | AS 字节码 → 优化的近原生执行；`PrecompiledData` 负责模块持久化 |
 | **DAP 调试** | `Debugging/` | 兼容 DAP 协议的 TCP 调试服务器（断点/单步/变量检视/调用栈） |
-| **脚本基类** | `BaseClasses/` | `ScriptWorldSubsystem` / `ScriptGameInstanceSubsystem` / `ScriptEngineSubsystem` / `ScriptLocalPlayerSubsystem` |
+| **脚本子系统** | `Subsystem/` | `ScriptWorldSubsystem` / `ScriptGameInstanceSubsystem` / `ScriptEngineSubsystem` / `ScriptLocalPlayerSubsystem` |
 | **函数库** | `FunctionLibraries/` | 21+ Mixin 库为数学类型/Actor/Component/GameplayTag/Widget 等增加辅助方法 |
 | **状态导出** | `Dump/` | 27+ CSV 表导出器；纯外部观察者，不入侵运行时 |
 | **代码覆盖率** | `CodeCoverage/` | AngelScript 行级覆盖率追踪 + HTML/JSON 报告 |

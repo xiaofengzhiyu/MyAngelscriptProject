@@ -101,7 +101,7 @@
 
 涉及文件（只读）：
 - `Plugins/Angelscript/Source/AngelscriptTest/Subsystem/AngelscriptSubsystemScenarioTests.cpp`
-- `Plugins/Angelscript/Source/AngelscriptRuntime/BaseClasses/ScriptWorldSubsystem.h`
+- `Plugins/Angelscript/Source/AngelscriptRuntime/Subsystem/ScriptWorldSubsystem.h`
 - `Plugins/Angelscript/Source/AngelscriptRuntime/ClassGenerator/AngelscriptClassGenerator.cpp`
 - `Plugins/Angelscript/Source/AngelscriptRuntime/Preprocessor/AngelscriptPreprocessor.cpp`
 

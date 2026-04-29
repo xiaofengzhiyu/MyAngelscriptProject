@@ -45,7 +45,7 @@ All three UE modules load at `PostDefault` phase. `AngelscriptRuntime` owns the 
 - **Preprocessor** (`Preprocessor/`): Full preprocessor (~134 KB) handling `#include`, `#if`, conditional compilation, and comment-format documentation extraction before scripts reach the AS compiler.
 - **Static JIT** (`StaticJIT/`): Compiles AS bytecode into optimized native-like execution. `AngelscriptBytecodes` (~200 KB) handles bytecode analysis; `AngelscriptStaticJIT` (~117 KB) does the actual code generation; `PrecompiledData` (~93 KB) manages serialization of precompiled modules.
 - **Debug Server** (`Debugging/`): DAP-compatible debug server (~96 KB) supporting breakpoints, stepping, variable inspection, and call stack navigation over a TCP socket.
-- **Script Base Classes** (`BaseClasses/`): `ScriptWorldSubsystem`, `ScriptGameInstanceSubsystem`, `ScriptEngineSubsystem`, `ScriptLocalPlayerSubsystem` — UE subsystem base classes designed for script inheritance.
+- **Script Subsystems** (`Subsystem/`): `ScriptWorldSubsystem`, `ScriptGameInstanceSubsystem`, `ScriptEngineSubsystem`, `ScriptLocalPlayerSubsystem` — UE subsystem base classes designed for script inheritance.
 - **Function Libraries** (`FunctionLibraries/`): 21+ mixin libraries adding helper methods to math types, actors, components, GameplayTags, widgets, etc.
 - **Dump Infrastructure** (`Dump/`): 27+ CSV table exporters that observe runtime state (registered types, bindings, functions, enums) through public APIs. Pure external observer — never mutates runtime state.
 - **Code Coverage** (`CodeCoverage/`): Per-line coverage tracking and HTML/JSON report generation for AngelScript code.

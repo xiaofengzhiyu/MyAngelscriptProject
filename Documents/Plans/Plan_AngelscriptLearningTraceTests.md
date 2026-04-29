@@ -205,7 +205,7 @@
   - 依据：`Plugins/Angelscript/Source/AngelscriptRuntime/Debugging/AngelscriptDebugServer.cpp`、`Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptDebugValue.h`
   - 教学价值：解释执行中的局部变量、调用栈、evaluate、break filter、data breakpoint 能观察到什么。
 - **Subsystem / Timers / Multi-frame**
-  - 依据：`Plugins/Angelscript/Source/AngelscriptRuntime/BaseClasses/ScriptWorldSubsystem.h`、`Plugins/Angelscript/Source/AngelscriptRuntime/Binds/Bind_SystemTimers.cpp`
+  - 依据：`Plugins/Angelscript/Source/AngelscriptRuntime/Subsystem/ScriptWorldSubsystem.h`、`Plugins/Angelscript/Source/AngelscriptRuntime/Binds/Bind_SystemTimers.cpp`
   - 教学价值：解释脚本如何融入 UE 的 subsystem lifecycle 和 timer-driven gameplay loop。
 - **Editor Metadata / Source Navigation**
   - 依据：`Plugins/Angelscript/Source/AngelscriptTest/Editor/AngelscriptSourceNavigationTests.cpp`

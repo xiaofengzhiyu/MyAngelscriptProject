@@ -68,7 +68,7 @@ C3. Check for code segments that appear modified but lack //[UE++] markers (e.g.
 
 D1. Count .cpp files and test macro definitions (IMPLEMENT_*_AUTOMATION_TEST, BEGIN_DEFINE_SPEC, etc.) in AngelscriptTest/ grouped by subdirectory (Actor/, Bindings/, Blueprint/, Component/, Core/, Debugger/, Delegate/, Dump/, GC/, HotReload/, Interface/, AngelScriptSDK/, Preprocessor/, Subsystem/, etc.).
 
-D2. Cross-reference against AngelscriptRuntime/ functional subdirectories (Core/, ClassGenerator/, Binds/, Debugging/, StaticJIT/, CodeCoverage/, Dump/, FunctionLibraries/, Preprocessor/, BaseClasses/). Flag which have dedicated test files targeting them and which do not.
+D2. Cross-reference against AngelscriptRuntime/ functional subdirectories (Core/, ClassGenerator/, Binds/, Debugging/, StaticJIT/, CodeCoverage/, Dump/, FunctionLibraries/, Preprocessor/, Subsystem/). Flag which have dedicated test files targeting them and which do not.
 
 D3. Count test files in AngelscriptRuntime/Tests/ (if it exists) and describe their relationship to tests in the AngelscriptTest/ module.
 

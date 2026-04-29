@@ -64,7 +64,7 @@ All subsystems have comprehensive test coverage:
 | CodeCoverage | 2 .cpp | 2 test files | COVERED |
 | Dump | 1 .cpp | 2 test files | COVERED |
 | FunctionLibraries | 1 .cpp | Distributed | COVERED |
-| BaseClasses | 0 .cpp | 8 test files | COVERED |
+| Subsystem | 0 .cpp | 8 test files | COVERED |
 | Hash | 0 .cpp | Implicit | COVERED |
 
 ### AngelscriptEditor (47 .cpp files) - FULLY COVERED
