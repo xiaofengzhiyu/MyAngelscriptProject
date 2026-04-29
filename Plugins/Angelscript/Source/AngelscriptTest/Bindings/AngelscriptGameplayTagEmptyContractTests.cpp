@@ -1,5 +1,5 @@
-#include "../Shared/AngelscriptTestUtilities.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "GameplayTagsManager.h"
 #include "Misc/ScopeExit.h"

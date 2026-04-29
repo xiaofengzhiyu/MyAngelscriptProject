@@ -1,5 +1,5 @@
 #include "AngelscriptBinds.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "Misc/AutomationTest.h"
 

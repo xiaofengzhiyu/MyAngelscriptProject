@@ -1,7 +1,7 @@
-﻿#pragma once
+#pragma once
 
-#include "../Shared/AngelscriptTestEngineHelper.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Components/ActorTestSpawner.h"
 #include "EngineUtils.h"

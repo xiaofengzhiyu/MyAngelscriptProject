@@ -1,12 +1,18 @@
 #include "AngelscriptEngine.h"
 
-#include "../Shared/AngelscriptPerformanceTestUtils.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptPerformanceTestUtils.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
 #include "Testing/AngelscriptBindExecutionObservation.h"
 
+#include "ClassGenerator/ASClass.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/Guid.h"
+#include "UObject/UObjectGlobals.h"
+#include "UObject/UObjectIterator.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -30,6 +36,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Core.Performance.Startup.CreateForTestingClone",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptShareCleanCyclePerformanceTest,
+	"Angelscript.TestModule.Core.Performance.ShareCleanCycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 {
 	struct FStartupPerformanceSample
@@ -37,6 +48,49 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		double StartupTotalSeconds = 0.0;
 		double BindScriptTypesSeconds = 0.0;
 		double CallBindsSeconds = 0.0;
+	};
+
+	struct FShareCleanCycleSample
+	{
+		FString WorkloadName;
+		int32 CycleIndex = 0;
+		double AcquireSeconds = 0.0;
+		double CompileSeconds = 0.0;
+		double ResetSeconds = 0.0;
+		double TotalSeconds = 0.0;
+		bool bCompileSucceeded = false;
+		int32 ResetActiveModuleCount = 0;
+		bool bGeneratedClassExpected = false;
+		bool bGeneratedClassFoundBeforeReset = false;
+		bool bGeneratedClassWeakValidAfterReset = false;
+		bool bGeneratedClassPathFindableAfterReset = false;
+		int32 GeneratedClassCountAfterReset = 0;
+		int32 DetachedGeneratedClassCountAfterReset = 0;
+		int32 RootedGeneratedClassCountAfterReset = 0;
+		int32 StandaloneGeneratedClassCountAfterReset = 0;
+		FString GeneratedClassName;
+		FString GeneratedClassPathName;
+
+		bool WasGeneratedClassGarbageCollectedAfterReset() const
+		{
+			return bGeneratedClassExpected
+				&& bGeneratedClassFoundBeforeReset
+				&& !bGeneratedClassWeakValidAfterReset
+				&& !bGeneratedClassPathFindableAfterReset
+				&& GeneratedClassCountAfterReset == 0;
+		}
+	};
+
+	enum class EShareCleanWorkloadKind : uint8
+	{
+		Minimal,
+		UClass,
+	};
+
+	struct FShareCleanWorkload
+	{
+		const TCHAR* Name = TEXT("");
+		EShareCleanWorkloadKind Kind = EShareCleanWorkloadKind::Minimal;
 	};
 
 	void ResetPerformanceEngineState()
@@ -156,6 +210,268 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		const FAngelscriptBindExecutionSnapshot Snapshot = FAngelscriptBindExecutionObservation::GetLastSnapshot();
 		return { TotalSeconds, Snapshot.BindScriptTypesDurationSeconds, Snapshot.CallBindsDurationSeconds };
 	}
+
+	FString MakeShareCleanModuleName(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
+	{
+		return FString::Printf(TEXT("ASShareCleanCycle_%s_%d_%s"), Workload.Name, CycleIndex, *RunSuffix);
+	}
+
+	FString MakeShareCleanGeneratedClassName(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
+	{
+		return FString::Printf(TEXT("UASShareCleanCycle_%s_%d_%s"), Workload.Name, CycleIndex, *RunSuffix);
+	}
+
+	FString MakeShareCleanScript(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
+	{
+		if (Workload.Kind == EShareCleanWorkloadKind::Minimal)
+		{
+			return TEXT("int DoubleValue(int Value) { return Value * 2; } int Run() { return DoubleValue(21); }");
+		}
+
+		const FString ClassName = MakeShareCleanGeneratedClassName(Workload, RunSuffix, CycleIndex);
+		return FString::Printf(
+			TEXT(R"AS(
+UCLASS()
+class %s : UObject
+{
+	UPROPERTY()
+	int Value;
+
+	UFUNCTION()
+	int GetValue()
+	{
+		return Value + 42;
+	}
+}
+)AS"),
+			*ClassName);
+	}
+
+	bool CompileShareCleanWorkload(FAngelscriptEngine& Engine, const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
+	{
+		const FString ModuleNameString = MakeShareCleanModuleName(Workload, RunSuffix, CycleIndex);
+		const FName ModuleName(*ModuleNameString);
+		const FString Filename = ModuleNameString + TEXT(".as");
+		const FString Script = MakeShareCleanScript(Workload, RunSuffix, CycleIndex);
+
+		if (Workload.Kind == EShareCleanWorkloadKind::Minimal)
+		{
+			return AngelscriptTestSupport::CompileModuleFromMemory(&Engine, ModuleName, Filename, Script);
+		}
+
+		return AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(&Engine, ModuleName, Filename, Script);
+	}
+
+	void CaptureGeneratedClassBeforeReset(FAngelscriptEngine& Engine, const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex, FShareCleanCycleSample& Sample, TWeakObjectPtr<UASClass>& OutWeakGeneratedClass)
+	{
+		if (Workload.Kind != EShareCleanWorkloadKind::UClass)
+		{
+			return;
+		}
+
+		Sample.bGeneratedClassExpected = true;
+		Sample.GeneratedClassName = MakeShareCleanGeneratedClassName(Workload, RunSuffix, CycleIndex);
+
+		UASClass* GeneratedClass = Cast<UASClass>(AngelscriptTestSupport::FindGeneratedClass(&Engine, FName(*Sample.GeneratedClassName)));
+		Sample.bGeneratedClassFoundBeforeReset = GeneratedClass != nullptr;
+		if (GeneratedClass == nullptr)
+		{
+			return;
+		}
+
+		Sample.GeneratedClassPathName = GeneratedClass->GetPathName();
+		OutWeakGeneratedClass = GeneratedClass;
+	}
+
+	void CaptureGeneratedClassAfterReset(FShareCleanCycleSample& Sample, const TWeakObjectPtr<UASClass>& WeakGeneratedClass)
+	{
+		if (!Sample.bGeneratedClassExpected)
+		{
+			return;
+		}
+
+		Sample.bGeneratedClassWeakValidAfterReset = WeakGeneratedClass.IsValid();
+		if (!Sample.GeneratedClassPathName.IsEmpty())
+		{
+			Sample.bGeneratedClassPathFindableAfterReset = FindObject<UASClass>(nullptr, *Sample.GeneratedClassPathName) != nullptr;
+		}
+
+		const FName GeneratedClassFName(*Sample.GeneratedClassName);
+		for (TObjectIterator<UASClass> It; It; ++It)
+		{
+			if (It->GetFName() != GeneratedClassFName)
+			{
+				continue;
+			}
+
+			++Sample.GeneratedClassCountAfterReset;
+			if (It->ScriptTypePtr == nullptr)
+			{
+				++Sample.DetachedGeneratedClassCountAfterReset;
+			}
+			if (It->IsRooted())
+			{
+				++Sample.RootedGeneratedClassCountAfterReset;
+			}
+			if (It->HasAnyFlags(RF_Standalone))
+			{
+				++Sample.StandaloneGeneratedClassCountAfterReset;
+			}
+		}
+	}
+
+	FShareCleanCycleSample MeasureShareCleanCycle(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
+	{
+		FShareCleanCycleSample Sample;
+		Sample.WorkloadName = Workload.Name;
+		Sample.CycleIndex = CycleIndex;
+		TWeakObjectPtr<UASClass> WeakGeneratedClass;
+
+		const double TotalStartTime = FPlatformTime::Seconds();
+		const double AcquireStartTime = FPlatformTime::Seconds();
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		Sample.AcquireSeconds = FPlatformTime::Seconds() - AcquireStartTime;
+
+		FAngelscriptEngineScope EngineScope(Engine);
+
+		const double CompileStartTime = FPlatformTime::Seconds();
+		Sample.bCompileSucceeded = CompileShareCleanWorkload(Engine, Workload, RunSuffix, CycleIndex);
+		Sample.CompileSeconds = FPlatformTime::Seconds() - CompileStartTime;
+		CaptureGeneratedClassBeforeReset(Engine, Workload, RunSuffix, CycleIndex, Sample, WeakGeneratedClass);
+
+		const double ResetStartTime = FPlatformTime::Seconds();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+		Sample.ResetSeconds = FPlatformTime::Seconds() - ResetStartTime;
+		Sample.ResetActiveModuleCount = Engine.GetActiveModules().Num();
+		CaptureGeneratedClassAfterReset(Sample, WeakGeneratedClass);
+		Sample.TotalSeconds = FPlatformTime::Seconds() - TotalStartTime;
+		return Sample;
+	}
+
+	void LogShareCleanCycleSample(FAutomationTestBase& Test, const FShareCleanCycleSample& Sample)
+	{
+		const FString Line = FString::Printf(
+			TEXT("[PERF] share_clean.%s cycle=%d acquire_seconds=%.6f compile_seconds=%.6f reset_seconds=%.6f total_seconds=%.6f compile_success=%s reset_active_modules=%d"),
+			*Sample.WorkloadName,
+			Sample.CycleIndex,
+			Sample.AcquireSeconds,
+			Sample.CompileSeconds,
+			Sample.ResetSeconds,
+			Sample.TotalSeconds,
+			Sample.bCompileSucceeded ? TEXT("true") : TEXT("false"),
+			Sample.ResetActiveModuleCount);
+		UE_LOG(LogTemp, Log, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+
+		if (Sample.bGeneratedClassExpected)
+		{
+			const FString GeneratedClassLine = FString::Printf(
+				TEXT("[PERF] share_clean.%s cycle=%d generated_class=%s found_before_reset=%s gc_after_reset=%s weak_valid_after_reset=%s path_findable_after_reset=%s matching_uasclass_after_reset=%d detached_after_reset=%d rooted_after_reset=%d standalone_after_reset=%d"),
+				*Sample.WorkloadName,
+				Sample.CycleIndex,
+				*Sample.GeneratedClassName,
+				Sample.bGeneratedClassFoundBeforeReset ? TEXT("true") : TEXT("false"),
+				Sample.WasGeneratedClassGarbageCollectedAfterReset() ? TEXT("true") : TEXT("false"),
+				Sample.bGeneratedClassWeakValidAfterReset ? TEXT("true") : TEXT("false"),
+				Sample.bGeneratedClassPathFindableAfterReset ? TEXT("true") : TEXT("false"),
+				Sample.GeneratedClassCountAfterReset,
+				Sample.DetachedGeneratedClassCountAfterReset,
+				Sample.RootedGeneratedClassCountAfterReset,
+				Sample.StandaloneGeneratedClassCountAfterReset);
+			UE_LOG(LogTemp, Log, TEXT("%s"), *GeneratedClassLine);
+			Test.AddInfo(GeneratedClassLine);
+		}
+	}
+
+	void AddShareCleanMetric(TArray<AngelscriptTestSupport::FAngelscriptPerformanceMetric>& Metrics, const FString& MetricName, const TArray<double>& Samples, const FString& Unit = TEXT("seconds"))
+	{
+		using namespace AngelscriptTestSupport;
+		LogPerformanceMetric(MetricName, Samples);
+		Metrics.Add({ MetricName, Samples, ComputeMedian(Samples), Unit, TEXT("AutomationTest") });
+	}
+
+	void AddShareCleanWorkloadMetrics(TArray<AngelscriptTestSupport::FAngelscriptPerformanceMetric>& Metrics, const FString& WorkloadName, const TArray<FShareCleanCycleSample>& Samples)
+	{
+		TArray<double> AcquireSeconds;
+		TArray<double> CompileSeconds;
+		TArray<double> ResetSeconds;
+		TArray<double> TotalSeconds;
+
+		for (const FShareCleanCycleSample& Sample : Samples)
+		{
+			if (!Sample.WorkloadName.Equals(WorkloadName, ESearchCase::CaseSensitive))
+			{
+				continue;
+			}
+
+			AcquireSeconds.Add(Sample.AcquireSeconds);
+			CompileSeconds.Add(Sample.CompileSeconds);
+			ResetSeconds.Add(Sample.ResetSeconds);
+			TotalSeconds.Add(Sample.TotalSeconds);
+		}
+
+		AddShareCleanMetric(Metrics, FString::Printf(TEXT("share_clean.%s.acquire_seconds"), *WorkloadName), AcquireSeconds);
+		AddShareCleanMetric(Metrics, FString::Printf(TEXT("share_clean.%s.compile_seconds"), *WorkloadName), CompileSeconds);
+		AddShareCleanMetric(Metrics, FString::Printf(TEXT("share_clean.%s.reset_seconds"), *WorkloadName), ResetSeconds);
+		AddShareCleanMetric(Metrics, FString::Printf(TEXT("share_clean.%s.total_seconds"), *WorkloadName), TotalSeconds);
+	}
+
+	void AddShareCleanGeneratedClassMetrics(TArray<AngelscriptTestSupport::FAngelscriptPerformanceMetric>& Metrics, const TArray<FShareCleanCycleSample>& Samples)
+	{
+		TArray<double> GcAfterReset;
+		TArray<double> WeakValidAfterReset;
+		TArray<double> PathFindableAfterReset;
+		TArray<double> MatchingClassCountAfterReset;
+		TArray<double> DetachedClassCountAfterReset;
+		TArray<double> RootedClassCountAfterReset;
+		TArray<double> StandaloneClassCountAfterReset;
+
+		for (const FShareCleanCycleSample& Sample : Samples)
+		{
+			if (!Sample.bGeneratedClassExpected)
+			{
+				continue;
+			}
+
+			GcAfterReset.Add(Sample.WasGeneratedClassGarbageCollectedAfterReset() ? 1.0 : 0.0);
+			WeakValidAfterReset.Add(Sample.bGeneratedClassWeakValidAfterReset ? 1.0 : 0.0);
+			PathFindableAfterReset.Add(Sample.bGeneratedClassPathFindableAfterReset ? 1.0 : 0.0);
+			MatchingClassCountAfterReset.Add(static_cast<double>(Sample.GeneratedClassCountAfterReset));
+			DetachedClassCountAfterReset.Add(static_cast<double>(Sample.DetachedGeneratedClassCountAfterReset));
+			RootedClassCountAfterReset.Add(static_cast<double>(Sample.RootedGeneratedClassCountAfterReset));
+			StandaloneClassCountAfterReset.Add(static_cast<double>(Sample.StandaloneGeneratedClassCountAfterReset));
+		}
+
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_gc_after_reset"), GcAfterReset, TEXT("boolean"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_weak_valid_after_reset"), WeakValidAfterReset, TEXT("boolean"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_path_findable_after_reset"), PathFindableAfterReset, TEXT("boolean"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_count_after_reset"), MatchingClassCountAfterReset, TEXT("count"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_detached_count_after_reset"), DetachedClassCountAfterReset, TEXT("count"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_rooted_count_after_reset"), RootedClassCountAfterReset, TEXT("count"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_standalone_count_after_reset"), StandaloneClassCountAfterReset, TEXT("count"));
+	}
+
+	FString ValidateAndWriteShareCleanMetrics(FAutomationTestBase& Test, const TArray<FShareCleanCycleSample>& Samples)
+	{
+		using namespace AngelscriptTestSupport;
+
+		TArray<FAngelscriptPerformanceMetric> Metrics;
+		AddShareCleanWorkloadMetrics(Metrics, TEXT("minimal"), Samples);
+		AddShareCleanWorkloadMetrics(Metrics, TEXT("uclass"), Samples);
+		AddShareCleanGeneratedClassMetrics(Metrics, Samples);
+
+		const FString MetricsPath = WritePerformanceMetricsArtifact(
+			TEXT("P3_4_ShareCleanCyclePerformance"),
+			TEXT("Angelscript.TestModule.Core.Performance.ShareCleanCycle"),
+			Metrics,
+			{
+				TEXT("Measures ASTEST_CREATE_ENGINE_SHARE_CLEAN acquire/create, AS compile, and explicit ResetSharedCloneEngine latency across serial cycles."),
+				TEXT("Cycle 0 starts after destroying the shared test engine; later cycles observe the hot shared-engine path."),
+				TEXT("No timing thresholds are enforced; this is an optimization baseline artifact.")
+			});
+		Test.TestTrue(TEXT("Share-clean cycle performance test should write a metrics.json artifact"), FPlatformFileManager::Get().GetPlatformFile().FileExists(*MetricsPath));
+		return MetricsPath;
+	}
 }
 
 using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
@@ -195,6 +511,58 @@ bool FAngelscriptStartupPerformanceCreateForTestingCloneTest::RunTest(const FStr
 		TestEqual(TEXT("CreateForTesting clone performance should not replay CallBinds"), Sample.CallBindsSeconds, 0.0);
 	}
 	ValidateAndWriteStartupMetrics(*this, TEXT("P3_1_StartupPerformance_CreateForTestingClone"), TEXT("Angelscript.TestModule.Core.Performance.Startup.CreateForTestingClone"), Samples, { TEXT("CreateForTesting clone samples reuse the current global source engine.") });
+	return true;
+}
+
+bool FAngelscriptShareCleanCyclePerformanceTest::RunTest(const FString& Parameters)
+{
+	constexpr int32 CycleCount = 3;
+	const FString RunSuffix = FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(8);
+	const FShareCleanWorkload Workloads[] = {
+		{ TEXT("minimal"), EShareCleanWorkloadKind::Minimal },
+		{ TEXT("uclass"), EShareCleanWorkloadKind::UClass },
+	};
+
+	AngelscriptTestSupport::DestroySharedTestEngine();
+
+	TArray<FShareCleanCycleSample> Samples;
+	for (const FShareCleanWorkload& Workload : Workloads)
+	{
+		for (int32 CycleIndex = 0; CycleIndex < CycleCount; ++CycleIndex)
+		{
+			FShareCleanCycleSample Sample = MeasureShareCleanCycle(Workload, RunSuffix, CycleIndex);
+			LogShareCleanCycleSample(*this, Sample);
+			TestTrue(
+				*FString::Printf(TEXT("Share-clean %s cycle %d should compile successfully"), Workload.Name, CycleIndex),
+				Sample.bCompileSucceeded);
+			TestEqual(
+				*FString::Printf(TEXT("Share-clean %s cycle %d reset should leave no active modules"), Workload.Name, CycleIndex),
+				Sample.ResetActiveModuleCount,
+				0);
+			if (Sample.bGeneratedClassExpected)
+			{
+				TestTrue(
+					*FString::Printf(TEXT("Share-clean %s cycle %d should locate the generated UASClass before reset"), Workload.Name, CycleIndex),
+					Sample.bGeneratedClassFoundBeforeReset);
+				TestEqual(
+					*FString::Printf(TEXT("Share-clean %s cycle %d should detach every matching generated UASClass left after reset"), Workload.Name, CycleIndex),
+					Sample.DetachedGeneratedClassCountAfterReset,
+					Sample.GeneratedClassCountAfterReset);
+				TestEqual(
+					*FString::Printf(TEXT("Share-clean %s cycle %d generated UASClass should not remain rooted after reset"), Workload.Name, CycleIndex),
+					Sample.RootedGeneratedClassCountAfterReset,
+					0);
+				TestEqual(
+					*FString::Printf(TEXT("Share-clean %s cycle %d generated UASClass should not remain standalone after reset"), Workload.Name, CycleIndex),
+					Sample.StandaloneGeneratedClassCountAfterReset,
+					0);
+			}
+			Samples.Add(MoveTemp(Sample));
+		}
+	}
+
+	ValidateAndWriteShareCleanMetrics(*this, Samples);
+	AngelscriptTestSupport::DestroySharedTestEngine();
 	return true;
 }
 

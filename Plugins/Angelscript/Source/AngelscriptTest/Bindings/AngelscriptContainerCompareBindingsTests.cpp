@@ -1,5 +1,5 @@
-#include "../Shared/AngelscriptTestUtilities.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "../../AngelscriptRuntime/Binds/Bind_TMap.h"
 #include "../../AngelscriptRuntime/Binds/Bind_TOptional.h"
 

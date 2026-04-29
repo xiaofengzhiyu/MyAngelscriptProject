@@ -1,6 +1,6 @@
-#include "../Shared/AngelscriptTestUtilities.h"
-#include "../Shared/AngelscriptTestMacros.h"
-#include "../Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
 
 #include "GameFramework/Actor.h"
 #include "Misc/ScopeExit.h"

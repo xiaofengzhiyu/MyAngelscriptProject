@@ -1,5 +1,5 @@
-﻿#include "../Shared/AngelscriptFunctionalTestUtils.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "Async/TaskGraphInterfaces.h"
 #include "Containers/Ticker.h"

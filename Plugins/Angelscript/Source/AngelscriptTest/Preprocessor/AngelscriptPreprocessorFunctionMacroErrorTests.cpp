@@ -1,5 +1,5 @@
-#include "../Shared/AngelscriptTestUtilities.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "Preprocessor/AngelscriptPreprocessor.h"
 

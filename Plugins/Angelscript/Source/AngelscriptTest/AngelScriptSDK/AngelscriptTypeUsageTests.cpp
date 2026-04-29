@@ -1,5 +1,5 @@
-﻿#include "Angelscript/AngelscriptTestSupport.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Angelscript/AngelscriptTestSupport.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "../../AngelscriptRuntime/Core/AngelscriptType.h"
 
 #include "GameFramework/Actor.h"

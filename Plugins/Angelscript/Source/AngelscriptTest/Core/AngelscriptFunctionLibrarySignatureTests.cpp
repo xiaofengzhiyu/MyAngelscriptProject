@@ -6,7 +6,7 @@
 #include "FunctionLibraries/GameplayTagQueryMixinLibrary.h"
 #include "FunctionLibraries/SubsystemLibrary.h"
 #include "FunctionLibraries/WidgetBlueprintStatics.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"

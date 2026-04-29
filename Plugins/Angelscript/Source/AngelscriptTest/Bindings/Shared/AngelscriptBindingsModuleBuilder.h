@@ -5,7 +5,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "AngelscriptBindingsCoverage.h"
-#include "../../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_scriptengine.h"

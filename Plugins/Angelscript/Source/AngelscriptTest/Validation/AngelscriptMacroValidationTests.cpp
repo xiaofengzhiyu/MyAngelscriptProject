@@ -1,4 +1,4 @@
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/AutomationTest.h"

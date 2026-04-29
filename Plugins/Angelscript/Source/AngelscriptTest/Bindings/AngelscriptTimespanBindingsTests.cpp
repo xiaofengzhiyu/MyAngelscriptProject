@@ -1,5 +1,5 @@
-#include "../Shared/AngelscriptTestMacros.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Misc/ScopeExit.h"
 #include "Misc/Timespan.h"

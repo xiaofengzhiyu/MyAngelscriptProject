@@ -1,7 +1,7 @@
-#include "../Shared/AngelscriptTestUtilities.h"
-#include "../Shared/AngelscriptTestMacros.h"
-#include "../Shared/AngelscriptTestEngineHelper.h"
-#include "../Shared/AngelscriptNativeScriptTestObject.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptNativeScriptTestObject.h"
 
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"

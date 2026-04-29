@@ -1,6 +1,6 @@
-#include "../Shared/AngelscriptTestMacros.h"
-#include "../Shared/AngelscriptTestEngineHelper.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "FunctionLibraries/UAssetManagerMixinLibrary.h"
 
@@ -211,6 +211,7 @@ class UAssetManagerMissingScanReceiver : UObject
 	}
 
 	TestEqual(TEXT("Valid asset manager callback path should still trigger exactly once"), ValidCallbackCount, 1);
+	
 	ASTEST_END_SHARE_CLEAN
 
 	return true;

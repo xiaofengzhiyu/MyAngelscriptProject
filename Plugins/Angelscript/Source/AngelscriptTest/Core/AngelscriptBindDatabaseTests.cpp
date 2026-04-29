@@ -1,6 +1,6 @@
 #include "AngelscriptBindDatabase.h"
 #include "AngelscriptEngine.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Engine/EngineTypes.h"
 #include "GameFramework/Actor.h"

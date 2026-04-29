@@ -1,6 +1,6 @@
 #include "AngelscriptEngine.h"
 #include "Angelscript/AngelscriptTestSupport.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Misc/AutomationTest.h"
 

@@ -1,4 +1,4 @@
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "UObject/Class.h"
 #include "UObject/UnrealType.h"
 

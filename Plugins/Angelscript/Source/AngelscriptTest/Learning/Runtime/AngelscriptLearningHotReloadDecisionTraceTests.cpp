@@ -1,7 +1,7 @@
-#include "../../Shared/AngelscriptLearningTrace.h"
-#include "../../Shared/AngelscriptTestEngineHelper.h"
-#include "../../Shared/AngelscriptTestUtilities.h"
-#include "../../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptLearningTrace.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "ClassGenerator/AngelscriptClassGenerator.h"
 #include "Misc/AutomationTest.h"

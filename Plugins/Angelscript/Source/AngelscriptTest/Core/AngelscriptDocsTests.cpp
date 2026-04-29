@@ -1,7 +1,7 @@
 #include "AngelscriptDocs.h"
 #include "AngelscriptEngine.h"
-#include "../Shared/AngelscriptTestEngineHelper.h"
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "Containers/StringConv.h"
 #include "HAL/FileManager.h"

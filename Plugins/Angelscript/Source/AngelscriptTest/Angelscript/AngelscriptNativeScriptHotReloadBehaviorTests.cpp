@@ -1,5 +1,5 @@
 #include "AngelscriptTestSupport.h"
-#include "../Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
 
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"

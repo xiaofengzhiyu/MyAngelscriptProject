@@ -1,5 +1,5 @@
-﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Components/ActorTestSpawner.h"
 #include "Engine/World.h"

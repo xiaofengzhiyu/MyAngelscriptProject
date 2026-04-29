@@ -1,5 +1,5 @@
 #include "AngelscriptTestSupport.h"
-#include "../Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptTestEngineHelper.h"
 #include "Misc/FileHelper.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"

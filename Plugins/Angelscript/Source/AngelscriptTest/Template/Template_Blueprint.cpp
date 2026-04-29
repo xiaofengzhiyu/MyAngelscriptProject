@@ -1,5 +1,5 @@
-﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptTestUtilities.h"
 
 #include "Engine/Blueprint.h"
 #include "Kismet2/KismetEditorUtilities.h"

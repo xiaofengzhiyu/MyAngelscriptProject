@@ -1,4 +1,4 @@
-#include "../Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestMacros.h"
 
 #include "Preprocessor/Helper_CommentFormat.h"
 

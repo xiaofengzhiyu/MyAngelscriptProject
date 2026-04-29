@@ -1,4 +1,4 @@
-#include "../Shared/AngelscriptTestUtilities.h"
+#include "Shared/AngelscriptTestUtilities.h"
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Components/BoxComponent.h"
