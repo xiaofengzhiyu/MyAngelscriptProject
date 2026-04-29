@@ -1,4 +1,5 @@
 #include "AngelscriptEngine.h"
+#include "AngelscriptEngineSubsystem.h"
 #include "AngelscriptGameInstanceSubsystem.h"
 #include "AngelscriptRuntimeModule.h"
 #include "Engine/GameInstance.h"
@@ -30,8 +31,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeFallbackDoesNotTickWhenSubsystemOwnsEngineTest,
-	"Angelscript.CppTests.Subsystem.RuntimeFallbackDoesNotTickWhenSubsystemOwnsEngine",
+	FAngelscriptEngineSubsystemDoesNotTickWhenGameInstanceSubsystemOwnsEngineTest,
+	"Angelscript.CppTests.Subsystem.EngineSubsystem.DoesNotTickWhenGameInstanceSubsystemOwnsEngine",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -40,13 +41,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeModuleStartupRegistersFallbackTickerTest,
-	"Angelscript.CppTests.Subsystem.RuntimeModule.StartupRegistersFallbackTicker",
+	FAngelscriptRuntimeModuleStartupDoesNotBootstrapPrimaryEngineTest,
+	"Angelscript.CppTests.Subsystem.RuntimeModule.StartupDoesNotBootstrapPrimaryEngine",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeFallbackTicksGlobalEngineWithoutSubsystemOwnerTest,
-	"Angelscript.CppTests.Subsystem.RuntimeFallbackTicksGlobalEngineWithoutSubsystemOwner",
+	FAngelscriptEngineSubsystemTicksGlobalEngineWithoutGameInstanceOwnerTest,
+	"Angelscript.CppTests.Subsystem.EngineSubsystem.TicksGlobalEngineWithoutGameInstanceOwner",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 struct FAngelscriptTickBehaviorTestAccess
@@ -89,11 +90,6 @@ struct FAngelscriptTickBehaviorTestAccess
 
 struct FAngelscriptRuntimeModuleTickTestAccess
 {
-	static bool TickFallbackPrimaryEngine(FAngelscriptRuntimeModule& Module, float DeltaTime)
-	{
-		return Module.TickFallbackPrimaryEngine(DeltaTime);
-	}
-
 	static void ResetInitializeState()
 	{
 		FAngelscriptRuntimeModule::ResetInitializeStateForTesting();
@@ -102,11 +98,6 @@ struct FAngelscriptRuntimeModuleTickTestAccess
 	static void SetInitializeOverride(TFunction<FAngelscriptEngine*()> InOverride)
 	{
 		FAngelscriptRuntimeModule::SetInitializeOverrideForTesting(MoveTemp(InOverride));
-	}
-
-	static bool HasFallbackTicker(const FAngelscriptRuntimeModule& Module)
-	{
-		return Module.FallbackTickHandle.IsValid();
 	}
 };
 
@@ -300,14 +291,14 @@ bool FAngelscriptSubsystemDeinitializeDestroysPrimaryEngineTest::RunTest(const F
 	return TestNull(TEXT("Subsystem deinitialize test should release the engine it owned"), Subsystem->GetEngine());
 }
 
-bool FAngelscriptRuntimeFallbackDoesNotTickWhenSubsystemOwnsEngineTest::RunTest(const FString& Parameters)
+bool FAngelscriptEngineSubsystemDoesNotTickWhenGameInstanceSubsystemOwnsEngineTest::RunTest(const FString& Parameters)
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
 	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	TStrongObjectPtr<UGameInstance> GameInstance;
 	UAngelscriptGameInstanceSubsystem* Subsystem = CreateInjectedSubsystem(*this, OwnedEngine.Get(), GameInstance);
-	if (!TestNotNull(TEXT("Fallback tick test should expose the Angelscript subsystem"), Subsystem))
+	if (!TestNotNull(TEXT("EngineSubsystem tick-owner test should expose the Angelscript game instance subsystem"), Subsystem))
 	{
 		return false;
 	}
@@ -319,17 +310,23 @@ bool FAngelscriptRuntimeFallbackDoesNotTickWhenSubsystemOwnsEngineTest::RunTest(
 	};
 
 	FAngelscriptEngine* PrimaryEngine = Subsystem->GetEngine();
-	if (!TestNotNull(TEXT("Fallback tick test should create a primary engine"), PrimaryEngine))
+	if (!TestNotNull(TEXT("EngineSubsystem tick-owner test should create a primary engine"), PrimaryEngine))
 	{
 		return false;
 	}
 
+	UAngelscriptEngineSubsystem* EngineSubsystem = NewObject<UAngelscriptEngineSubsystem>(GetTransientPackage());
+	if (!TestNotNull(TEXT("EngineSubsystem tick-owner test should create a native engine subsystem object"), EngineSubsystem))
+	{
+		return false;
+	}
+	EngineSubsystem->EnsurePrimaryEngineInitialized();
+
 	FAngelscriptTickBehaviorTestAccess::PrepareTickProbe(*PrimaryEngine);
-	FAngelscriptRuntimeModule RuntimeModule;
-	const bool bTickerContinues = FAngelscriptRuntimeModuleTickTestAccess::TickFallbackPrimaryEngine(RuntimeModule, 0.0f);
-	const bool bDidNotTick = TestEqual(TEXT("Runtime fallback tick should not touch the primary engine while the subsystem owns ticking"), FAngelscriptTickBehaviorTestAccess::GetNextHotReloadCheck(*PrimaryEngine), 0.0);
-	TestTrue(TEXT("Fallback tick should keep its ticker registered"), bTickerContinues);
-	return bDidNotTick && bTickerContinues;
+	EngineSubsystem->Tick(0.0f);
+	const bool bDidNotTick = TestEqual(TEXT("EngineSubsystem tick should not touch the primary engine while the game instance subsystem owns ticking"), FAngelscriptTickBehaviorTestAccess::GetNextHotReloadCheck(*PrimaryEngine), 0.0);
+	EngineSubsystem->Deinitialize();
+	return bDidNotTick;
 }
 
 bool FAngelscriptRuntimeModuleInitializeCreatesGlobalEngineTest::RunTest(const FString& Parameters)
@@ -359,15 +356,15 @@ bool FAngelscriptRuntimeModuleInitializeCreatesGlobalEngineTest::RunTest(const F
 	return TestTrue(TEXT("Runtime module initialize test should leave a tickable primary engine"), GlobalEngine->ShouldTick());
 }
 
-bool FAngelscriptRuntimeModuleStartupRegistersFallbackTickerTest::RunTest(const FString& Parameters)
+bool FAngelscriptRuntimeModuleStartupDoesNotBootstrapPrimaryEngineTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptTickBehaviorTestAccess::ResetToIsolatedState();
 	FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-	FAngelscriptRuntimeModuleTickTestAccess::SetInitializeOverride([]()
+	int32 InitializeCalls = 0;
+	FAngelscriptRuntimeModuleTickTestAccess::SetInitializeOverride([&InitializeCalls]()
 	{
-		const FAngelscriptEngineConfig Config;
-		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateUncompiled(Config, Dependencies).Release();
+		++InitializeCalls;
+		return nullptr;
 	});
 	FAngelscriptRuntimeModule RuntimeModule;
 	ON_SCOPE_EXIT
@@ -377,15 +374,16 @@ bool FAngelscriptRuntimeModuleStartupRegistersFallbackTickerTest::RunTest(const 
 		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
 	};
 
+	FAngelscriptEngine* PreStartupEngine = FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine();
 	RuntimeModule.StartupModule();
-	TestTrue(TEXT("Runtime module startup test should register the fallback ticker"), FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
-	TestNull(TEXT("Runtime module startup test should leave initialization to the loader module"), FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine());
+	TestEqual(TEXT("Runtime module startup test should not call compatibility initialization"), InitializeCalls, 0);
+	TestTrue(TEXT("Runtime module startup test should not replace the engine subsystem primary engine"), FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine() == PreStartupEngine);
 
 	RuntimeModule.ShutdownModule();
-	return TestFalse(TEXT("Runtime module shutdown should clear the fallback ticker handle"), FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
+	return TestTrue(TEXT("Runtime module shutdown should not release the engine subsystem primary engine"), FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine() == PreStartupEngine);
 }
 
-bool FAngelscriptRuntimeFallbackTicksGlobalEngineWithoutSubsystemOwnerTest::RunTest(const FString& Parameters)
+bool FAngelscriptEngineSubsystemTicksGlobalEngineWithoutGameInstanceOwnerTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptTickBehaviorTestAccess::ResetToIsolatedState();
 	FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
@@ -404,16 +402,23 @@ bool FAngelscriptRuntimeFallbackTicksGlobalEngineWithoutSubsystemOwnerTest::RunT
 
 	FAngelscriptRuntimeModule::InitializeAngelscript();
 	FAngelscriptEngine* GlobalEngine = FAngelscriptTickBehaviorTestAccess::TryGetGlobalEngine();
-	if (!TestNotNull(TEXT("Runtime fallback tick without subsystem owner should create a global engine"), GlobalEngine))
+	if (!TestNotNull(TEXT("EngineSubsystem tick without game instance owner should start from a global engine"), GlobalEngine))
 	{
 		return false;
 	}
 
 	FAngelscriptTickBehaviorTestAccess::PrepareTickProbe(*GlobalEngine);
-	FAngelscriptRuntimeModule RuntimeModule;
-	const bool bTickerContinues = FAngelscriptRuntimeModuleTickTestAccess::TickFallbackPrimaryEngine(RuntimeModule, 0.0f);
-	TestTrue(TEXT("Runtime fallback tick without subsystem owner should keep its ticker registered"), bTickerContinues);
-	return TestTrue(TEXT("Runtime fallback tick without subsystem owner should advance the next hot reload check"), FAngelscriptTickBehaviorTestAccess::GetNextHotReloadCheck(*GlobalEngine) > 0.0);
+	UAngelscriptEngineSubsystem* EngineSubsystem = NewObject<UAngelscriptEngineSubsystem>(GetTransientPackage());
+	if (!TestNotNull(TEXT("EngineSubsystem tick without game instance owner should create a native subsystem object"), EngineSubsystem))
+	{
+		return false;
+	}
+
+	EngineSubsystem->EnsurePrimaryEngineInitialized();
+	EngineSubsystem->Tick(0.0f);
+	const bool bTicked = TestTrue(TEXT("EngineSubsystem tick without game instance owner should advance the next hot reload check"), FAngelscriptTickBehaviorTestAccess::GetNextHotReloadCheck(*GlobalEngine) > 0.0);
+	EngineSubsystem->Deinitialize();
+	return bTicked;
 }
 
 #endif

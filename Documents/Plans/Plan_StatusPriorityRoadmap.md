@@ -4,7 +4,7 @@
 
 当前仓库已经不是一个"从零开始做脚本插件"的状态，而是一个**核心运行时、编辑器集成、测试基础设施都已成型**、但**对外交付入口、若干关键能力闭环、以及相对 Hazelight 基线的优先级收口仍然分散**的阶段。
 
-一方面，`Plugins/Angelscript/` 已经具备 `Runtime / Editor / Loader / Test` 四模块、`DebugServer`、`CodeCoverage`、`StateDump`、大量 `Bind_*.cpp` 与成体系自动化测试；另一方面，当前状态快照分散在 `Plan_OpportunityIndex.md`、`TechnicalDebtInventory.md`、`Plan_HazelightCapabilityGap.md`、`Plan_PluginEngineeringHardening.md` 等多份文档中，导致执行时容易在"功能补齐""插件化硬化""Hazelight parity""测试债分流"之间来回切换。
+一方面，`Plugins/Angelscript/` 已经具备 `Runtime / Editor / Test` 三个 UE 模块、`DebugServer`、`CodeCoverage`、`StateDump`、大量 `Bind_*.cpp` 与成体系自动化测试；另一方面，当前状态快照分散在 `Plan_OpportunityIndex.md`、`TechnicalDebtInventory.md`、`Plan_HazelightCapabilityGap.md`、`Plan_PluginEngineeringHardening.md` 等多份文档中，导致执行时容易在"功能补齐""插件化硬化""Hazelight parity""测试债分流"之间来回切换。
 
 本计划的目标不是再新增一条功能主线，而是把**当前完成现状、Hazelight 差距和下一阶段优先级顺序**收束成一个单入口：先校准事实，再先做真正阻塞插件可交付与可对齐的事项，最后才进入更深的能力扩展和架构演进。
 
@@ -28,7 +28,7 @@
    - 根指引 `AGENTS.md` 已明确 `Plugins/Angelscript/` 是核心交付物，`Source/AngelscriptProject/` 只保留最小宿主职责；后续优先级必须围绕插件本体组织，而不是把大量逻辑回流到宿主模块。
 
 2. **插件核心骨架已经成熟，不属于"能力底座缺失"阶段。**
-   - `Plugins/Angelscript/Angelscript.uplugin` 已形成 `AngelscriptRuntime`、`AngelscriptEditor`、`AngelscriptLoader`、`AngelscriptTest` 四模块；`AngelscriptLoader` 承接编辑器与 Commandlet 启动期初始化。
+   - `Plugins/Angelscript/Angelscript.uplugin` 已形成 `AngelscriptRuntime`、`AngelscriptEditor`、`AngelscriptTest` 三个 UE 模块；`UAngelscriptEngineSubsystem` 承接编辑器与 Commandlet 启动期初始化。
    - `Plugins/Angelscript/Source/AngelscriptRuntime/` 已具备 `Core/`、`ClassGenerator/`、`Preprocessor/`、`Debugging/`、`CodeCoverage/`、`Dump/`、`StaticJIT/`、`FunctionLibraries/`、`Binds/` 等主体结构。
    - 当前 `Binds/` 下已有 **124 个 `Bind_*.cpp`** 与 **23 个头文件**，说明绑定面已经很广，不应继续用"插件还没建立绑定体系"的口径描述当前状态。
 
@@ -97,7 +97,7 @@
 ### 四、结构差异：应记录，但不应一上来当成最高优先级缺口
 
 - Hazelight 使用 `AngelscriptCode + AngelscriptEditor + AngelscriptLoader`，并把 `AngelscriptGAS`、`AngelscriptEnhancedInput` 独立成插件。
-- 当前仓库已迁移为 `AngelscriptRuntime + AngelscriptEditor + AngelscriptLoader + AngelscriptTest`；Loader 启动边界已对齐 Hazelight 风格，GAS / EnhancedInput 仍直接并入主插件依赖。
+- 当前仓库已迁移为 `AngelscriptRuntime + AngelscriptEditor + AngelscriptTest`；Hazelight 独立 Loader 模块被 Runtime 内的 `UAngelscriptEngineSubsystem` 替代，GAS / EnhancedInput 仍直接并入主插件依赖。
 - 剩余结构差异更像**工程边界选择**，不是立即阻塞当前插件使用的功能缺口；近期优先级应先做"功能和验证闭环"，结构重拆放在后面。
 
 ### 五、不应再误判为差距的项目

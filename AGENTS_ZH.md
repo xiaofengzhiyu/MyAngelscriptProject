@@ -11,7 +11,7 @@
 ## 当前项目阶段
 
 - 插件已经**不处于原型或底座搭建阶段**，而是进入了"核心运行时、编辑器集成、测试基础设施都已成型，但对外交付入口和若干关键能力闭环仍需收口"的成熟期。
-- 当前基线：`AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptLoader` / `AngelscriptTest` 四模块已稳定，`123` 个 `Bind_*.cpp`、`27+` 张 CSV 状态导出表、`452+` 个自动化测试定义、`DebugServer V2` 协议、`CodeCoverage`、`StaticJIT`、`BlueprintImpact Commandlet` 均已落地；`AngelscriptLoader` 负责编辑器和 Commandlet 启动期初始化。
+- 当前基线：`AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptTest` 三个 UE 模块已稳定，`123` 个 `Bind_*.cpp`、`27+` 张 CSV 状态导出表、`452+` 个自动化测试定义、`DebugServer V2` 协议、`CodeCoverage`、`StaticJIT`、`BlueprintImpact Commandlet` 均已落地；编辑器和 Commandlet 启动期初始化由 Runtime 内的原生 `UAngelscriptEngineSubsystem` 承接。
 - AS 基线版本为 `2.33 + 选择性 2.38 兼容`，fork 已深度分叉，整体升级不可行，策略为从高版本选择性吸收改进。详见 `Documents/Guides/AngelscriptForkStrategy.md`。
 - 近期优先级顺序：**已知阻塞项与交付基线 → 上手资产与工作流入口 → 功能 parity 与验证闭环 → AS 2.38 选择性迁移与长期架构**。详见 `Documents/Plans/Plan_StatusPriorityRoadmap.md`。
 
@@ -23,7 +23,7 @@
 ## 关键路径
 
 - `Plugins/Angelscript/Source/AngelscriptRuntime/`：运行时模块，插件核心能力优先落在这里。
-  - `Core/`：引擎核心、绑定管理器、类型系统。
+  - `Core/`：引擎核心、绑定管理器、类型系统；`UAngelscriptEngineSubsystem` 负责 Editor/Commandlet 主启动初始化与无 GameInstance tick owner 时的主引擎 tick。
     - `Core/GAS/`：GAS（Gameplay Ability System）脚本化基类、组件、工具库（18 个文件）。
     - `Core/Commandlets/`：工具类 Commandlet 入口（4 个文件）。
   - `ClassGenerator/`：动态类生成、热重载、版本链。
@@ -34,7 +34,6 @@
   - `CodeCoverage/`：代码覆盖率追踪。
   - `FunctionLibraries/`：21+ 个脚本辅助函数库。
 - `Plugins/Angelscript/Source/AngelscriptEditor/`：编辑器相关支持（菜单扩展、热重载 UI、BlueprintImpact Commandlet）。
-- `Plugins/Angelscript/Source/AngelscriptLoader/`：启动收口模块，在 Runtime / Editor 模块可用后负责编辑器与 Commandlet 的 Angelscript 初始化。
 - `Plugins/Angelscript/Source/AngelscriptTest/`：插件测试与验证（按 Actor/Bindings/Blueprint/Component/Debugger/HotReload/Subsystem 等主题组织）。
 - `Plugins/Angelscript/Source/AngelscriptUHTTool/`：UHT 代码生成工具链。
 - `Documents/Guides/`：构建、测试、查询指南（13 份）。

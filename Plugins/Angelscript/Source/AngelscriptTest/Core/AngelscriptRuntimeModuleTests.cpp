@@ -1,6 +1,6 @@
 #include "AngelscriptEngine.h"
+#include "AngelscriptEngineSubsystem.h"
 #include "AngelscriptGameInstanceSubsystem.h"
-#include "AngelscriptLoaderModule.h"
 #include "AngelscriptRuntimeModule.h"
 #include "Angelscript/AngelscriptTestSupport.h"
 
@@ -36,24 +36,9 @@ using namespace AngelscriptTest_Core_AngelscriptRuntimeModuleTests_Private;
 
 struct FAngelscriptRuntimeModuleTickTestAccess
 {
-	static bool TickFallbackPrimaryEngine(FAngelscriptRuntimeModule& Module, float DeltaTime)
-	{
-		return Module.TickFallbackPrimaryEngine(DeltaTime);
-	}
-
 	static void SetInitializeOverride(TFunction<FAngelscriptEngine*()> InOverride)
 	{
 		FAngelscriptRuntimeModule::SetInitializeOverrideForTesting(MoveTemp(InOverride));
-	}
-
-	static void SetStartupEnvironmentOverride(const TOptional<bool>& bIsEditorOverride, const TOptional<bool>& bIsRunningCommandletOverride)
-	{
-		FAngelscriptRuntimeModule::SetStartupEnvironmentOverrideForTesting(bIsEditorOverride, bIsRunningCommandletOverride);
-	}
-
-	static void ClearStartupEnvironmentOverride()
-	{
-		FAngelscriptRuntimeModule::ClearStartupEnvironmentOverrideForTesting();
 	}
 
 	static void ResetInitializeState()
@@ -74,16 +59,6 @@ struct FAngelscriptRuntimeModuleTickTestAccess
 	static FAngelscriptEngine* GetOwnedPrimaryEngine()
 	{
 		return FAngelscriptRuntimeModule::OwnedPrimaryEngine.Get();
-	}
-
-	static bool HasFallbackTicker(const FAngelscriptRuntimeModule& Module)
-	{
-		return Module.FallbackTickHandle.IsValid();
-	}
-
-	static void SetFallbackTicker(FAngelscriptRuntimeModule& Module, FTSTicker::FDelegateHandle InHandle)
-	{
-		Module.FallbackTickHandle = InHandle;
 	}
 };
 
@@ -113,47 +88,29 @@ struct FAngelscriptTickBehaviorTestAccess
 	}
 };
 
-struct FAngelscriptLoaderModuleTestAccess
-{
-	static void SetStartupEnvironmentOverride(const TOptional<bool>& bIsEditorOverride, const TOptional<bool>& bIsRunningCommandletOverride)
-	{
-		FAngelscriptLoaderModule::SetStartupEnvironmentOverrideForTesting(bIsEditorOverride, bIsRunningCommandletOverride);
-	}
-
-	static void ClearStartupEnvironmentOverride()
-	{
-		FAngelscriptLoaderModule::ClearStartupEnvironmentOverrideForTesting();
-	}
-};
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptRuntimeModuleInitializeOverrideLifecycleTest,
 	"Angelscript.TestModule.Engine.RuntimeModule.InitializeOverrideIsIdempotentAndRestorable",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeModuleShutdownReleasesOwnedPrimaryEngineAndTickerHandleTest,
-	"Angelscript.TestModule.Engine.RuntimeModule.ShutdownReleasesOwnedPrimaryEngineAndTickerHandle",
+	FAngelscriptRuntimeModuleInitializeRoutesToEngineSubsystemTest,
+	"Angelscript.TestModule.Engine.RuntimeModule.InitializeRoutesToEngineSubsystem",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeModuleStartupModuleHonorsEditorAndCommandletGatesTest,
-	"Angelscript.TestModule.Engine.RuntimeModule.StartupModuleHonorsEditorAndCommandletGates",
+	FAngelscriptRuntimeModuleStartupModuleDoesNotBootstrapPrimaryEngineTest,
+	"Angelscript.TestModule.Engine.RuntimeModule.StartupModuleDoesNotBootstrapPrimaryEngine",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRuntimeModuleFallbackTickRespectsSubsystemOwnershipTest,
-	"Angelscript.TestModule.Engine.RuntimeModule.FallbackTickRespectsSubsystemOwnership",
+	FAngelscriptEngineSubsystemTickRespectsGameInstanceOwnershipTest,
+	"Angelscript.TestModule.Engine.EngineSubsystem.TickRespectsGameInstanceOwnership",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptRuntimeModuleInitializeAdoptsAmbientEngineWithoutOwningItTest,
 	"Angelscript.TestModule.Engine.RuntimeModule.InitializeAdoptsAmbientEngineWithoutOwningIt",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptLoaderModuleStartupModuleHonorsEditorAndCommandletGatesTest,
-	"Angelscript.TestModule.Engine.LoaderModule.StartupModuleHonorsEditorAndCommandletGates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FAngelscriptRuntimeModuleInitializeOverrideLifecycleTest::RunTest(const FString& Parameters)
@@ -233,7 +190,7 @@ bool FAngelscriptRuntimeModuleInitializeOverrideLifecycleTest::RunTest(const FSt
 		0);
 }
 
-bool FAngelscriptRuntimeModuleShutdownReleasesOwnedPrimaryEngineAndTickerHandleTest::RunTest(const FString& Parameters)
+bool FAngelscriptRuntimeModuleInitializeRoutesToEngineSubsystemTest::RunTest(const FString& Parameters)
 {
 	FRuntimeModuleContextStackGuard ContextGuard;
 	AngelscriptTestSupport::DestroySharedTestEngine();
@@ -245,6 +202,11 @@ bool FAngelscriptRuntimeModuleShutdownReleasesOwnedPrimaryEngineAndTickerHandleT
 
 	FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
 	FAngelscriptRuntimeModule RuntimeModule;
+	UAngelscriptEngineSubsystem* EngineSubsystem = UAngelscriptEngineSubsystem::Get();
+	if (!TestNotNull(TEXT("RuntimeModule subsystem-route test should have an engine subsystem in editor automation"), EngineSubsystem))
+	{
+		return false;
+	}
 
 	ON_SCOPE_EXIT
 	{
@@ -264,37 +226,23 @@ bool FAngelscriptRuntimeModuleShutdownReleasesOwnedPrimaryEngineAndTickerHandleT
 	}
 
 	FAngelscriptRuntimeModule::InitializeAngelscript();
-	if (!TestTrue(
-			TEXT("RuntimeModule shutdown test should create an owned primary engine when no current engine exists"),
+	if (!TestFalse(
+			TEXT("RuntimeModule subsystem-route test should not create a module-owned primary engine when the engine subsystem exists"),
 			FAngelscriptRuntimeModuleTickTestAccess::HasOwnedPrimaryEngine()))
 	{
 		return false;
 	}
 
-	FAngelscriptEngine* OwnedEngine = FAngelscriptRuntimeModuleTickTestAccess::GetOwnedPrimaryEngine();
+	FAngelscriptEngine* SubsystemEngine = EngineSubsystem->GetEngine();
 	if (!TestNotNull(
-			TEXT("RuntimeModule shutdown test should expose the owned primary engine instance"),
-			OwnedEngine))
+			TEXT("RuntimeModule subsystem-route test should expose the subsystem primary engine instance"),
+			SubsystemEngine))
 	{
 		return false;
 	}
 	if (!TestTrue(
-			TEXT("RuntimeModule shutdown test should push the owned primary engine onto the context stack"),
-			FAngelscriptEngine::TryGetCurrentEngine() == OwnedEngine))
-	{
-		return false;
-	}
-
-	FAngelscriptRuntimeModuleTickTestAccess::SetFallbackTicker(
-		RuntimeModule,
-		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
-		{
-			return true;
-		})));
-
-	if (!TestTrue(
-			TEXT("RuntimeModule shutdown test should inject a fallback ticker handle before shutdown"),
-			FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule)))
+			TEXT("RuntimeModule subsystem-route test should make the subsystem primary engine current"),
+			FAngelscriptEngine::TryGetCurrentEngine() == SubsystemEngine))
 	{
 		return false;
 	}
@@ -303,42 +251,39 @@ bool FAngelscriptRuntimeModuleShutdownReleasesOwnedPrimaryEngineAndTickerHandleT
 
 	bool bPassed = true;
 	bPassed &= TestFalse(
-		TEXT("RuntimeModule shutdown test should clear the fallback ticker handle on first shutdown"),
-		FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
-	bPassed &= TestFalse(
-		TEXT("RuntimeModule shutdown test should release the owned primary engine on first shutdown"),
+		TEXT("RuntimeModule subsystem-route test should still not own the primary engine after shutdown"),
 		FAngelscriptRuntimeModuleTickTestAccess::HasOwnedPrimaryEngine());
-	bPassed &= TestNull(
-		TEXT("RuntimeModule shutdown test should clear the current engine after releasing the owned primary engine"),
-		FAngelscriptEngine::TryGetCurrentEngine());
+	bPassed &= TestTrue(
+		TEXT("RuntimeModule subsystem-route test should leave the subsystem primary engine current after module shutdown"),
+		FAngelscriptEngine::TryGetCurrentEngine() == SubsystemEngine);
 
 	TArray<FAngelscriptEngine*> StackAfterFirstShutdown = FAngelscriptEngineContextStack::SnapshotAndClear();
 	bPassed &= TestEqual(
-		TEXT("RuntimeModule shutdown test should leave the context stack empty after first shutdown"),
+		TEXT("RuntimeModule subsystem-route test should leave exactly one subsystem engine on the context stack after first shutdown"),
 		StackAfterFirstShutdown.Num(),
-		0);
+		1);
+	bPassed &= TestTrue(
+		TEXT("RuntimeModule subsystem-route test should keep the subsystem engine as the only stack entry"),
+		StackAfterFirstShutdown.Num() == 1 && StackAfterFirstShutdown[0] == SubsystemEngine);
 
 	RuntimeModule.ShutdownModule();
 
 	bPassed &= TestFalse(
-		TEXT("RuntimeModule shutdown test should keep the fallback ticker handle cleared on repeated shutdown"),
-		FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
-	bPassed &= TestFalse(
-		TEXT("RuntimeModule shutdown test should keep the owned primary engine released on repeated shutdown"),
+		TEXT("RuntimeModule subsystem-route test should keep module-owned engine absent on repeated shutdown"),
 		FAngelscriptRuntimeModuleTickTestAccess::HasOwnedPrimaryEngine());
 	bPassed &= TestNull(
-		TEXT("RuntimeModule shutdown test should keep the current engine cleared on repeated shutdown"),
+		TEXT("RuntimeModule subsystem-route test should keep the current engine cleared after the test manually clears the stack"),
 		FAngelscriptEngine::TryGetCurrentEngine());
 
 	TArray<FAngelscriptEngine*> StackAfterSecondShutdown = FAngelscriptEngineContextStack::SnapshotAndClear();
 	bPassed &= TestEqual(
-		TEXT("RuntimeModule shutdown test should keep the context stack empty on repeated shutdown"),
+		TEXT("RuntimeModule subsystem-route test should keep the context stack empty after manual clear and repeated shutdown"),
 		StackAfterSecondShutdown.Num(),
 		0);
 	return bPassed;
 }
 
-bool FAngelscriptRuntimeModuleStartupModuleHonorsEditorAndCommandletGatesTest::RunTest(const FString& Parameters)
+bool FAngelscriptRuntimeModuleStartupModuleDoesNotBootstrapPrimaryEngineTest::RunTest(const FString& Parameters)
 {
 	FRuntimeModuleContextStackGuard ContextGuard;
 	AngelscriptTestSupport::DestroySharedTestEngine();
@@ -351,7 +296,6 @@ bool FAngelscriptRuntimeModuleStartupModuleHonorsEditorAndCommandletGatesTest::R
 	ON_SCOPE_EXIT
 	{
 		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-		FAngelscriptRuntimeModuleTickTestAccess::ClearStartupEnvironmentOverride();
 		FAngelscriptEngineContextStack::SnapshotAndClear();
 		if (FAngelscriptEngine::IsInitialized())
 		{
@@ -360,192 +304,46 @@ bool FAngelscriptRuntimeModuleStartupModuleHonorsEditorAndCommandletGatesTest::R
 		AngelscriptTestSupport::DestroySharedTestEngine();
 	};
 
-	TUniquePtr<FAngelscriptEngine> OverrideEngine = AngelscriptTestSupport::CreateFullTestEngine();
-	if (!TestNotNull(TEXT("RuntimeModule startup gate test should create an isolated override engine"), OverrideEngine.Get()))
+	int32 InitializeCalls = 0;
+	FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
+	FAngelscriptRuntimeModuleTickTestAccess::SetInitializeOverride([&InitializeCalls]()
+	{
+		++InitializeCalls;
+		return nullptr;
+	});
+
+	if (!TestNull(TEXT("RuntimeModule startup test should start without a current engine"), FAngelscriptEngine::TryGetCurrentEngine()))
 	{
 		return false;
 	}
 
-	struct FStartupTestCase
-	{
-		const TCHAR* Label;
-		bool bIsEditor = false;
-		bool bIsRunningCommandlet = false;
-		int32 ExpectedInitializeCalls = 0;
-		bool bExpectFallbackTicker = false;
-	};
-
-	const TArray<FStartupTestCase> TestCases = {
-		{ TEXT("EditorStartup"), true, false, 0, true },
-		{ TEXT("CommandletStartup"), false, true, 0, false },
-		{ TEXT("PlainRuntimeStartup"), false, false, 0, false },
-	};
+	FAngelscriptRuntimeModule RuntimeModule;
+	RuntimeModule.StartupModule();
 
 	bool bPassed = true;
-	for (const FStartupTestCase& TestCase : TestCases)
-	{
-		int32 InitializeCalls = 0;
-		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-		FAngelscriptRuntimeModuleTickTestAccess::ClearStartupEnvironmentOverride();
+	bPassed &= TestEqual(
+		TEXT("RuntimeModule startup test should not call compatibility initialization"),
+		InitializeCalls,
+		0);
+	bPassed &= TestFalse(
+		TEXT("RuntimeModule startup test should leave InitializeAngelscript uncalled"),
+		FAngelscriptRuntimeModuleTickTestAccess::WasInitializeAngelscriptCalled());
+	bPassed &= TestNull(
+		TEXT("RuntimeModule startup test should leave the context stack empty"),
+		FAngelscriptEngine::TryGetCurrentEngine());
 
-		if (!TestNull(FString::Printf(TEXT("%s should start without a current engine"), TestCase.Label), FAngelscriptEngine::TryGetCurrentEngine()))
-		{
-			return false;
-		}
+	RuntimeModule.ShutdownModule();
 
-		FAngelscriptRuntimeModuleTickTestAccess::SetStartupEnvironmentOverride(TestCase.bIsEditor, TestCase.bIsRunningCommandlet);
-		FAngelscriptRuntimeModuleTickTestAccess::SetInitializeOverride([&OverrideEngine, &InitializeCalls]()
-		{
-			++InitializeCalls;
-			return OverrideEngine.Get();
-		});
-
-		FAngelscriptRuntimeModule RuntimeModule;
-		RuntimeModule.StartupModule();
-
-		bPassed &= TestEqual(
-			FString::Printf(TEXT("%s should trigger the expected number of initialize calls"), TestCase.Label),
-			InitializeCalls,
-			TestCase.ExpectedInitializeCalls);
-		bPassed &= TestEqual(
-			FString::Printf(TEXT("%s should match the expected fallback ticker registration state"), TestCase.Label),
-			FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule),
-			TestCase.bExpectFallbackTicker);
-
-		if (TestCase.ExpectedInitializeCalls > 0)
-		{
-			bPassed &= TestTrue(
-				FString::Printf(TEXT("%s should push the override engine when initialization runs"), TestCase.Label),
-				FAngelscriptEngine::TryGetCurrentEngine() == OverrideEngine.Get());
-		}
-		else
-		{
-			bPassed &= TestNull(
-				FString::Printf(TEXT("%s should keep the context stack empty when initialization is gated off"), TestCase.Label),
-				FAngelscriptEngine::TryGetCurrentEngine());
-		}
-
-		RuntimeModule.ShutdownModule();
-
-		bPassed &= TestFalse(
-			FString::Printf(TEXT("%s should clear the fallback ticker handle during shutdown"), TestCase.Label),
-			FAngelscriptRuntimeModuleTickTestAccess::HasFallbackTicker(RuntimeModule));
-
-		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-		bPassed &= TestNull(
-			FString::Printf(TEXT("%s should leave no current engine after reset"), TestCase.Label),
-			FAngelscriptEngine::TryGetCurrentEngine());
-
-		const TArray<FAngelscriptEngine*> StackAfterTestCase = FAngelscriptEngineContextStack::SnapshotAndClear();
-		bPassed &= TestEqual(
-			FString::Printf(TEXT("%s should leave the context stack empty after teardown"), TestCase.Label),
-			StackAfterTestCase.Num(),
-			0);
-	}
+	const TArray<FAngelscriptEngine*> StackAfterStartup = FAngelscriptEngineContextStack::SnapshotAndClear();
+	bPassed &= TestEqual(
+		TEXT("RuntimeModule startup test should leave the context stack empty after shutdown"),
+		StackAfterStartup.Num(),
+		0);
 
 	return bPassed;
 }
 
-bool FAngelscriptLoaderModuleStartupModuleHonorsEditorAndCommandletGatesTest::RunTest(const FString& Parameters)
-{
-	FRuntimeModuleContextStackGuard ContextGuard;
-	AngelscriptTestSupport::DestroySharedTestEngine();
-	if (FAngelscriptEngine::IsInitialized())
-	{
-		AngelscriptTestSupport::FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
-	}
-	ContextGuard.DiscardSavedStack();
-
-	ON_SCOPE_EXIT
-	{
-		FAngelscriptLoaderModuleTestAccess::ClearStartupEnvironmentOverride();
-		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-		FAngelscriptEngineContextStack::SnapshotAndClear();
-		if (FAngelscriptEngine::IsInitialized())
-		{
-			AngelscriptTestSupport::FAngelscriptTestEngineScopeAccess::DestroyGlobalEngine();
-		}
-		AngelscriptTestSupport::DestroySharedTestEngine();
-	};
-
-	TUniquePtr<FAngelscriptEngine> OverrideEngine = AngelscriptTestSupport::CreateFullTestEngine();
-	if (!TestNotNull(TEXT("LoaderModule startup gate test should create an isolated override engine"), OverrideEngine.Get()))
-	{
-		return false;
-	}
-
-	struct FStartupTestCase
-	{
-		const TCHAR* Label;
-		bool bIsEditor = false;
-		bool bIsRunningCommandlet = false;
-		int32 ExpectedInitializeCalls = 0;
-	};
-
-	const TArray<FStartupTestCase> TestCases = {
-		{ TEXT("EditorStartup"), true, false, 1 },
-		{ TEXT("CommandletStartup"), false, true, 1 },
-		{ TEXT("PlainRuntimeStartup"), false, false, 0 },
-	};
-
-	bool bPassed = true;
-	for (const FStartupTestCase& TestCase : TestCases)
-	{
-		int32 InitializeCalls = 0;
-		FAngelscriptLoaderModuleTestAccess::ClearStartupEnvironmentOverride();
-		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-
-		if (!TestNull(FString::Printf(TEXT("%s should start without a current engine"), TestCase.Label), FAngelscriptEngine::TryGetCurrentEngine()))
-		{
-			return false;
-		}
-
-		FAngelscriptLoaderModuleTestAccess::SetStartupEnvironmentOverride(TestCase.bIsEditor, TestCase.bIsRunningCommandlet);
-		FAngelscriptRuntimeModuleTickTestAccess::SetInitializeOverride([&OverrideEngine, &InitializeCalls]()
-		{
-			++InitializeCalls;
-			return OverrideEngine.Get();
-		});
-
-		FAngelscriptLoaderModule LoaderModule;
-		LoaderModule.StartupModule();
-
-		bPassed &= TestEqual(
-			FString::Printf(TEXT("%s should trigger the expected number of Loader initialize calls"), TestCase.Label),
-			InitializeCalls,
-			TestCase.ExpectedInitializeCalls);
-
-		if (TestCase.ExpectedInitializeCalls > 0)
-		{
-			bPassed &= TestTrue(
-				FString::Printf(TEXT("%s should push the override engine when Loader initialization runs"), TestCase.Label),
-				FAngelscriptEngine::TryGetCurrentEngine() == OverrideEngine.Get());
-		}
-		else
-		{
-			bPassed &= TestNull(
-				FString::Printf(TEXT("%s should keep the context stack empty when Loader initialization is gated off"), TestCase.Label),
-				FAngelscriptEngine::TryGetCurrentEngine());
-		}
-
-		LoaderModule.ShutdownModule();
-		FAngelscriptRuntimeModuleTickTestAccess::ResetInitializeState();
-		FAngelscriptLoaderModuleTestAccess::ClearStartupEnvironmentOverride();
-		bPassed &= TestNull(
-			FString::Printf(TEXT("%s should leave no current engine after reset"), TestCase.Label),
-			FAngelscriptEngine::TryGetCurrentEngine());
-
-		const TArray<FAngelscriptEngine*> StackAfterTestCase = FAngelscriptEngineContextStack::SnapshotAndClear();
-		bPassed &= TestEqual(
-			FString::Printf(TEXT("%s should leave the context stack empty after teardown"), TestCase.Label),
-			StackAfterTestCase.Num(),
-			0);
-	}
-
-	return bPassed;
-}
-
-bool FAngelscriptRuntimeModuleFallbackTickRespectsSubsystemOwnershipTest::RunTest(const FString& Parameters)
+bool FAngelscriptEngineSubsystemTickRespectsGameInstanceOwnershipTest::RunTest(const FString& Parameters)
 {
 	FRuntimeModuleContextStackGuard ContextGuard;
 	const int32 SavedActiveTickOwners = FAngelscriptTickBehaviorTestAccess::GetActiveTickOwners();
@@ -569,47 +367,50 @@ bool FAngelscriptRuntimeModuleFallbackTickRespectsSubsystemOwnershipTest::RunTes
 	};
 
 	TUniquePtr<FAngelscriptEngine> TestEngine = AngelscriptTestSupport::CreateFullTestEngine();
-	if (!TestNotNull(TEXT("RuntimeModule fallback tick test should create an isolated full engine"), TestEngine.Get()))
+	if (!TestNotNull(TEXT("EngineSubsystem tick test should create an isolated full engine"), TestEngine.Get()))
 	{
 		return false;
 	}
 
 	FAngelscriptEngineScope EngineScope(*TestEngine);
-	if (!TestTrue(TEXT("RuntimeModule fallback tick test should make the isolated engine current"), FAngelscriptEngine::TryGetCurrentEngine() == TestEngine.Get()))
+	if (!TestTrue(TEXT("EngineSubsystem tick test should make the isolated engine current"), FAngelscriptEngine::TryGetCurrentEngine() == TestEngine.Get()))
 	{
 		return false;
 	}
 
-	FAngelscriptRuntimeModule RuntimeModule;
+	TStrongObjectPtr<UAngelscriptEngineSubsystem> EngineSubsystem(NewObject<UAngelscriptEngineSubsystem>(GetTransientPackage()));
+	if (!TestNotNull(TEXT("EngineSubsystem tick test should create a native subsystem object"), EngineSubsystem.Get()))
+	{
+		return false;
+	}
+
+	EngineSubsystem->EnsurePrimaryEngineInitialized();
 	bool bPassed = true;
 
 	FAngelscriptTickBehaviorTestAccess::SetActiveTickOwners(0);
 	FAngelscriptTickBehaviorTestAccess::PrepareTickProbe(*TestEngine, -1.0);
 
 	bPassed &= TestFalse(
-		TEXT("RuntimeModule fallback tick test should start without subsystem tick owners"),
+		TEXT("EngineSubsystem tick test should start without game instance tick owners"),
 		UAngelscriptGameInstanceSubsystem::HasAnyTickOwner());
+	EngineSubsystem->Tick(0.016f);
 	bPassed &= TestTrue(
-		TEXT("RuntimeModule fallback tick test should keep the ticker alive when no subsystem owner exists"),
-		FAngelscriptRuntimeModuleTickTestAccess::TickFallbackPrimaryEngine(RuntimeModule, 0.016f));
-	bPassed &= TestTrue(
-		TEXT("RuntimeModule fallback tick test should advance NextHotReloadCheck when fallback tick owns progression"),
+		TEXT("EngineSubsystem tick test should advance NextHotReloadCheck when no game instance owner exists"),
 		FAngelscriptTickBehaviorTestAccess::GetNextHotReloadCheck(*TestEngine) > 0.0);
 
 	FAngelscriptTickBehaviorTestAccess::SetActiveTickOwners(1);
 	FAngelscriptTickBehaviorTestAccess::PrepareTickProbe(*TestEngine, -1.0);
 
 	bPassed &= TestTrue(
-		TEXT("RuntimeModule fallback tick test should report an active subsystem tick owner after the owner setup"),
+		TEXT("EngineSubsystem tick test should report an active game instance tick owner after setup"),
 		UAngelscriptGameInstanceSubsystem::HasAnyTickOwner());
-	bPassed &= TestTrue(
-		TEXT("RuntimeModule fallback tick test should keep the ticker alive when a subsystem owner exists"),
-		FAngelscriptRuntimeModuleTickTestAccess::TickFallbackPrimaryEngine(RuntimeModule, 0.016f));
+	EngineSubsystem->Tick(0.016f);
 	bPassed &= TestEqual(
-		TEXT("RuntimeModule fallback tick test should leave NextHotReloadCheck unchanged while a subsystem owner exists"),
+		TEXT("EngineSubsystem tick test should leave NextHotReloadCheck unchanged while a game instance owner exists"),
 		FAngelscriptTickBehaviorTestAccess::GetNextHotReloadCheck(*TestEngine),
 		-1.0);
 
+	EngineSubsystem->Deinitialize();
 	return bPassed;
 }
 

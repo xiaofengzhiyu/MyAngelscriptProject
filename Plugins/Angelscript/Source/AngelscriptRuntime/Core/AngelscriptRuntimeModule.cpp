@@ -1,5 +1,6 @@
 #include "AngelscriptRuntimeModule.h"
 #include "AngelscriptEngine.h"
+#include "AngelscriptEngineSubsystem.h"
 #include "AngelscriptGameInstanceSubsystem.h"
 
 IMPLEMENT_MODULE(FAngelscriptRuntimeModule, AngelscriptRuntime);
@@ -7,45 +8,19 @@ IMPLEMENT_MODULE(FAngelscriptRuntimeModule, AngelscriptRuntime);
 bool FAngelscriptRuntimeModule::bInitializeAngelscriptCalled = false;
 TUniquePtr<FAngelscriptEngine> FAngelscriptRuntimeModule::OwnedPrimaryEngine;
 #if WITH_DEV_AUTOMATION_TESTS
-TOptional<bool> FAngelscriptRuntimeModule::StartupIsEditorOverrideForTesting;
-TOptional<bool> FAngelscriptRuntimeModule::StartupIsRunningCommandletOverrideForTesting;
 TFunction<FAngelscriptEngine*()> FAngelscriptRuntimeModule::InitializeOverrideForTesting;
 FAngelscriptEngine* FAngelscriptRuntimeModule::InitializedOverrideEngineForTesting = nullptr;
 #endif
 
 void FAngelscriptRuntimeModule::StartupModule()
 {
-	bool bIsEditor = GIsEditor;
-	#if WITH_DEV_AUTOMATION_TESTS
-	if (StartupIsEditorOverrideForTesting.IsSet())
-	{
-		bIsEditor = StartupIsEditorOverrideForTesting.GetValue();
-	}
-	#endif
-
-	UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] StartupModule editor=%s commandlet=%s"),
-		bIsEditor ? TEXT("true") : TEXT("false"),
-		IsRunningCommandlet() ? TEXT("true") : TEXT("false"));
-
-	if (bIsEditor)
-	{
-		FallbackTickHandle = FTSTicker::GetCoreTicker().AddTicker(
-			FTickerDelegate::CreateRaw(this, &FAngelscriptRuntimeModule::TickFallbackPrimaryEngine));
-		UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] Registered fallback primary-engine ticker."));
-	}
+	UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] StartupModule."));
 }
 
 void FAngelscriptRuntimeModule::ShutdownModule()
 {
-	UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] ShutdownModule fallbackTicker=%s ownedEngine=%s"),
-		FallbackTickHandle.IsValid() ? TEXT("true") : TEXT("false"),
+	UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] ShutdownModule ownedEngine=%s"),
 		OwnedPrimaryEngine.IsValid() ? TEXT("true") : TEXT("false"));
-
-	if (FallbackTickHandle.IsValid())
-	{
-		FTSTicker::GetCoreTicker().RemoveTicker(FallbackTickHandle);
-		FallbackTickHandle.Reset();
-	}
 
 	if (OwnedPrimaryEngine.IsValid())
 	{
@@ -175,6 +150,13 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 	#endif
 
 	FModuleManager::Get().LoadModuleChecked(TEXT("AngelscriptRuntime"));
+	if (UAngelscriptEngineSubsystem* EngineSubsystem = UAngelscriptEngineSubsystem::Get())
+	{
+		UE_LOG(Angelscript, Verbose, TEXT("[RuntimeStartup] Routing InitializeAngelscript to EngineSubsystem=%p."), EngineSubsystem);
+		EngineSubsystem->EnsurePrimaryEngineInitialized();
+		return;
+	}
+
 	if (FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine())
 	{
 		// Adopt an already-initialized ambient engine instead of re-running full initialization.
@@ -198,18 +180,6 @@ void FAngelscriptRuntimeModule::InitializeAngelscript()
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
-void FAngelscriptRuntimeModule::SetStartupEnvironmentOverrideForTesting(const TOptional<bool>& bIsEditorOverride, const TOptional<bool>& bIsRunningCommandletOverride)
-{
-	StartupIsEditorOverrideForTesting = bIsEditorOverride;
-	StartupIsRunningCommandletOverrideForTesting = bIsRunningCommandletOverride;
-}
-
-void FAngelscriptRuntimeModule::ClearStartupEnvironmentOverrideForTesting()
-{
-	StartupIsEditorOverrideForTesting.Reset();
-	StartupIsRunningCommandletOverrideForTesting.Reset();
-}
-
 void FAngelscriptRuntimeModule::SetInitializeOverrideForTesting(TFunction<FAngelscriptEngine*()> InOverride)
 {
 	InitializeOverrideForTesting = MoveTemp(InOverride);
@@ -217,8 +187,6 @@ void FAngelscriptRuntimeModule::SetInitializeOverrideForTesting(TFunction<FAngel
 
 void FAngelscriptRuntimeModule::ResetInitializeStateForTesting()
 {
-	ClearStartupEnvironmentOverrideForTesting();
-
 	if (InitializedOverrideEngineForTesting != nullptr)
 	{
 		FAngelscriptEngineContextStack::Pop(InitializedOverrideEngineForTesting);
@@ -234,19 +202,3 @@ void FAngelscriptRuntimeModule::ResetInitializeStateForTesting()
 	InitializeOverrideForTesting = nullptr;
 }
 #endif
-
-bool FAngelscriptRuntimeModule::TickFallbackPrimaryEngine(float DeltaTime)
-{
-	if (!UAngelscriptGameInstanceSubsystem::HasAnyTickOwner())
-	{
-		if (FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine())
-		{
-			if (CurrentEngine->ShouldTick())
-			{
-				CurrentEngine->Tick(DeltaTime);
-			}
-		}
-	}
-
-	return true;
-}

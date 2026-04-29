@@ -27,11 +27,6 @@
 			"LoadingPhase": "PostDefault"
 		},
 		{
-			"Name": "AngelscriptLoader",
-			"Type": "Runtime",
-			"LoadingPhase": "PostDefault"
-		},
-		{
 			"Name": "AngelscriptTest",
 			"Type": "Editor",
 			"LoadingPhase": "PostDefault"

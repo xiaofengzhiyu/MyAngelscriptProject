@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Containers/Ticker.h"
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
@@ -51,18 +50,12 @@ public:
 private:
 	friend struct FAngelscriptRuntimeModuleTickTestAccess;
 	#if WITH_DEV_AUTOMATION_TESTS
-	static void SetStartupEnvironmentOverrideForTesting(const TOptional<bool>& bIsEditorOverride, const TOptional<bool>& bIsRunningCommandletOverride);
-	static void ClearStartupEnvironmentOverrideForTesting();
 	static void SetInitializeOverrideForTesting(TFunction<FAngelscriptEngine*()> InOverride);
 	static void ResetInitializeStateForTesting();
-	static TOptional<bool> StartupIsEditorOverrideForTesting;
-	static TOptional<bool> StartupIsRunningCommandletOverrideForTesting;
 	static TFunction<FAngelscriptEngine*()> InitializeOverrideForTesting;
 	static FAngelscriptEngine* InitializedOverrideEngineForTesting;
 	#endif
-	bool TickFallbackPrimaryEngine(float DeltaTime);
 	static bool bInitializeAngelscriptCalled;
 	static TUniquePtr<FAngelscriptEngine> OwnedPrimaryEngine;
-	FTSTicker::FDelegateHandle FallbackTickHandle;
 
 };

@@ -2,7 +2,7 @@
 
 ## 背景与目标
 
-当前仓库已经具备较强的插件研发底座：`Plugins/Angelscript` 的 `Runtime / Editor / Loader / Test` 四模块边界清晰，`Documents/Guides/Build.md`、`Documents/Guides/Test.md` 与 `Tools/RunTests.ps1` 已经把本地构建、自动化测试和分层回归入口整理出来，`Script/Example_Actor.as` 与 `Script/Tests/` 也证明仓库并非完全没有可消费脚本语料。
+当前仓库已经具备较强的插件研发底座：`Plugins/Angelscript` 的 `Runtime / Editor / Test` 三个 UE 模块边界清晰，Editor/Commandlet 启动收口已内聚到 Runtime 的 `UAngelscriptEngineSubsystem`，`Documents/Guides/Build.md`、`Documents/Guides/Test.md` 与 `Tools/RunTests.ps1` 已经把本地构建、自动化测试和分层回归入口整理出来，`Script/Example_Actor.as` 与 `Script/Tests/` 也证明仓库并非完全没有可消费脚本语料。
 
 但从“工程硬化 / hardened / production-grade 插件工程”的口径看，当前仓库仍缺一条对外可交付的主线：顶层 `README.md` 仍是空内容，`Plugins/Angelscript/Angelscript.uplugin` 的 `DocsURL` / `MarketplaceURL` / `SupportURL` 为空，仓库内看不到 `.github/workflows/` 级 CI 守门，也还没有把兼容矩阵、发布流程、安全披露、贡献入口这些对外契约收口成可复用基线。
 

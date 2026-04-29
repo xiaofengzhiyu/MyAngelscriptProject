@@ -12,7 +12,7 @@
 4. Bind 层与生成代码层出现了新一轮治理债：`Bind_BlueprintEvent.cpp:805`、`Bind_FName.cpp:83`、`Bind_BlueprintType.cpp:156` 仍保留明确 hack / 注释缺口；`FunctionCallers` 生成文件族已经成为需要独立 owner 的结构性债务，而不是“顺手清一点”的小修。
 5. 测试债已经分裂成三种性质完全不同的问题：`Plugins/Angelscript/Source/AngelscriptTest/Subsystem/AngelscriptSubsystemScenarioTests.cpp` 把 subsystem script generation 的编译失败当成当前能力边界；`Documents/Plans/Plan_KnownTestFailureFixes.md` 承接的是当前 `7` 个应通过但未通过的 live failures；`Plan_TestCoverageExpansion.md` 与 `Plan_StaticJITUnitTests.md` 面向的则是 zero / weak coverage。
 6. 插件交付债已经足够明确，不能继续埋在笼统 backlog 中：根 `README.md` 仍是 `NULL`，`Plugins/Angelscript/Angelscript.uplugin` 的 `DocsURL` / `MarketplaceURL` / `SupportURL` 仍为空，这些问题更适合由 `Plan_PluginEngineeringHardening.md` 承接，而不是继续混写进泛化技术债。
-7. 相对 Hazelight 参考源，当前仓库仍存在 parity debt，但必须先拆层：`Plugins/Angelscript/Source/AngelscriptEditor/FunctionLibraries/EditorSubsystemLibrary.h` 仍是 `BlueprintCallable` 注解；`Plugins/Angelscript/Source/AngelscriptRuntime/FunctionLibraries/AngelscriptActorLibrary.h`、`AngelscriptComponentLibrary.h` 仍保留被注释掉的 `//UFUNCTION(ScriptCallable)` 痕迹；GAS / EnhancedInput 以内收形式存在于 runtime；Loader / 引擎补丁级能力不能被误写成普通插件 TODO。
+7. 相对 Hazelight 参考源，当前仓库仍存在 parity debt，但必须先拆层：`Plugins/Angelscript/Source/AngelscriptEditor/FunctionLibraries/EditorSubsystemLibrary.h` 仍是 `BlueprintCallable` 注解；`Plugins/Angelscript/Source/AngelscriptRuntime/FunctionLibraries/AngelscriptActorLibrary.h`、`AngelscriptComponentLibrary.h` 仍保留被注释掉的 `//UFUNCTION(ScriptCallable)` 痕迹；GAS / EnhancedInput 以内收形式存在于 runtime；Hazelight 独立 Loader 结构已由当前 Runtime `UAngelscriptEngineSubsystem` 替代，不能被误写成普通插件 TODO；引擎补丁级能力也必须单独标记。
 8. `StaticJIT` / `JIT` 债务目前被低估成“只差单元测试”，但代码和文档已经表明它至少分成四层：`StaticJITConfig.h` 中的跨平台与 Editor gating（`AS_CAN_GENERATE_JIT`、`AS_SKIP_JITTED_CODE`）、`AngelscriptStaticJIT.h` 中 `FJITDatabase` 的全局单例 / shared-state 边界、`PrecompiledData.h/.cpp` 在四阶段编译流中的结构恢复职责、以及 `Plan_AS238JITv2Port.md` 所记录的 V1/V2 接口迁移债。
 9. JIT 的代码生成与性能治理也还没有稳定 owner：`AngelscriptStaticJIT.cpp` 负责 `.as.jit.hpp` 生成、唯一符号命名和模块产物组织；`PrecompiledData.cpp` 仍保留一组手工 `TIMER_*` 指标；`Documents/Guides/TestPerformance.md` 已定义启动 / 热重载性能基线，却还没有把 StaticJIT 专项指标、生成产物验证和 Editor `AS_SKIP_JITTED_CODE` 的限制统一收口。
 
@@ -34,7 +34,7 @@
   - `Plugins/Angelscript/Source/AngelscriptRuntime/`、`Plugins/Angelscript/Source/AngelscriptEditor/`、`Plugins/Angelscript/Source/AngelscriptTest/` 的 debt 锚点文件，用于固定证据与 owner。
   - `README.md`、`Plugins/Angelscript/Angelscript.uplugin` 这类已明确属于插件交付债的入口文件。
 - **范围外**
-  - 直接实现 import 解析、subsystem 支持、Loader 模块、GAS / EnhancedInput 独立插件化、StaticJIT 新测试、JIT v2 回移或其他真实代码功能改动。
+  - 直接实现 import 解析、subsystem 支持、重新引入 Loader 模块、GAS / EnhancedInput 独立插件化、StaticJIT 新测试、JIT v2 回移或其他真实代码功能改动。
   - 重新打开 `Archives/Plan_TechnicalDebt.md` 已关闭的历史债务，除非出现新证据证明 closeout 失效。
   - 一次性大规模 rename、目录迁移或大文件拆分；这类动作必须先通过 owner 分流形成独立 sibling plan。
   - 任何写死本机绝对路径的说明；涉及 Hazelight 参考源时统一写成 `References.HazelightAngelscriptEngineRoot/<relative-path>`。
@@ -190,8 +190,8 @@ Runtime / Editor / Test 锚点（16 组）：
 - [ ] **P2.1** 📦 Git 提交：`[Docs/TestDebt] Refactor: classify test debt by coverage boundary and failure ownership`
 
 - [ ] **P2.2** 把 Hazelight parity 拆成 engine / plugin / workflow 三层
-  - 以 `Plan_HazelightCapabilityGap.md`、`EditorSubsystemLibrary.h`、`FunctionLibraries/*.h`、`References.HazelightAngelscriptEngineRoot/...` 中的 Loader / GAS / EnhancedInput / Script-Examples 为证据，分别标记引擎侧差距、插件侧可行动项、工作流与示例差距。
-  - 引擎补丁、UHT、Loader 这类项必须显式标记 `blocked by engine` 或 `accepted divergence`，不再伪装成普通插件 TODO。
+  - 以 `Plan_HazelightCapabilityGap.md`、`EditorSubsystemLibrary.h`、`FunctionLibraries/*.h`、`References.HazelightAngelscriptEngineRoot/...` 中的 Hazelight Loader / GAS / EnhancedInput / Script-Examples 为证据，分别标记引擎侧差距、插件侧可行动项、工作流与示例差距。
+  - 引擎补丁、UHT、Hazelight 独立 Loader 结构这类项必须显式标记 `blocked by engine` 或 `accepted divergence`，不再伪装成普通插件 TODO。
   - `BlueprintCallable` 与 `ScriptCallable` 这类有可落证据的注解漂移，必须与“整个 Loader 体系缺失”分开记录，也不能再只用单个 `EditorSubsystemLibrary` 例子代表全局问题。
 - [ ] **P2.2** 📦 Git 提交：`[Docs/Hazelight] Refactor: split parity debt into engine plugin and workflow layers`
 
