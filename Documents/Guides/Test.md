@@ -97,6 +97,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Grou
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Group AngelscriptDebugger -Label debugger -TimeoutMs 600000
 ```
 
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Group AngelscriptPerformance -Label perf -TimeoutMs 900000
+```
+
 ### 按具名 suite 运行
 
 ```powershell
@@ -251,6 +255,148 @@ J:\UnrealEngine\UERelease\Engine\Binaries\Win64\UnrealEditor-Cmd.exe <ProjectFil
 - `HotReload`
 - `FunctionalSamples`
 - `All`
+
+## CQTest 框架使用指南
+
+### 概述
+
+CQTest 是 UE 5.x 引入的声明式自动化测试框架（`Engine/Source/Developer/CQTest/`），相比传统 `IMPLEMENT_SIMPLE_AUTOMATION_TEST` 提供更简洁的语法和更好的 setup/teardown 结构化支持。本项目已在 `AngelscriptTest.Build.cs` 中加入 `CQTest` 依赖（editor builds），当前作为 PoC 在绑定测试中使用。
+
+引入头文件：
+
+```cpp
+#include "CQTest.h"
+```
+
+### 核心宏
+
+| 宏 | 作用 | 映射 |
+|---|---|---|
+| `TEST_CLASS(Name, Path)` | 声明测试类，Path 为 Automation ID 前缀 | 生成 `FAutomationTestBase` 子类 |
+| `TEST_CLASS_WITH_FLAGS(Name, Path, Flags)` | 同上，但可指定 `EAutomationTestFlags` | 同上 |
+| `TEST_METHOD(Name)` | 在类内声明一个测试方法 | 每个方法注册为独立 Automation Test |
+| `BEFORE_ALL()` | **静态方法**，整个测试类执行前调用一次 | `static void BeforeAll(const FString&)` |
+| `AFTER_ALL()` | **静态方法**，整个测试类执行后调用一次 | `static void AfterAll(const FString&)` |
+| `BEFORE_EACH()` | 每个 `TEST_METHOD` 执行前调用 | `virtual void Setup() override` |
+| `AFTER_EACH()` | 每个 `TEST_METHOD` 执行后调用 | `virtual void TearDown() override` |
+| `ASSERT_THAT(expr)` | 断言失败时 `return`，不继续执行 | `if (!this->Assert.expr) { return; }` |
+
+### 与 Angelscript 引擎集成的推荐模式
+
+由于 `ASTEST_BEGIN/END_SHARE_CLEAN` 等宏展开为大括号对（包含 `FAngelscriptEngineScope` RAII），无法跨 CQTest 的 `Setup()/TearDown()/TEST_METHOD()` 边界拆分。推荐的适配模式如下：
+
+```cpp
+TEST_CLASS_WITH_FLAGS(FMyBindingsTest,
+    "Angelscript.TestModule.Bindings.MyType",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+    BEFORE_ALL()
+    {
+        // 整个类开始时一次性获取干净的共享引擎
+        ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+    }
+
+    AFTER_ALL()
+    {
+        // 整个类结束后一次性重置引擎
+        FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+        AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+    }
+
+    TEST_METHOD(SomeSection)
+    {
+        // 获取共享引擎（无 reset，因为 BEFORE_ALL 已经清理过）
+        FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+        FAngelscriptEngineScope Scope(Engine);
+
+        // FCoverageModuleScope 自动在析构时 DiscardModule
+        FCoverageModuleScope Mod(*TestRunner, Engine, Profile, TEXT("Section"), TEXT(R"(
+            // AS code here
+        )"));
+        if (!Mod.IsValid()) return;
+        auto& M = Mod.GetModule();
+
+        // 断言
+        ExpectGlobalInts(*TestRunner, Engine, M, Profile, Cases);
+    }
+};
+```
+
+关键设计决策：
+
+- **`BEFORE_ALL` / `AFTER_ALL`（推荐）**：引擎获取和重置只执行各一次。由于它们是 `static` 方法，不能直接设置实例成员变量，但可以操作进程级共享引擎单例。
+- **`BEFORE_EACH` / `AFTER_EACH`（避免）**：每个 `TEST_METHOD` 前后都执行，会导致不必要的引擎重置。`FCoverageModuleScope` 的 RAII 析构已经负责每个测试的模块清理，无需额外的整引擎重置。
+- **`FCoverageModuleScope`**：每个 `TEST_METHOD` 内通过 RAII 创建和销毁 AS 模块，测试结束时自动 `DiscardModule`，保证测试间的模块隔离。
+- **`TestRunner` 指针**：CQTest 将 `TestRunner` 暴露为 `static` 指针（类型为 `TTestRunner<FNoDiscardAsserter>*`），传给需要 `FAutomationTestBase&` 的函数时需要解引用为 `*TestRunner`。
+
+### setup 层级选择
+
+| 层级 | 用途 | 示例 |
+|---|---|---|
+| `BEFORE_ALL` / `AFTER_ALL` | 引擎获取/重置、重量级资源创建 | `ASTEST_CREATE_ENGINE_SHARE_CLEAN()` |
+| `BEFORE_EACH` / `AFTER_EACH` | 每个测试必须隔离的状态（如 `AddExpectedError`） | 仅在特殊需要时使用 |
+| `TEST_METHOD` 内 RAII | 模块创建/销毁、局部作用域 | `FCoverageModuleScope`、`FAngelscriptEngineScope` |
+
+### 跨边界 FString 测试模式
+
+绑定测试中常见三种 C++ ↔ AS 数据传递路径：
+
+**1. AS 内部比较，返回 int**（最常用）：
+
+```cpp
+// AS 代码
+int MyTest() {
+    FString S = "Hello".ToUpper();
+    return (S == "HELLO") ? 1 : 0;
+}
+
+// C++ 断言
+ExpectGlobalInts(*TestRunner, Engine, M, Profile, Cases);
+```
+
+**2. AS 返回 FString，C++ 验证内容**：
+
+```cpp
+// AS 代码
+FString MyReturnTest() {
+    return "Hello".ToUpper();
+}
+
+// C++ 断言
+ExpectGlobalReturnCustom<FString>(*TestRunner, Engine, M, Profile,
+    TEXT("FString MyReturnTest()"),
+    TEXT("ToUpper returns HELLO"),
+    [](FAutomationTestBase& T, const FString& V) -> bool {
+        return T.TestEqual(TEXT("upper"), V, TEXT("HELLO"));
+    });
+```
+
+**3. C++ 传入 FString 参数，AS 处理**：
+
+```cpp
+// AS 代码
+FString Pass_Upper(const FString& in S) {
+    return S.ToUpper();
+}
+
+// C++ 调用
+FString Input = TEXT("hello");
+FASGlobalFunctionInvoker Inv(*TestRunner, Engine, M,
+    TEXT("FString Pass_Upper(const FString& in)"));
+Inv.AddArgRef(Input);
+if (Inv.Call()) {
+    FString Result;
+    if (Inv.ReadReturnStruct(Result)) {
+        TestRunner->TestEqual(TEXT("upper"), Result, TEXT("HELLO"));
+    }
+}
+```
+
+### 现有 CQTest PoC 参考
+
+| 文件 | 测试数 | 覆盖范围 |
+|---|---|---|
+| `AngelscriptFStringBindingsTests.cpp` | 17 个 TEST_METHOD，300+ 用例 | FString 全 API + 全局函数 + 跨边界传参/返回 |
 
 ## 与 Gauntlet 的边界
 

@@ -64,13 +64,14 @@
   - [13.2 Runtime 层学习测试](#132-runtime-层学习测试)
 - [14. Examples — 示例脚本编译](#14-examples--示例脚本编译)
 - [15. Template — 模板场景](#15-template--模板场景)
+- [15.6 Performance — 运行期微基准](#156-performance--运行期微基准)
 - [16. Dump — 状态导出](#16-dump--状态导出)
 
 ---
 
 ## 1. Shared — 测试基础设施
 
-> 源文件：`Shared/AngelscriptTestEngineHelperTests.cpp`、`Shared/AngelscriptNativeScriptTestObjectTests.cpp`
+> 源文件：`Shared/AngelscriptTestEngineHelperTests.cpp`、`Shared/AngelscriptTestEnginePoolTests.cpp`、`Shared/AngelscriptNativeScriptTestObjectTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
@@ -81,10 +82,19 @@
 | Shared.EngineHelper.SharedTestEngineNeverSilentlyAttachesToProductionEngine | `GetOrCreateSharedCloneEngine` / `AcquireCleanSharedCloneEngine` 始终指向同一个共享 clone 引擎，不会静默附着到生产引擎 |
 | Shared.EngineHelper.ProductionHelperRejectsMissingProductionEngine | 无生产子系统/全局引擎时 `TryGetRunningProductionEngine` 为 null |
 | Shared.EngineHelper.CompileUsesScopedGlobalEngine | 在 `FScopedGlobalEngineOverride` 下编译后，全局引擎指针恢复为共享 clone 引擎 |
+| Shared.EngineHelper.ResetSharedEngineReleasesGeneratedComponentClasses | `ResetSharedCloneEngine` 后测试生成的组件 `UASClass` 需从 weak/path/对象迭代中消失 |
+| Shared.EngineHelper.ResetSharedEngineReleasesGeneratedStructs | `ResetSharedCloneEngine` 后测试生成的 `UASStruct` 需从 weak/path/对象迭代中消失 |
+| Shared.EngineHelper.ResetSharedEngineReleasesGeneratedEnumsAndDelegates | `ResetSharedCloneEngine` 后测试生成的 `UEnum`、单播 delegate 和 multicast event `UDelegateFunction` 需从 weak/path 中消失 |
 | Shared.EngineHelper.NestedGlobalEngineScopeRestoresPreviousEngine | 嵌套 scope 先装 B 再退出后恢复 A |
 | Shared.EngineHelper.WorldContextScopeRestoresPreviousContext | `FScopedTestWorldContextScope` 正确设置/恢复 `CurrentWorldContext` |
 | Shared.EngineHelper.ExecutingOneTestEngineDoesNotLeakContextIntoNextTest | 两个 clone 引擎分别编译执行不同模块，结果互不串线 |
 | Shared.EngineHelper.SubsystemAttachedProductionEngineDoesNotHijackIsolatedTestEngine | 隔离引擎编译的模块不出现在共享测试引擎中 |
+| Shared.TestEnginePool.PrewarmCachesBindDatabase | module-clean source engine 预热后复用 bind database，不重复 replay bind |
+| Shared.TestEnginePool.ModuleCleanDiscardsOnlyDelta | module-clean scope 只丢弃当前 scope 新增模块，不清 baseline |
+| Shared.TestEnginePool.GeneratedClassCleanupIsBounded | module-clean 清理测试生成的 `UASClass`，不留下 rooted detached class |
+| Shared.TestEnginePool.GeneratedStructCleanupIsBounded | module-clean 清理测试生成的 `UASStruct`，并触发 batched GC 释放 |
+| Shared.TestEnginePool.GeneratedEnumDelegateCleanupIsBounded | module-clean 只按本次丢弃模块清理测试生成的 `UEnum`、单播 delegate 和 multicast event `UDelegateFunction` |
+| Shared.TestEnginePool.GeneratedClassActionCacheIsCleared | module-clean 清掉 generated class 对应 Blueprint action cache，避免 cache 强引用阻止 GC |
 | Shared.NativeScriptTestObject.Instantiate | 原生测试用 `UAngelscriptNativeScriptTestObject` 可实例化 |
 
 ---
@@ -141,7 +151,9 @@
 | Core.Performance.Startup.Clone | clone 启动基线与 0 bind replay 指标 |
 | Core.Performance.Startup.CreateForTestingFallbackFull | 无 source engine 时 CreateForTesting fallback 全量启动基线 |
 | Core.Performance.Startup.CreateForTestingClone | 有 source engine 时 CreateForTesting clone 启动基线 |
+| Core.Performance.ShareCleanCycle | `ASTEST_CREATE_ENGINE_SHARE_CLEAN` 串行 acquire/compile/reset 周期耗时基线，并观测生成 `UASClass` reset 后 GC/脱离/引用来源 |
 | Core.Performance.ArtifactGeneration | metrics.json 产物结构与落盘回归 |
+| Core.Performance.InstrumentationScopeCatalog | runtime performance instrumentation scope 目录回归 |
 
 ---
 
@@ -1030,6 +1042,8 @@
 | 测试前缀 | 说明 |
 |--------|----------|
 | `Angelscript.TestModule.Core.Performance.Startup` | startup/bind baseline |
+| `Angelscript.TestModule.Core.Performance.ShareCleanCycle` | share-clean 串行 acquire/compile/reset baseline，含生成类 reset 后引用诊断 |
+| `Angelscript.TestModule.Performance` | 参考外部性能样例的脚本自调用、C++ 属性、C++ 函数微基准 |
 | `Angelscript.TestModule.HotReload.Performance` | reload 延迟 baseline 与 burst churn |
 
 ### 15.5 产物验证层
@@ -1040,7 +1054,19 @@
 | `Angelscript.CppTests.CodeCoverage.HtmlReport.Generation` | 报告产物写出能力邻近回归 |
 | `Angelscript.CppTests.StaticJIT.PrecompiledData.*` | 预编译数据产物与 round-trip 稳定性 |
 
-### 15.6 首轮执行快照（2026-04-03）
+### 15.6 Performance — 运行期微基准
+
+> 源文件：`Performance/AngelscriptRuntimeMicrobenchmarkTests.cpp`、`Performance/AngelscriptPerformanceTestTypes.cpp`
+>
+> 标准分组：`AngelscriptPerformance` 同时路由 `Angelscript.TestModule.Performance.`、`Angelscript.TestModule.Core.Performance.` 与 `Angelscript.TestModule.HotReload.Performance.`。
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| Performance.ScriptSelf | 参考外部样例中的脚本自调用场景，采样空函数与算术函数循环，并与 native baseline checksum 对齐 |
+| Performance.NativeProperty | 采样脚本访问 C++ scalar/container UPROPERTY 的读写循环，并与 C++ native loop checksum 对齐 |
+| Performance.NativeFunction | 采样脚本调用 C++ scalar/container UFUNCTION 的读写循环，并与 C++ native loop checksum 对齐 |
+
+### 15.7 首轮执行快照（2026-04-03）
 
 | 层级 | 前缀 | 报告目录 | 结果摘要 |
 |--------|----------|----------|----------|
