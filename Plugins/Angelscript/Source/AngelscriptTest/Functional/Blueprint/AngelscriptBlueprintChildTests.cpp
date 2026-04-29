@@ -1,5 +1,5 @@
 #include "CQTest.h"
-#include "Blueprint/Shared/AngelscriptBlueprintTestHelpers.h"
+#include "Functional/Blueprint/AngelscriptBlueprintTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
