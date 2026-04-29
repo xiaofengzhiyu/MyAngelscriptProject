@@ -63,6 +63,11 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_ConsoleVariables((int32)FAngel
 	FConsoleVariable_.Method("void SetString(const FString& InValue) const", &FScriptConsoleVariable<FString>::SetString);
 });
 
+namespace
+{
+	TMap<FString, const void*> GScriptConsoleCommandOwners;
+}
+
 struct FScriptConsoleCommand
 {
 	IConsoleCommand* Command = nullptr;
@@ -122,17 +127,25 @@ struct FScriptConsoleCommand
 			Context->SetArgAddress(0, (void*)&Args);
 			Context->Execute();
 		}));
+		GScriptConsoleCommandOwners.Add(CommandName, this);
 #endif
 	}
 
 	~FScriptConsoleCommand()
 	{
 #if !UE_BUILD_SHIPPING
-		// Make sure the command is still registered. If it's already been unregistered then Command is now
-		// a pointer to deleted memory, so we should not unregister it again.
-		auto* RegisteredCommand = IConsoleManager::Get().FindConsoleObject(*CommandName);
-		if (RegisteredCommand == Command)
-			IConsoleManager::Get().UnregisterConsoleObject(Command);
+		const void* const* CurrentOwner = GScriptConsoleCommandOwners.Find(CommandName);
+		if (CurrentOwner != nullptr && *CurrentOwner == this)
+		{
+			// Pointer equality against the console object is not enough: if this command was
+			// replaced, the console manager can reuse the old allocation address for the new
+			// command. Track script-side ownership separately so an old module cannot unregister
+			// a newer replacement.
+			auto* RegisteredCommand = IConsoleManager::Get().FindConsoleObject(*CommandName);
+			if (RegisteredCommand == Command)
+				IConsoleManager::Get().UnregisterConsoleObject(Command);
+			GScriptConsoleCommandOwners.Remove(CommandName);
+		}
 #endif
 	}
 };
