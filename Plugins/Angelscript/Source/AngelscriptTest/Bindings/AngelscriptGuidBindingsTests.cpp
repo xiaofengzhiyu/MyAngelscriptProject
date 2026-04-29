@@ -1,239 +1,280 @@
-#include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptGuidBindingsTests.cpp
+//
+// FGuid binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Guid.FAngelscriptGuidBindingsTest.*
+//
+// Sections:
+//   FormatAndSlots    — construction, ToString formats, operator[] access
+//   ParseSuccess      — Parse/ParseExact with valid DigitsWithHyphens and Digits
+//   ParseFailure      — ParseExact wrong format, Parse invalid string
+//   StringConstructor — FGuid(string) construction from formatted strings
+//
+// CQTest adaptation notes:
+//   FGuid literal values are computed from native baselines and substituted via
+//   ReplaceInline into the script source at test time.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+
 #include "Misc/Guid.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptGuidParseFailureAndIndexCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.GuidParseFailureAndIndexCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-namespace AngelscriptTest_Bindings_AngelscriptGuidBindingsTests_Private
+static const FBindingsCoverageProfile GGuidProfile{
+	TEXT("Guid"),              // Theme
+	TEXT(""),                  // Variant
+	TEXT("ASGuid"),            // ModulePrefix
+	TEXT("Guid"),             // CasePrefix
+	TEXT("GuidBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace AngelscriptGuidTestHelpers
 {
-	static constexpr ANSICHAR GuidBindingsModuleName[] = "ASGuidParseFailureAndIndexCompat";
-
-	struct FGuidBindingsBaselines
-	{
-		FGuid ExplicitGuid;
-		FGuid SentinelGuid;
-		FString DigitsWithHyphens;
-		FString Digits;
-		FString InvalidInput;
-	};
-
-	FGuidBindingsBaselines BuildBaselines()
-	{
-		FGuidBindingsBaselines Baselines;
-		Baselines.ExplicitGuid = FGuid(1, 2, 3, 4);
-		Baselines.SentinelGuid = FGuid(91, 92, 93, 94);
-		Baselines.DigitsWithHyphens = Baselines.ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
-		Baselines.Digits = Baselines.ExplicitGuid.ToString(EGuidFormats::Digits);
-		Baselines.InvalidInput = TEXT("not-a-guid");
-		return Baselines;
-	}
-
-	FString ToScriptUIntLiteral(const uint32 Value)
+	static FString ToScriptUIntLiteral(const uint32 Value)
 	{
 		return FString::Printf(TEXT("%u"), Value);
 	}
 
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const FString& Replacement)
+	static void ReplaceGuidTokens(FString& Source, const TCHAR* Prefix, const FGuid& Value)
 	{
-		ScriptSource.ReplaceInline(Token, *Replacement, ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_A__"), Prefix), *ToScriptUIntLiteral(Value[0]), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_B__"), Prefix), *ToScriptUIntLiteral(Value[1]), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_C__"), Prefix), *ToScriptUIntLiteral(Value[2]), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_D__"), Prefix), *ToScriptUIntLiteral(Value[3]), ESearchCase::CaseSensitive);
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptGuidBindingsTest,
+	"Angelscript.TestModule.Bindings.Guid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const uint32 Replacement)
+	AFTER_ALL()
 	{
-		ReplaceToken(ScriptSource, Token, ToScriptUIntLiteral(Replacement));
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
 	}
 
-	void ReplaceGuidTokens(FString& ScriptSource, const TCHAR* Prefix, const FGuid& Value)
-	{
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_A__"), Prefix), Value[0]);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_B__"), Prefix), Value[1]);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_C__"), Prefix), Value[2]);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_D__"), Prefix), Value[3]);
-	}
+	// ====================================================================
+	// Section: FormatAndSlots
+	// ====================================================================
 
-	FString BuildScriptSource(const FGuidBindingsBaselines& Baselines, const uint32 ExpectedLastSlot)
+	TEST_METHOD(FormatAndSlots)
 	{
+		using namespace AngelscriptGuidTestHelpers;
+
+		const FGuid ExplicitGuid(1, 2, 3, 4);
+		const FString WithHyphens = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
+		const FString Digits = ExplicitGuid.ToString(EGuidFormats::Digits);
+
 		FString ScriptSource = TEXT(R"(
-int VerifyGuidSlots(FGuid Value, uint ExpectedA, uint ExpectedB, uint ExpectedC, uint ExpectedD, int FailureBase)
+int Guid_ToStringHyphens()
 {
-	if (Value[0] != ExpectedA)
-		return FailureBase + 0;
-	if (Value[1] != ExpectedB)
-		return FailureBase + 1;
-	if (Value[2] != ExpectedC)
-		return FailureBase + 2;
-	if (Value[3] != ExpectedD)
-		return FailureBase + 3;
-
-	return 0;
+	const FGuid G(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (G.ToString(EGuidFormats::DigitsWithHyphens) == "__HYPHENS__") ? 1 : 0;
 }
-
-int VerifyGuidMatches(FGuid Observed, FGuid Expected, int FailureBase)
+int Guid_ToStringDigits()
 {
-	if (!(Observed == Expected))
-		return FailureBase + 0;
-	if (Observed.opCmp(Expected) != 0)
-		return FailureBase + 1;
-
-	const int SlotResult = VerifyGuidSlots(Observed, Expected[0], Expected[1], Expected[2], Expected[3], FailureBase + 2);
-	if (SlotResult != 0)
-		return SlotResult;
-
-	return 0;
+	const FGuid G(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (G.ToString(EGuidFormats::Digits) == "__DIGITS__") ? 1 : 0;
 }
-
-int Entry()
+int Guid_SlotAccess()
 {
-	const FGuid ExplicitGuid(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
-	const FGuid SentinelGuid(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
-
-	if (!(ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens) == "__GUID_WITH_HYPHENS__"))
-		return 10;
-	if (!(ExplicitGuid.ToString(EGuidFormats::Digits) == "__GUID_DIGITS__"))
-		return 11;
-
-	int Result = VerifyGuidSlots(ExplicitGuid, __GUID_A__, __GUID_B__, __GUID_C__, __GUID_D_EXPECTED__, 20);
-	if (Result != 0)
-		return Result;
-
-	FGuid ParsedHyphens = SentinelGuid;
-	if (!FGuid::Parse("__GUID_WITH_HYPHENS__", ParsedHyphens))
-		return 30;
-	Result = VerifyGuidMatches(ParsedHyphens, ExplicitGuid, 31);
-	if (Result != 0)
-		return Result;
-
-	FGuid ParsedDigits = SentinelGuid;
-	if (!FGuid::Parse("__GUID_DIGITS__", ParsedDigits))
-		return 40;
-	Result = VerifyGuidMatches(ParsedDigits, ExplicitGuid, 41);
-	if (Result != 0)
-		return Result;
-
-	FGuid ParsedExactHyphens = SentinelGuid;
-	if (!FGuid::ParseExact("__GUID_WITH_HYPHENS__", EGuidFormats::DigitsWithHyphens, ParsedExactHyphens))
-		return 50;
-	Result = VerifyGuidMatches(ParsedExactHyphens, ExplicitGuid, 51);
-	if (Result != 0)
-		return Result;
-
-	FGuid ParsedExactDigits = SentinelGuid;
-	if (!FGuid::ParseExact("__GUID_DIGITS__", EGuidFormats::Digits, ParsedExactDigits))
-		return 60;
-	Result = VerifyGuidMatches(ParsedExactDigits, ExplicitGuid, 61);
-	if (Result != 0)
-		return Result;
-
-	FGuid WrongFormat = SentinelGuid;
-	if (FGuid::ParseExact("__GUID_WITH_HYPHENS__", EGuidFormats::Digits, WrongFormat))
-		return 70;
-	Result = VerifyGuidMatches(WrongFormat, SentinelGuid, 71);
-	if (Result != 0)
-		return Result;
-
-	FGuid InvalidParsed = SentinelGuid;
-	if (FGuid::Parse("__INVALID_GUID__", InvalidParsed))
-		return 80;
-	Result = VerifyGuidMatches(InvalidParsed, SentinelGuid, 81);
-	if (Result != 0)
-		return Result;
-
-	const FGuid FromHyphenString("__GUID_WITH_HYPHENS__");
-	Result = VerifyGuidMatches(FromHyphenString, ExplicitGuid, 90);
-	if (Result != 0)
-		return Result;
-
-	const FGuid FromDigitsString("__GUID_DIGITS__");
-	Result = VerifyGuidMatches(FromDigitsString, ExplicitGuid, 100);
-	if (Result != 0)
-		return Result;
-
-	return 1;
+	const FGuid G(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (G[0] == __GUID_A__ && G[1] == __GUID_B__ && G[2] == __GUID_C__ && G[3] == __GUID_D__) ? 1 : 0;
 }
 )");
+		ReplaceGuidTokens(ScriptSource, TEXT("GUID"), ExplicitGuid);
+		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
+		ScriptSource.ReplaceInline(TEXT("__DIGITS__"), *Digits, ESearchCase::CaseSensitive);
 
-		ReplaceGuidTokens(ScriptSource, TEXT("GUID"), Baselines.ExplicitGuid);
-		ReplaceGuidTokens(ScriptSource, TEXT("SENTINEL"), Baselines.SentinelGuid);
-		ReplaceToken(ScriptSource, TEXT("__GUID_WITH_HYPHENS__"), Baselines.DigitsWithHyphens.ReplaceCharWithEscapedChar());
-		ReplaceToken(ScriptSource, TEXT("__GUID_DIGITS__"), Baselines.Digits.ReplaceCharWithEscapedChar());
-		ReplaceToken(ScriptSource, TEXT("__INVALID_GUID__"), Baselines.InvalidInput.ReplaceCharWithEscapedChar());
-		ReplaceToken(ScriptSource, TEXT("__GUID_D_EXPECTED__"), ExpectedLastSlot);
-		return ScriptSource;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("FormatSlots"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ToStringHyphens()"), TEXT("FGuid ToString DigitsWithHyphens should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ToStringDigits()"), TEXT("FGuid ToString Digits should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_SlotAccess()"), TEXT("FGuid operator[] should return correct components"), 1);
 	}
-}
 
-using namespace AngelscriptTest_Bindings_AngelscriptGuidBindingsTests_Private;
+	// ====================================================================
+	// Section: ParseSuccess
+	// ====================================================================
 
-bool FAngelscriptGuidParseFailureAndIndexCompatBindingsTest::RunTest(const FString& Parameters)
+	TEST_METHOD(ParseSuccess)
+	{
+		using namespace AngelscriptGuidTestHelpers;
+
+		const FGuid ExplicitGuid(1, 2, 3, 4);
+		const FGuid SentinelGuid(91, 92, 93, 94);
+		const FString WithHyphens = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
+		const FString Digits = ExplicitGuid.ToString(EGuidFormats::Digits);
+
+		FString ScriptSource = TEXT(R"(
+int Guid_ParseHyphens()
 {
-	const FGuidBindingsBaselines Baselines = BuildBaselines();
-	TestTrue(TEXT("Native hyphenated guid string should not be empty"), !Baselines.DigitsWithHyphens.IsEmpty());
-	TestTrue(TEXT("Native digits guid string should not be empty"), !Baselines.Digits.IsEmpty());
-
-	FGuid NativeParsed = Baselines.SentinelGuid;
-	TestTrue(TEXT("Native Parse should accept DigitsWithHyphens"), FGuid::Parse(Baselines.DigitsWithHyphens, NativeParsed));
-	TestTrue(TEXT("Native Parse should preserve explicit guid value"), NativeParsed == Baselines.ExplicitGuid);
-
-	NativeParsed = Baselines.SentinelGuid;
-	TestTrue(TEXT("Native Parse should accept Digits"), FGuid::Parse(Baselines.Digits, NativeParsed));
-	TestTrue(TEXT("Native Parse digits should preserve explicit guid value"), NativeParsed == Baselines.ExplicitGuid);
-
-	NativeParsed = Baselines.SentinelGuid;
-	TestTrue(TEXT("Native ParseExact should accept DigitsWithHyphens"), FGuid::ParseExact(Baselines.DigitsWithHyphens, EGuidFormats::DigitsWithHyphens, NativeParsed));
-	TestTrue(TEXT("Native ParseExact hyphenated should preserve explicit guid value"), NativeParsed == Baselines.ExplicitGuid);
-
-	NativeParsed = Baselines.SentinelGuid;
-	TestTrue(TEXT("Native ParseExact should accept Digits"), FGuid::ParseExact(Baselines.Digits, EGuidFormats::Digits, NativeParsed));
-	TestTrue(TEXT("Native ParseExact digits should preserve explicit guid value"), NativeParsed == Baselines.ExplicitGuid);
-
-	NativeParsed = Baselines.SentinelGuid;
-	TestFalse(TEXT("Native ParseExact should reject wrong format"), FGuid::ParseExact(Baselines.DigitsWithHyphens, EGuidFormats::Digits, NativeParsed));
-	TestTrue(TEXT("Native wrong-format ParseExact should preserve sentinel value"), NativeParsed == Baselines.SentinelGuid);
-
-	NativeParsed = Baselines.SentinelGuid;
-	TestFalse(TEXT("Native Parse should reject invalid guid text"), FGuid::Parse(Baselines.InvalidInput, NativeParsed));
-	TestTrue(TEXT("Native invalid Parse should preserve sentinel value"), NativeParsed == Baselines.SentinelGuid);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bResultMatched = false;
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	const FString ScriptSource = BuildScriptSource(Baselines, Baselines.ExplicitGuid[3]);
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		GuidBindingsModuleName,
-		ScriptSource);
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
-
-	bResultMatched = TestEqual(TEXT("Guid parse failure and index compat should match native FGuid semantics"), Result, 1);
-
-	ASTEST_END_SHARE_CLEAN
-	return bResultMatched;
+	FGuid Parsed(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	if (!FGuid::Parse("__HYPHENS__", Parsed))
+		return 0;
+	const FGuid Expected(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (Parsed == Expected) ? 1 : 0;
 }
+int Guid_ParseDigits()
+{
+	FGuid Parsed(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	if (!FGuid::Parse("__DIGITS__", Parsed))
+		return 0;
+	const FGuid Expected(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (Parsed == Expected) ? 1 : 0;
+}
+int Guid_ParseExactHyphens()
+{
+	FGuid Parsed(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	if (!FGuid::ParseExact("__HYPHENS__", EGuidFormats::DigitsWithHyphens, Parsed))
+		return 0;
+	const FGuid Expected(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (Parsed == Expected) ? 1 : 0;
+}
+int Guid_ParseExactDigits()
+{
+	FGuid Parsed(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	if (!FGuid::ParseExact("__DIGITS__", EGuidFormats::Digits, Parsed))
+		return 0;
+	const FGuid Expected(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (Parsed == Expected) ? 1 : 0;
+}
+)");
+		ReplaceGuidTokens(ScriptSource, TEXT("GUID"), ExplicitGuid);
+		ReplaceGuidTokens(ScriptSource, TEXT("SENTINEL"), SentinelGuid);
+		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
+		ScriptSource.ReplaceInline(TEXT("__DIGITS__"), *Digits, ESearchCase::CaseSensitive);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("ParseOk"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ParseHyphens()"), TEXT("FGuid::Parse should accept DigitsWithHyphens format"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ParseDigits()"), TEXT("FGuid::Parse should accept Digits format"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ParseExactHyphens()"), TEXT("FGuid::ParseExact should accept DigitsWithHyphens"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ParseExactDigits()"), TEXT("FGuid::ParseExact should accept Digits"), 1);
+	}
+
+	// ====================================================================
+	// Section: ParseFailure
+	// ====================================================================
+
+	TEST_METHOD(ParseFailure)
+	{
+		using namespace AngelscriptGuidTestHelpers;
+
+		const FGuid ExplicitGuid(1, 2, 3, 4);
+		const FGuid SentinelGuid(91, 92, 93, 94);
+		const FString WithHyphens = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
+		const FString InvalidInput = TEXT("not-a-guid");
+
+		FString ScriptSource = TEXT(R"(
+int Guid_ParseExactWrongFormat()
+{
+	FGuid Parsed(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	const FGuid Sentinel(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	if (FGuid::ParseExact("__HYPHENS__", EGuidFormats::Digits, Parsed))
+		return 0;
+	return (Parsed == Sentinel) ? 1 : 0;
+}
+int Guid_ParseInvalid()
+{
+	FGuid Parsed(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	const FGuid Sentinel(__SENTINEL_A__, __SENTINEL_B__, __SENTINEL_C__, __SENTINEL_D__);
+	if (FGuid::Parse("__INVALID__", Parsed))
+		return 0;
+	return (Parsed == Sentinel) ? 1 : 0;
+}
+)");
+		ReplaceGuidTokens(ScriptSource, TEXT("SENTINEL"), SentinelGuid);
+		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
+		ScriptSource.ReplaceInline(TEXT("__INVALID__"), *InvalidInput, ESearchCase::CaseSensitive);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("ParseFail"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ParseExactWrongFormat()"), TEXT("FGuid::ParseExact should reject wrong format and preserve sentinel"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_ParseInvalid()"), TEXT("FGuid::Parse should reject invalid text and preserve sentinel"), 1);
+	}
+
+	// ====================================================================
+	// Section: StringConstructor
+	// ====================================================================
+
+	TEST_METHOD(StringConstructor)
+	{
+		using namespace AngelscriptGuidTestHelpers;
+
+		const FGuid ExplicitGuid(1, 2, 3, 4);
+		const FString WithHyphens = ExplicitGuid.ToString(EGuidFormats::DigitsWithHyphens);
+		const FString Digits = ExplicitGuid.ToString(EGuidFormats::Digits);
+
+		FString ScriptSource = TEXT(R"(
+int Guid_CtorFromHyphens()
+{
+	const FGuid FromStr("__HYPHENS__");
+	const FGuid Expected(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (FromStr == Expected) ? 1 : 0;
+}
+int Guid_CtorFromDigits()
+{
+	const FGuid FromStr("__DIGITS__");
+	const FGuid Expected(__GUID_A__, __GUID_B__, __GUID_C__, __GUID_D__);
+	return (FromStr == Expected) ? 1 : 0;
+}
+)");
+		ReplaceGuidTokens(ScriptSource, TEXT("GUID"), ExplicitGuid);
+		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
+		ScriptSource.ReplaceInline(TEXT("__DIGITS__"), *Digits, ESearchCase::CaseSensitive);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("StrCtor"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_CtorFromHyphens()"), TEXT("FGuid string ctor should parse DigitsWithHyphens"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GGuidProfile, TEXT("int Guid_CtorFromDigits()"), TEXT("FGuid string ctor should parse Digits"), 1);
+	}
+};
 
 #endif

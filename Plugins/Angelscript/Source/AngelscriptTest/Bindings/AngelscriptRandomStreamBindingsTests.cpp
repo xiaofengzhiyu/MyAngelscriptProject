@@ -1,35 +1,39 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+// ============================================================================
+// AngelscriptRandomStreamBindingsTests.cpp
+//
+// FRandomStream binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.RandomStream.FAngelscriptRandomStreamBindingsTest.*
+//
+// Sections:
+//   IntSeedSequence   — int32 seed construction, GetInitialSeed, GetCurrentSeed,
+//                       GetUnsignedInt, RandRange, GetFraction, FRandRange, copy parity
+//   IntSeedReset      — Reset behaviour after sequence consumption
+//   UintSeedSequence  — uint32 seed construction, GetInitialSeed, GetCurrentSeed,
+//                       GetUnsignedInt, Reset
+//   NameSeedSequence  — Initialize(FName), GetCurrentSeed, RandRange
+//
+// CQTest adaptation notes:
+//   Native C++ expectations are computed at test time and substituted into script
+//   via ReplaceInline tokens so that parity is verified against deterministic output.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
-#include "Misc/ScopeExit.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-namespace AngelscriptTest_Bindings_AngelscriptRandomStreamBindingsTests_Private
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace AngelscriptRandomStreamBindingsTests_Private
 {
-	struct FRandomStreamExpectations
-	{
-		int32 IntInitialSeed = 0;
-		int32 IntInitialCurrentSeed = 0;
-		uint32 IntUnsignedValue = 0;
-		int32 IntRangeValue = 0;
-		double IntFractionValue = 0.0;
-		double IntDoubleRangeValue = 0.0;
-		int32 IntPostSequenceSeed = 0;
-		int32 IntCopyNextValue = 0;
-		int32 IntStreamNextValue = 0;
-		int32 IntResetValue = 0;
-		int32 UintInitialSeed = 0;
-		int32 UintInitialCurrentSeed = 0;
-		uint32 UintUnsignedValue = 0;
-		int32 UintResetValue = 0;
-		int32 NameCurrentSeed = 0;
-		int32 NameFirstRangeValue = 0;
-	};
-
 	FString ToScriptFloatLiteral(double Value)
 	{
 		FString Literal = FString::Printf(TEXT("%.17g"), Value);
@@ -37,162 +41,290 @@ namespace AngelscriptTest_Bindings_AngelscriptRandomStreamBindingsTests_Private
 		{
 			Literal += TEXT(".0");
 		}
-
 		return Literal;
 	}
-
-	FRandomStreamExpectations BuildRandomStreamExpectations()
-	{
-		FRandomStreamExpectations Expectations;
-
-		FRandomStream NativeIntSeed(123);
-		Expectations.IntInitialSeed = NativeIntSeed.GetInitialSeed();
-		Expectations.IntInitialCurrentSeed = NativeIntSeed.GetCurrentSeed();
-		Expectations.IntUnsignedValue = NativeIntSeed.GetUnsignedInt();
-		Expectations.IntRangeValue = NativeIntSeed.RandRange(1, 1000);
-		Expectations.IntFractionValue = NativeIntSeed.GetFraction();
-		Expectations.IntDoubleRangeValue = NativeIntSeed.FRandRange(0.0, 10.0);
-		Expectations.IntPostSequenceSeed = NativeIntSeed.GetCurrentSeed();
-
-		FRandomStream NativeIntCopy = NativeIntSeed;
-		Expectations.IntCopyNextValue = NativeIntCopy.RandRange(1, 1000);
-		Expectations.IntStreamNextValue = NativeIntSeed.RandRange(1, 1000);
-		NativeIntSeed.Reset();
-		Expectations.IntResetValue = NativeIntSeed.RandRange(1, 1000);
-
-		FRandomStream NativeUintSeed(uint32(123));
-		Expectations.UintInitialSeed = NativeUintSeed.GetInitialSeed();
-		Expectations.UintInitialCurrentSeed = NativeUintSeed.GetCurrentSeed();
-		Expectations.UintUnsignedValue = NativeUintSeed.GetUnsignedInt();
-		NativeUintSeed.Reset();
-		Expectations.UintResetValue = NativeUintSeed.RandRange(1, 1000);
-
-		FRandomStream NativeNameSeed;
-		NativeNameSeed.Initialize(FName(TEXT("RandomSeedName")));
-		Expectations.NameCurrentSeed = NativeNameSeed.GetCurrentSeed();
-		Expectations.NameFirstRangeValue = NativeNameSeed.RandRange(1, 1000);
-
-		return Expectations;
-	}
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptRandomStreamBindingsTests_Private;
+using namespace AngelscriptRandomStreamBindingsTests_Private;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptRandomStreamSequenceParityTest,
-	"Angelscript.TestModule.Bindings.RandomStreamSequenceParity",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GRandomStreamProfile{
+	TEXT("RandomStream"),           // Theme
+	TEXT(""),                       // Variant
+	TEXT("ASRandomStream"),         // ModulePrefix
+	TEXT("RandomStream"),           // CasePrefix
+	TEXT("RandomStreamBindings"),   // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptRandomStreamBindingsTest,
+	"Angelscript.TestModule.Bindings.RandomStream",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptRandomStreamSequenceParityTest::RunTest(const FString& Parameters)
 {
-	FRandomStreamExpectations Expectations = BuildRandomStreamExpectations();
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	FString ScriptSource = TEXT(R"(
-bool NearlyEqual(float64 A, float64 B)
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: IntSeedSequence
+	// ====================================================================
+
+	TEST_METHOD(IntSeedSequence)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		// Compute native expectations
+		FRandomStream Native(123);
+		const int32 ExpInitialSeed = Native.GetInitialSeed();
+		const int32 ExpCurrentSeed = Native.GetCurrentSeed();
+		const uint32 ExpUnsigned = Native.GetUnsignedInt();
+		const int32 ExpRange = Native.RandRange(1, 1000);
+		const double ExpFraction = Native.GetFraction();
+		const double ExpDoubleRange = Native.FRandRange(0.0, 10.0);
+		const int32 ExpPostSeed = Native.GetCurrentSeed();
+
+		FRandomStream NativeCopy = Native;
+		const int32 ExpCopyNext = NativeCopy.RandRange(1, 1000);
+		const int32 ExpStreamNext = Native.RandRange(1, 1000);
+
+		FString Script = TEXT(R"(
+bool NearlyEqual(float64 A, float64 B) { return Math::Abs(A - B) <= 0.000001; }
+
+int IntSeed_InitialSeed()
 {
-	return Math::Abs(A - B) <= 0.000001;
+	FRandomStream S(123);
+	return (S.GetInitialSeed() == __EXP_INITIAL_SEED__) ? 1 : 0;
 }
-
-int Entry()
+int IntSeed_CurrentSeed()
 {
-	FRandomStream IntStream(123);
-	if (IntStream.GetInitialSeed() != __INT_INITIAL_SEED__)
-		return 10;
-	if (IntStream.GetCurrentSeed() != __INT_INITIAL_CURRENT_SEED__)
-		return 11;
-	if (IntStream.GetUnsignedInt() != __INT_UNSIGNED_VALUE__)
-		return 12;
-	if (IntStream.RandRange(1, 1000) != __INT_RANGE_VALUE__)
-		return 13;
-	if (!NearlyEqual(IntStream.GetFraction(), __INT_FRACTION_VALUE__))
-		return 14;
-	if (!NearlyEqual(IntStream.RandRange(0.0, 10.0), __INT_DOUBLE_RANGE_VALUE__))
-		return 15;
-	if (IntStream.GetCurrentSeed() != __INT_POST_SEQUENCE_SEED__)
-		return 16;
+	FRandomStream S(123);
+	return (S.GetCurrentSeed() == __EXP_CURRENT_SEED__) ? 1 : 0;
+}
+int IntSeed_GetUnsignedInt()
+{
+	FRandomStream S(123);
+	return (S.GetUnsignedInt() == __EXP_UNSIGNED__) ? 1 : 0;
+}
+int IntSeed_RandRange()
+{
+	FRandomStream S(123);
+	S.GetUnsignedInt();
+	return (S.RandRange(1, 1000) == __EXP_RANGE__) ? 1 : 0;
+}
+int IntSeed_GetFraction()
+{
+	FRandomStream S(123);
+	S.GetUnsignedInt();
+	S.RandRange(1, 1000);
+	return NearlyEqual(S.GetFraction(), __EXP_FRACTION__) ? 1 : 0;
+}
+int IntSeed_FRandRange()
+{
+	FRandomStream S(123);
+	S.GetUnsignedInt();
+	S.RandRange(1, 1000);
+	S.GetFraction();
+	return NearlyEqual(S.RandRange(0.0, 10.0), __EXP_DOUBLE_RANGE__) ? 1 : 0;
+}
+int IntSeed_PostSequenceSeed()
+{
+	FRandomStream S(123);
+	S.GetUnsignedInt();
+	S.RandRange(1, 1000);
+	S.GetFraction();
+	S.RandRange(0.0, 10.0);
+	return (S.GetCurrentSeed() == __EXP_POST_SEED__) ? 1 : 0;
+}
+int IntSeed_CopyParity()
+{
+	FRandomStream S(123);
+	S.GetUnsignedInt();
+	S.RandRange(1, 1000);
+	S.GetFraction();
+	S.RandRange(0.0, 10.0);
 
-	FRandomStream IntCopy = IntStream;
-	int CopyNext = IntCopy.RandRange(1, 1000);
-	int StreamNext = IntStream.RandRange(1, 1000);
-	if (CopyNext != __INT_COPY_NEXT_VALUE__)
-		return 17;
-	if (StreamNext != __INT_STREAM_NEXT_VALUE__)
-		return 18;
-	if (CopyNext != StreamNext)
-		return 19;
-
-	IntStream.Reset();
-	if (IntStream.RandRange(1, 1000) != __INT_RESET_VALUE__)
-		return 20;
-
-	FRandomStream UintStream(uint32(123));
-	if (UintStream.GetInitialSeed() != __UINT_INITIAL_SEED__)
-		return 30;
-	if (UintStream.GetCurrentSeed() != __UINT_INITIAL_CURRENT_SEED__)
-		return 31;
-	if (UintStream.GetUnsignedInt() != __UINT_UNSIGNED_VALUE__)
-		return 32;
-	UintStream.Reset();
-	if (UintStream.RandRange(1, 1000) != __UINT_RESET_VALUE__)
-		return 33;
-
-	FRandomStream NameStream;
-	NameStream.Initialize(n"RandomSeedName");
-	if (NameStream.GetCurrentSeed() != __NAME_CURRENT_SEED__)
-		return 40;
-	if (NameStream.RandRange(1, 1000) != __NAME_FIRST_RANGE_VALUE__)
-		return 41;
-
+	FRandomStream Copy = S;
+	int CopyNext = Copy.RandRange(1, 1000);
+	int StreamNext = S.RandRange(1, 1000);
+	if (CopyNext != __EXP_COPY_NEXT__) return 0;
+	if (StreamNext != __EXP_STREAM_NEXT__) return 0;
+	if (CopyNext != StreamNext) return 0;
 	return 1;
 }
 )");
 
-	ScriptSource.ReplaceInline(TEXT("__INT_INITIAL_SEED__"), *LexToString(Expectations.IntInitialSeed), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_INITIAL_CURRENT_SEED__"), *LexToString(Expectations.IntInitialCurrentSeed), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_UNSIGNED_VALUE__"), *LexToString(Expectations.IntUnsignedValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_RANGE_VALUE__"), *LexToString(Expectations.IntRangeValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_FRACTION_VALUE__"), *ToScriptFloatLiteral(Expectations.IntFractionValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_DOUBLE_RANGE_VALUE__"), *ToScriptFloatLiteral(Expectations.IntDoubleRangeValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_POST_SEQUENCE_SEED__"), *LexToString(Expectations.IntPostSequenceSeed), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_COPY_NEXT_VALUE__"), *LexToString(Expectations.IntCopyNextValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_STREAM_NEXT_VALUE__"), *LexToString(Expectations.IntStreamNextValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__INT_RESET_VALUE__"), *LexToString(Expectations.IntResetValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__UINT_INITIAL_SEED__"), *LexToString(Expectations.UintInitialSeed), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__UINT_INITIAL_CURRENT_SEED__"), *LexToString(Expectations.UintInitialCurrentSeed), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__UINT_UNSIGNED_VALUE__"), *LexToString(Expectations.UintUnsignedValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__UINT_RESET_VALUE__"), *LexToString(Expectations.UintResetValue), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__NAME_CURRENT_SEED__"), *LexToString(Expectations.NameCurrentSeed), ESearchCase::CaseSensitive);
-	ScriptSource.ReplaceInline(TEXT("__NAME_FIRST_RANGE_VALUE__"), *LexToString(Expectations.NameFirstRangeValue), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_INITIAL_SEED__"), *LexToString(ExpInitialSeed), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_CURRENT_SEED__"), *LexToString(ExpCurrentSeed), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_UNSIGNED__"), *LexToString(ExpUnsigned), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_RANGE__"), *LexToString(ExpRange), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_FRACTION__"), *ToScriptFloatLiteral(ExpFraction), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_DOUBLE_RANGE__"), *ToScriptFloatLiteral(ExpDoubleRange), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_POST_SEED__"), *LexToString(ExpPostSeed), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_COPY_NEXT__"), *LexToString(ExpCopyNext), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_STREAM_NEXT__"), *LexToString(ExpStreamNext), ESearchCase::CaseSensitive);
 
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+		FCoverageModuleScope Mod(*TestRunner, Engine, GRandomStreamProfile, TEXT("IntSeedSequence"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		"ASRandomStreamSequenceParity",
-		ScriptSource);
-	if (Module == nullptr)
-	{
-		return false;
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_InitialSeed()"), TEXT("GetInitialSeed parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_CurrentSeed()"), TEXT("GetCurrentSeed parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_GetUnsignedInt()"), TEXT("GetUnsignedInt parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_RandRange()"), TEXT("RandRange parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_GetFraction()"), TEXT("GetFraction parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_FRandRange()"), TEXT("FRandRange parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_PostSequenceSeed()"), TEXT("post-sequence seed parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_CopyParity()"), TEXT("copy produces identical sequence"), 1);
 	}
 
-	asIScriptFunction* Function = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (Function == nullptr)
+	// ====================================================================
+	// Section: IntSeedReset
+	// ====================================================================
+
+	TEST_METHOD(IntSeedReset)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *Function, Result))
-	{
-		return false;
-	}
+		// Compute native expectation
+		FRandomStream Native(123);
+		Native.GetUnsignedInt();
+		Native.RandRange(1, 1000);
+		Native.GetFraction();
+		Native.FRandRange(0.0, 10.0);
+		Native.RandRange(1, 1000);
+		Native.Reset();
+		const int32 ExpResetValue = Native.RandRange(1, 1000);
 
-	TestEqual(TEXT("FRandomStream bindings should preserve native sequence parity for int32/uint32/name seeds"), Result, 1);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
+		FString Script = TEXT(R"(
+int IntSeed_Reset()
+{
+	FRandomStream S(123);
+	S.GetUnsignedInt();
+	S.RandRange(1, 1000);
+	S.GetFraction();
+	S.RandRange(0.0, 10.0);
+	S.RandRange(1, 1000);
+	S.Reset();
+	return (S.RandRange(1, 1000) == __EXP_RESET__) ? 1 : 0;
 }
+)");
+		Script.ReplaceInline(TEXT("__EXP_RESET__"), *LexToString(ExpResetValue), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GRandomStreamProfile, TEXT("IntSeedReset"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int IntSeed_Reset()"), TEXT("Reset restores initial sequence"), 1);
+	}
+
+	// ====================================================================
+	// Section: UintSeedSequence
+	// ====================================================================
+
+	TEST_METHOD(UintSeedSequence)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FRandomStream Native(uint32(123));
+		const int32 ExpInitialSeed = Native.GetInitialSeed();
+		const int32 ExpCurrentSeed = Native.GetCurrentSeed();
+		const uint32 ExpUnsigned = Native.GetUnsignedInt();
+		Native.Reset();
+		const int32 ExpResetValue = Native.RandRange(1, 1000);
+
+		FString Script = TEXT(R"(
+int UintSeed_InitialSeed()
+{
+	FRandomStream S(uint32(123));
+	return (S.GetInitialSeed() == __EXP_INITIAL_SEED__) ? 1 : 0;
+}
+int UintSeed_CurrentSeed()
+{
+	FRandomStream S(uint32(123));
+	return (S.GetCurrentSeed() == __EXP_CURRENT_SEED__) ? 1 : 0;
+}
+int UintSeed_GetUnsignedInt()
+{
+	FRandomStream S(uint32(123));
+	return (S.GetUnsignedInt() == __EXP_UNSIGNED__) ? 1 : 0;
+}
+int UintSeed_Reset()
+{
+	FRandomStream S(uint32(123));
+	S.GetUnsignedInt();
+	S.Reset();
+	return (S.RandRange(1, 1000) == __EXP_RESET__) ? 1 : 0;
+}
+)");
+		Script.ReplaceInline(TEXT("__EXP_INITIAL_SEED__"), *LexToString(ExpInitialSeed), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_CURRENT_SEED__"), *LexToString(ExpCurrentSeed), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_UNSIGNED__"), *LexToString(ExpUnsigned), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_RESET__"), *LexToString(ExpResetValue), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GRandomStreamProfile, TEXT("UintSeedSequence"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int UintSeed_InitialSeed()"), TEXT("uint32 seed GetInitialSeed"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int UintSeed_CurrentSeed()"), TEXT("uint32 seed GetCurrentSeed"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int UintSeed_GetUnsignedInt()"), TEXT("uint32 seed GetUnsignedInt"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int UintSeed_Reset()"), TEXT("uint32 seed Reset"), 1);
+	}
+
+	// ====================================================================
+	// Section: NameSeedSequence
+	// ====================================================================
+
+	TEST_METHOD(NameSeedSequence)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FRandomStream Native;
+		Native.Initialize(FName(TEXT("RandomSeedName")));
+		const int32 ExpCurrentSeed = Native.GetCurrentSeed();
+		const int32 ExpFirstRange = Native.RandRange(1, 1000);
+
+		FString Script = TEXT(R"(
+int NameSeed_CurrentSeed()
+{
+	FRandomStream S;
+	S.Initialize(n"RandomSeedName");
+	return (S.GetCurrentSeed() == __EXP_CURRENT_SEED__) ? 1 : 0;
+}
+int NameSeed_RandRange()
+{
+	FRandomStream S;
+	S.Initialize(n"RandomSeedName");
+	return (S.RandRange(1, 1000) == __EXP_FIRST_RANGE__) ? 1 : 0;
+}
+)");
+		Script.ReplaceInline(TEXT("__EXP_CURRENT_SEED__"), *LexToString(ExpCurrentSeed), ESearchCase::CaseSensitive);
+		Script.ReplaceInline(TEXT("__EXP_FIRST_RANGE__"), *LexToString(ExpFirstRange), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GRandomStreamProfile, TEXT("NameSeedSequence"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int NameSeed_CurrentSeed()"), TEXT("FName seed GetCurrentSeed"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GRandomStreamProfile, TEXT("int NameSeed_RandRange()"), TEXT("FName seed RandRange"), 1);
+	}
+};
 
 #endif

@@ -1,23 +1,54 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptDateTimeBindingsTests.cpp
+//
+// FDateTime binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.DateTime.FAngelscriptDateTimeBindingsTest.*
+//
+// Sections:
+//   ParseIso8601       — ISO-8601 parsing with component verification
+//   ParseHttpDate      — HTTP date parsing with component verification
+//   ParseGeneric       — Generic Parse with component verification
+//   ParseInvalid       — Parse/ParseHttpDate/ParseIso8601 with invalid input
+//   Construction       — FDateTime construction, formatting, component access
+//   RoundTrip          — Parse→Format→Parse round-trip fidelity
+//
+// CQTest adaptation notes:
+//   All expected values are computed from native FDateTime baselines and
+//   substituted via ReplaceInline into the script source at test time.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Misc/DateTime.h"
-#include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDateTimeParseRoundTripCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.DateTimeParseRoundTripCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-namespace AngelscriptTest_Bindings_AngelscriptDateTimeBindingsTests_Private
+static const FBindingsCoverageProfile GDateTimeProfile{
+	TEXT("DateTime"),            // Theme
+	TEXT(""),                    // Variant
+	TEXT("ASDateTime"),          // ModulePrefix
+	TEXT("DateTime"),            // CasePrefix
+	TEXT("DateTimeBindings"),    // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace AngelscriptDateTimeTestHelpers
 {
-	static constexpr ANSICHAR DateTimeBindingsModuleName[] = "ASDateTimeParseRoundTripCompat";
-
-	struct FDateTimeValueBaseline
+	struct FDateTimeBaseline
 	{
 		bool bSuccess = false;
 		int64 Ticks = 0;
@@ -28,153 +59,42 @@ namespace AngelscriptTest_Bindings_AngelscriptDateTimeBindingsTests_Private
 		int32 Millisecond = 0;
 	};
 
-	struct FDateTimeBindingsBaselines
+	static FDateTimeBaseline Capture(const bool bSuccess, const FDateTime& Value)
 	{
-		FString IsoInput;
-		FDateTimeValueBaseline Iso;
-
-		FString HttpInput;
-		FDateTimeValueBaseline Http;
-
-		FString GenericInput;
-		FDateTimeValueBaseline Generic;
-
-		FString InvalidInput;
-		FDateTimeValueBaseline InvalidParse;
-		FDateTimeValueBaseline InvalidHttp;
-		FDateTimeValueBaseline InvalidIso;
-
-		FString ConstructedHttp;
-		FString ConstructedIso;
-		FString ConstructedFormatted;
-		FDateTimeValueBaseline Constructed;
-		FDateTimeValueBaseline ConstructedHttpRoundTrip;
-		FDateTimeValueBaseline ConstructedIsoRoundTrip;
-		FDateTimeValueBaseline ConstructedFormattedRoundTrip;
-	};
-
-	FDateTimeValueBaseline CaptureValueBaseline(const bool bSuccess, const FDateTime& Value)
-	{
-		int32 Year = INDEX_NONE;
-		int32 Month = INDEX_NONE;
-		int32 Day = INDEX_NONE;
-		Value.GetDate(Year, Month, Day);
-
-		FDateTimeValueBaseline Baseline;
-		Baseline.bSuccess = bSuccess;
-		Baseline.Ticks = Value.GetTicks();
-		Baseline.Year = Year;
-		Baseline.Month = Month;
-		Baseline.Day = Day;
-		Baseline.Hour12 = Value.GetHour12();
-		Baseline.Millisecond = Value.GetMillisecond();
-		return Baseline;
+		FDateTimeBaseline B;
+		B.bSuccess = bSuccess;
+		B.Ticks = Value.GetTicks();
+		int32 Y, M, D;
+		Value.GetDate(Y, M, D);
+		B.Year = Y;
+		B.Month = M;
+		B.Day = D;
+		B.Hour12 = Value.GetHour12();
+		B.Millisecond = Value.GetMillisecond();
+		return B;
 	}
 
-	FString ToScriptBoolLiteral(const bool bValue)
+	static void ReplaceValueTokens(FString& Source, const TCHAR* Prefix, const FDateTimeBaseline& B)
 	{
-		return bValue ? TEXT("true") : TEXT("false");
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_SUCCESS__"), Prefix), B.bSuccess ? TEXT("true") : TEXT("false"), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_TICKS__"), Prefix), *FString::Printf(TEXT("%lld"), static_cast<long long>(B.Ticks)), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_YEAR__"), Prefix), *FString::FromInt(B.Year), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_MONTH__"), Prefix), *FString::FromInt(B.Month), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_DAY__"), Prefix), *FString::FromInt(B.Day), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_HOUR12__"), Prefix), *FString::FromInt(B.Hour12), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(*FString::Printf(TEXT("__%s_MILLISECOND__"), Prefix), *FString::FromInt(B.Millisecond), ESearchCase::CaseSensitive);
 	}
 
-	FString ToScriptInt64Literal(const int64 Value)
+	// Shared script helper function for verifying datetime component values
+	static const TCHAR* VerifyDateValueFunc()
 	{
-		return FString::Printf(TEXT("%lld"), static_cast<long long>(Value));
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const FString& Replacement)
-	{
-		ScriptSource.ReplaceInline(Token, *Replacement, ESearchCase::CaseSensitive);
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const int32 Replacement)
-	{
-		ReplaceToken(ScriptSource, Token, FString::FromInt(Replacement));
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const int64 Replacement)
-	{
-		ReplaceToken(ScriptSource, Token, ToScriptInt64Literal(Replacement));
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const bool Replacement)
-	{
-		ReplaceToken(ScriptSource, Token, ToScriptBoolLiteral(Replacement));
-	}
-
-	void ReplaceValueTokens(FString& ScriptSource, const TCHAR* Prefix, const FDateTimeValueBaseline& Value)
-	{
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_SUCCESS__"), Prefix), Value.bSuccess);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_TICKS__"), Prefix), Value.Ticks);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_YEAR__"), Prefix), Value.Year);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_MONTH__"), Prefix), Value.Month);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_DAY__"), Prefix), Value.Day);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_HOUR12__"), Prefix), Value.Hour12);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_MILLISECOND__"), Prefix), Value.Millisecond);
-	}
-
-	FDateTimeBindingsBaselines BuildBaselines()
-	{
-		FDateTimeBindingsBaselines Baselines;
-
-		Baselines.IsoInput = TEXT("2024-12-25T14:30:15Z");
-		Baselines.HttpInput = TEXT("Wed, 25 Dec 2024 14:30:15 GMT");
-		Baselines.GenericInput = TEXT("2024-12-25 14:30:15.123");
-		Baselines.InvalidInput = TEXT("not-a-date");
-
-		const FDateTime Sentinel(1999, 1, 2, 3, 4, 5, 6);
-
-		FDateTime IsoValue = Sentinel;
-		Baselines.Iso = CaptureValueBaseline(FDateTime::ParseIso8601(*Baselines.IsoInput, IsoValue), IsoValue);
-
-		FDateTime HttpValue = Sentinel;
-		Baselines.Http = CaptureValueBaseline(FDateTime::ParseHttpDate(Baselines.HttpInput, HttpValue), HttpValue);
-
-		FDateTime GenericValue = Sentinel;
-		Baselines.Generic = CaptureValueBaseline(FDateTime::Parse(Baselines.GenericInput, GenericValue), GenericValue);
-
-		FDateTime InvalidParseValue = Sentinel;
-		Baselines.InvalidParse = CaptureValueBaseline(FDateTime::Parse(Baselines.InvalidInput, InvalidParseValue), InvalidParseValue);
-
-		FDateTime InvalidHttpValue = Sentinel;
-		Baselines.InvalidHttp = CaptureValueBaseline(FDateTime::ParseHttpDate(Baselines.InvalidInput, InvalidHttpValue), InvalidHttpValue);
-
-		FDateTime InvalidIsoValue = Sentinel;
-		Baselines.InvalidIso = CaptureValueBaseline(FDateTime::ParseIso8601(*Baselines.InvalidInput, InvalidIsoValue), InvalidIsoValue);
-
-		const FDateTime ConstructedValue(2024, 12, 25, 14, 30, 15, 123);
-		Baselines.Constructed = CaptureValueBaseline(true, ConstructedValue);
-		Baselines.ConstructedHttp = ConstructedValue.ToHttpDate();
-		Baselines.ConstructedIso = ConstructedValue.ToIso8601();
-		Baselines.ConstructedFormatted = ConstructedValue.ToString(TEXT("%Y-%m-%d %H:%M:%S.%s"));
-
-		FDateTime ConstructedHttpRoundTripValue = Sentinel;
-		Baselines.ConstructedHttpRoundTrip = CaptureValueBaseline(
-			FDateTime::ParseHttpDate(Baselines.ConstructedHttp, ConstructedHttpRoundTripValue),
-			ConstructedHttpRoundTripValue);
-
-		FDateTime ConstructedIsoRoundTripValue = Sentinel;
-		Baselines.ConstructedIsoRoundTrip = CaptureValueBaseline(
-			FDateTime::ParseIso8601(*Baselines.ConstructedIso, ConstructedIsoRoundTripValue),
-			ConstructedIsoRoundTripValue);
-
-		FDateTime ConstructedFormattedRoundTripValue = Sentinel;
-		Baselines.ConstructedFormattedRoundTrip = CaptureValueBaseline(
-			FDateTime::Parse(Baselines.ConstructedFormatted, ConstructedFormattedRoundTripValue),
-			ConstructedFormattedRoundTripValue);
-
-		return Baselines;
-	}
-
-	FString BuildScriptSource(const FDateTimeBindingsBaselines& Baselines)
-	{
-		FString ScriptSource = TEXT(R"(
+		return TEXT(R"(
 int VerifyDateValue(bool ObservedSuccess, bool ExpectedSuccess, FDateTime Value, int64 ExpectedTicks, int ExpectedYear, int ExpectedMonth, int ExpectedDay, int ExpectedHour12, int ExpectedMillisecond, int FailureBase)
 {
 	if (ObservedSuccess != ExpectedSuccess)
 		return FailureBase + 0;
 	if (Value.GetTicks() != ExpectedTicks)
 		return FailureBase + 1;
-
 	int Year = -1;
 	int Month = -1;
 	int Day = -1;
@@ -185,163 +105,301 @@ int VerifyDateValue(bool ObservedSuccess, bool ExpectedSuccess, FDateTime Value,
 		return FailureBase + 3;
 	if (Value.GetMillisecond() != ExpectedMillisecond)
 		return FailureBase + 4;
-
 	return 0;
 }
+)");
+	}
+}
 
-int Entry()
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptDateTimeBindingsTest,
+	"Angelscript.TestModule.Bindings.DateTime",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	const FDateTime InvalidSentinel(1999, 1, 2, 3, 4, 5, 6);
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	FDateTime IsoParsed = FDateTime::MinValue();
-	const bool bIsoParsed = FDateTime::ParseIso8601("__ISO_INPUT__", IsoParsed);
-	int Result = VerifyDateValue(bIsoParsed, __ISO_SUCCESS__, IsoParsed, int64(__ISO_TICKS__), __ISO_YEAR__, __ISO_MONTH__, __ISO_DAY__, __ISO_HOUR12__, __ISO_MILLISECOND__, 10);
-	if (Result != 0)
-		return Result;
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	FDateTime HttpParsed = FDateTime::MinValue();
-	const bool bHttpParsed = FDateTime::ParseHttpDate("__HTTP_INPUT__", HttpParsed);
-	Result = VerifyDateValue(bHttpParsed, __HTTP_SUCCESS__, HttpParsed, int64(__HTTP_TICKS__), __HTTP_YEAR__, __HTTP_MONTH__, __HTTP_DAY__, __HTTP_HOUR12__, __HTTP_MILLISECOND__, 20);
-	if (Result != 0)
-		return Result;
+	// ====================================================================
+	// Section: ParseIso8601
+	// ====================================================================
 
-	FDateTime GenericParsed = FDateTime::MinValue();
-	const bool bGenericParsed = FDateTime::Parse("__GENERIC_INPUT__", GenericParsed);
-	Result = VerifyDateValue(bGenericParsed, __GENERIC_SUCCESS__, GenericParsed, int64(__GENERIC_TICKS__), __GENERIC_YEAR__, __GENERIC_MONTH__, __GENERIC_DAY__, __GENERIC_HOUR12__, __GENERIC_MILLISECOND__, 30);
-	if (Result != 0)
-		return Result;
+	TEST_METHOD(ParseIso8601)
+	{
+		using namespace AngelscriptDateTimeTestHelpers;
 
-	FDateTime InvalidParsed = InvalidSentinel;
-	const bool bInvalidParsed = FDateTime::Parse("__INVALID_INPUT__", InvalidParsed);
-	Result = VerifyDateValue(bInvalidParsed, __INVALID_PARSE_SUCCESS__, InvalidParsed, int64(__INVALID_PARSE_TICKS__), __INVALID_PARSE_YEAR__, __INVALID_PARSE_MONTH__, __INVALID_PARSE_DAY__, __INVALID_PARSE_HOUR12__, __INVALID_PARSE_MILLISECOND__, 40);
-	if (Result != 0)
-		return Result;
+		const FString IsoInput = TEXT("2024-12-25T14:30:15Z");
+		FDateTime IsoValue = FDateTime::MinValue();
+		const FDateTimeBaseline IsoBaseline = Capture(FDateTime::ParseIso8601(*IsoInput, IsoValue), IsoValue);
 
-	FDateTime InvalidHttp = InvalidSentinel;
-	const bool bInvalidHttp = FDateTime::ParseHttpDate("__INVALID_INPUT__", InvalidHttp);
-	Result = VerifyDateValue(bInvalidHttp, __INVALID_HTTP_SUCCESS__, InvalidHttp, int64(__INVALID_HTTP_TICKS__), __INVALID_HTTP_YEAR__, __INVALID_HTTP_MONTH__, __INVALID_HTTP_DAY__, __INVALID_HTTP_HOUR12__, __INVALID_HTTP_MILLISECOND__, 50);
-	if (Result != 0)
-		return Result;
-
-	FDateTime InvalidIso = InvalidSentinel;
-	const bool bInvalidIso = FDateTime::ParseIso8601("__INVALID_INPUT__", InvalidIso);
-	Result = VerifyDateValue(bInvalidIso, __INVALID_ISO_SUCCESS__, InvalidIso, int64(__INVALID_ISO_TICKS__), __INVALID_ISO_YEAR__, __INVALID_ISO_MONTH__, __INVALID_ISO_DAY__, __INVALID_ISO_HOUR12__, __INVALID_ISO_MILLISECOND__, 60);
-	if (Result != 0)
-		return Result;
-
-	FDateTime Constructed(2024, 12, 25, 14, 30, 15, 123);
-	if (Constructed.ToHttpDate() != "__CONSTRUCTED_HTTP__")
-		return 70;
-	if (Constructed.ToIso8601() != "__CONSTRUCTED_ISO__")
-		return 71;
-	const FString Formatted = Constructed.ToString("%Y-%m-%d %H:%M:%S.%s");
-	if (Formatted != "__CONSTRUCTED_FORMATTED__")
-		return 72;
-
-	Result = VerifyDateValue(true, true, Constructed, int64(__CONSTRUCTED_TICKS__), __CONSTRUCTED_YEAR__, __CONSTRUCTED_MONTH__, __CONSTRUCTED_DAY__, __CONSTRUCTED_HOUR12__, __CONSTRUCTED_MILLISECOND__, 80);
-	if (Result != 0)
-		return Result;
-
-	FDateTime ConstructedHttpRoundTrip = FDateTime::MinValue();
-	const bool bConstructedHttpRoundTrip = FDateTime::ParseHttpDate(Constructed.ToHttpDate(), ConstructedHttpRoundTrip);
-	Result = VerifyDateValue(bConstructedHttpRoundTrip, __CONSTRUCTED_HTTP_ROUNDTRIP_SUCCESS__, ConstructedHttpRoundTrip, int64(__CONSTRUCTED_HTTP_ROUNDTRIP_TICKS__), __CONSTRUCTED_HTTP_ROUNDTRIP_YEAR__, __CONSTRUCTED_HTTP_ROUNDTRIP_MONTH__, __CONSTRUCTED_HTTP_ROUNDTRIP_DAY__, __CONSTRUCTED_HTTP_ROUNDTRIP_HOUR12__, __CONSTRUCTED_HTTP_ROUNDTRIP_MILLISECOND__, 90);
-	if (Result != 0)
-		return Result;
-
-	FDateTime ConstructedIsoRoundTrip = FDateTime::MinValue();
-	const bool bConstructedIsoRoundTrip = FDateTime::ParseIso8601(Constructed.ToIso8601(), ConstructedIsoRoundTrip);
-	Result = VerifyDateValue(bConstructedIsoRoundTrip, __CONSTRUCTED_ISO_ROUNDTRIP_SUCCESS__, ConstructedIsoRoundTrip, int64(__CONSTRUCTED_ISO_ROUNDTRIP_TICKS__), __CONSTRUCTED_ISO_ROUNDTRIP_YEAR__, __CONSTRUCTED_ISO_ROUNDTRIP_MONTH__, __CONSTRUCTED_ISO_ROUNDTRIP_DAY__, __CONSTRUCTED_ISO_ROUNDTRIP_HOUR12__, __CONSTRUCTED_ISO_ROUNDTRIP_MILLISECOND__, 100);
-	if (Result != 0)
-		return Result;
-
-	FDateTime ConstructedFormattedRoundTrip = FDateTime::MinValue();
-	const bool bConstructedFormattedRoundTrip = FDateTime::Parse(Formatted, ConstructedFormattedRoundTrip);
-	Result = VerifyDateValue(bConstructedFormattedRoundTrip, __CONSTRUCTED_FORMATTED_ROUNDTRIP_SUCCESS__, ConstructedFormattedRoundTrip, int64(__CONSTRUCTED_FORMATTED_ROUNDTRIP_TICKS__), __CONSTRUCTED_FORMATTED_ROUNDTRIP_YEAR__, __CONSTRUCTED_FORMATTED_ROUNDTRIP_MONTH__, __CONSTRUCTED_FORMATTED_ROUNDTRIP_DAY__, __CONSTRUCTED_FORMATTED_ROUNDTRIP_HOUR12__, __CONSTRUCTED_FORMATTED_ROUNDTRIP_MILLISECOND__, 110);
-	if (Result != 0)
-		return Result;
-
-	return 1;
+		FString ScriptSource = FString(VerifyDateValueFunc()) + TEXT(R"(
+int DateTime_ParseIso8601()
+{
+	FDateTime Parsed = FDateTime::MinValue();
+	const bool bOk = FDateTime::ParseIso8601("__ISO_INPUT__", Parsed);
+	return (VerifyDateValue(bOk, __ISO_SUCCESS__, Parsed, int64(__ISO_TICKS__), __ISO_YEAR__, __ISO_MONTH__, __ISO_DAY__, __ISO_HOUR12__, __ISO_MILLISECOND__, 10) == 0) ? 1 : 0;
 }
 )");
+		ScriptSource.ReplaceInline(TEXT("__ISO_INPUT__"), *IsoInput, ESearchCase::CaseSensitive);
+		ReplaceValueTokens(ScriptSource, TEXT("ISO"), IsoBaseline);
 
-		ReplaceToken(ScriptSource, TEXT("__ISO_INPUT__"), Baselines.IsoInput.ReplaceCharWithEscapedChar());
-		ReplaceValueTokens(ScriptSource, TEXT("ISO"), Baselines.Iso);
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-		ReplaceToken(ScriptSource, TEXT("__HTTP_INPUT__"), Baselines.HttpInput.ReplaceCharWithEscapedChar());
-		ReplaceValueTokens(ScriptSource, TEXT("HTTP"), Baselines.Http);
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Iso"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-		ReplaceToken(ScriptSource, TEXT("__GENERIC_INPUT__"), Baselines.GenericInput.ReplaceCharWithEscapedChar());
-		ReplaceValueTokens(ScriptSource, TEXT("GENERIC"), Baselines.Generic);
-
-		ReplaceToken(ScriptSource, TEXT("__INVALID_INPUT__"), Baselines.InvalidInput.ReplaceCharWithEscapedChar());
-		ReplaceValueTokens(ScriptSource, TEXT("INVALID_PARSE"), Baselines.InvalidParse);
-		ReplaceValueTokens(ScriptSource, TEXT("INVALID_HTTP"), Baselines.InvalidHttp);
-		ReplaceValueTokens(ScriptSource, TEXT("INVALID_ISO"), Baselines.InvalidIso);
-
-		ReplaceToken(ScriptSource, TEXT("__CONSTRUCTED_HTTP__"), Baselines.ConstructedHttp.ReplaceCharWithEscapedChar());
-		ReplaceToken(ScriptSource, TEXT("__CONSTRUCTED_ISO__"), Baselines.ConstructedIso.ReplaceCharWithEscapedChar());
-		ReplaceToken(ScriptSource, TEXT("__CONSTRUCTED_FORMATTED__"), Baselines.ConstructedFormatted.ReplaceCharWithEscapedChar());
-		ReplaceValueTokens(ScriptSource, TEXT("CONSTRUCTED"), Baselines.Constructed);
-		ReplaceValueTokens(ScriptSource, TEXT("CONSTRUCTED_HTTP_ROUNDTRIP"), Baselines.ConstructedHttpRoundTrip);
-		ReplaceValueTokens(ScriptSource, TEXT("CONSTRUCTED_ISO_ROUNDTRIP"), Baselines.ConstructedIsoRoundTrip);
-		ReplaceValueTokens(ScriptSource, TEXT("CONSTRUCTED_FORMATTED_ROUNDTRIP"), Baselines.ConstructedFormattedRoundTrip);
-
-		return ScriptSource;
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ParseIso8601()"), TEXT("FDateTime::ParseIso8601 should parse and match native components"), 1);
 	}
-}
 
-using namespace AngelscriptTest_Bindings_AngelscriptDateTimeBindingsTests_Private;
+	// ====================================================================
+	// Section: ParseHttpDate
+	// ====================================================================
 
-bool FAngelscriptDateTimeParseRoundTripCompatBindingsTest::RunTest(const FString& Parameters)
+	TEST_METHOD(ParseHttpDate)
+	{
+		using namespace AngelscriptDateTimeTestHelpers;
+
+		const FString HttpInput = TEXT("Wed, 25 Dec 2024 14:30:15 GMT");
+		FDateTime HttpValue = FDateTime::MinValue();
+		const FDateTimeBaseline HttpBaseline = Capture(FDateTime::ParseHttpDate(HttpInput, HttpValue), HttpValue);
+
+		FString ScriptSource = FString(VerifyDateValueFunc()) + TEXT(R"(
+int DateTime_ParseHttpDate()
 {
-	const FDateTimeBindingsBaselines Baselines = BuildBaselines();
-	if (!TestTrue(TEXT("Native ParseIso8601 baseline should succeed for the fixed ISO-8601 sample"), Baselines.Iso.bSuccess) ||
-		!TestTrue(TEXT("Native ParseHttpDate baseline should succeed for the fixed HTTP-date sample"), Baselines.Http.bSuccess) ||
-		!TestTrue(TEXT("Native Parse baseline should succeed for the fixed generic date sample"), Baselines.Generic.bSuccess) ||
-		!TestFalse(TEXT("Native Parse baseline should reject the invalid generic sample"), Baselines.InvalidParse.bSuccess) ||
-		!TestFalse(TEXT("Native ParseHttpDate baseline should reject the invalid sample"), Baselines.InvalidHttp.bSuccess) ||
-		!TestFalse(TEXT("Native ParseIso8601 baseline should reject the invalid sample"), Baselines.InvalidIso.bSuccess))
-	{
-		return false;
-	}
-
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASDateTimeParseRoundTripCompat"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		DateTimeBindingsModuleName,
-		BuildScriptSource(Baselines));
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("DateTime bindings should match native parse, round-trip, out-parameter, millisecond, hour12 and tick semantics"),
-		Result,
-		1);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
+	FDateTime Parsed = FDateTime::MinValue();
+	const bool bOk = FDateTime::ParseHttpDate("__HTTP_INPUT__", Parsed);
+	return (VerifyDateValue(bOk, __HTTP_SUCCESS__, Parsed, int64(__HTTP_TICKS__), __HTTP_YEAR__, __HTTP_MONTH__, __HTTP_DAY__, __HTTP_HOUR12__, __HTTP_MILLISECOND__, 10) == 0) ? 1 : 0;
 }
+)");
+		ScriptSource.ReplaceInline(TEXT("__HTTP_INPUT__"), *HttpInput, ESearchCase::CaseSensitive);
+		ReplaceValueTokens(ScriptSource, TEXT("HTTP"), HttpBaseline);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Http"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ParseHttpDate()"), TEXT("FDateTime::ParseHttpDate should parse and match native components"), 1);
+	}
+
+	// ====================================================================
+	// Section: ParseGeneric
+	// ====================================================================
+
+	TEST_METHOD(ParseGeneric)
+	{
+		using namespace AngelscriptDateTimeTestHelpers;
+
+		const FString GenericInput = TEXT("2024-12-25 14:30:15.123");
+		FDateTime GenericValue = FDateTime::MinValue();
+		const FDateTimeBaseline GenericBaseline = Capture(FDateTime::Parse(GenericInput, GenericValue), GenericValue);
+
+		FString ScriptSource = FString(VerifyDateValueFunc()) + TEXT(R"(
+int DateTime_ParseGeneric()
+{
+	FDateTime Parsed = FDateTime::MinValue();
+	const bool bOk = FDateTime::Parse("__GENERIC_INPUT__", Parsed);
+	return (VerifyDateValue(bOk, __GENERIC_SUCCESS__, Parsed, int64(__GENERIC_TICKS__), __GENERIC_YEAR__, __GENERIC_MONTH__, __GENERIC_DAY__, __GENERIC_HOUR12__, __GENERIC_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+)");
+		ScriptSource.ReplaceInline(TEXT("__GENERIC_INPUT__"), *GenericInput, ESearchCase::CaseSensitive);
+		ReplaceValueTokens(ScriptSource, TEXT("GENERIC"), GenericBaseline);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Generic"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ParseGeneric()"), TEXT("FDateTime::Parse should parse generic format and match native components"), 1);
+	}
+
+	// ====================================================================
+	// Section: ParseInvalid
+	// ====================================================================
+
+	TEST_METHOD(ParseInvalid)
+	{
+		using namespace AngelscriptDateTimeTestHelpers;
+
+		const FString InvalidInput = TEXT("not-a-date");
+		const FDateTime Sentinel(1999, 1, 2, 3, 4, 5, 6);
+
+		FDateTime InvalidParseValue = Sentinel;
+		const FDateTimeBaseline InvalidParse = Capture(FDateTime::Parse(InvalidInput, InvalidParseValue), InvalidParseValue);
+
+		FDateTime InvalidHttpValue = Sentinel;
+		const FDateTimeBaseline InvalidHttp = Capture(FDateTime::ParseHttpDate(InvalidInput, InvalidHttpValue), InvalidHttpValue);
+
+		FDateTime InvalidIsoValue = Sentinel;
+		const FDateTimeBaseline InvalidIso = Capture(FDateTime::ParseIso8601(*InvalidInput, InvalidIsoValue), InvalidIsoValue);
+
+		FString ScriptSource = FString(VerifyDateValueFunc()) + TEXT(R"(
+int DateTime_ParseInvalidGeneric()
+{
+	FDateTime Parsed(1999, 1, 2, 3, 4, 5, 6);
+	const bool bOk = FDateTime::Parse("__INVALID__", Parsed);
+	return (VerifyDateValue(bOk, __INVALID_PARSE_SUCCESS__, Parsed, int64(__INVALID_PARSE_TICKS__), __INVALID_PARSE_YEAR__, __INVALID_PARSE_MONTH__, __INVALID_PARSE_DAY__, __INVALID_PARSE_HOUR12__, __INVALID_PARSE_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+int DateTime_ParseInvalidHttp()
+{
+	FDateTime Parsed(1999, 1, 2, 3, 4, 5, 6);
+	const bool bOk = FDateTime::ParseHttpDate("__INVALID__", Parsed);
+	return (VerifyDateValue(bOk, __INVALID_HTTP_SUCCESS__, Parsed, int64(__INVALID_HTTP_TICKS__), __INVALID_HTTP_YEAR__, __INVALID_HTTP_MONTH__, __INVALID_HTTP_DAY__, __INVALID_HTTP_HOUR12__, __INVALID_HTTP_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+int DateTime_ParseInvalidIso()
+{
+	FDateTime Parsed(1999, 1, 2, 3, 4, 5, 6);
+	const bool bOk = FDateTime::ParseIso8601("__INVALID__", Parsed);
+	return (VerifyDateValue(bOk, __INVALID_ISO_SUCCESS__, Parsed, int64(__INVALID_ISO_TICKS__), __INVALID_ISO_YEAR__, __INVALID_ISO_MONTH__, __INVALID_ISO_DAY__, __INVALID_ISO_HOUR12__, __INVALID_ISO_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+)");
+		ScriptSource.ReplaceInline(TEXT("__INVALID__"), *InvalidInput, ESearchCase::CaseSensitive);
+		ReplaceValueTokens(ScriptSource, TEXT("INVALID_PARSE"), InvalidParse);
+		ReplaceValueTokens(ScriptSource, TEXT("INVALID_HTTP"), InvalidHttp);
+		ReplaceValueTokens(ScriptSource, TEXT("INVALID_ISO"), InvalidIso);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Invalid"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ParseInvalidGeneric()"), TEXT("FDateTime::Parse should reject invalid input"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ParseInvalidHttp()"), TEXT("FDateTime::ParseHttpDate should reject invalid input"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ParseInvalidIso()"), TEXT("FDateTime::ParseIso8601 should reject invalid input"), 1);
+	}
+
+	// ====================================================================
+	// Section: Construction
+	// ====================================================================
+
+	TEST_METHOD(Construction)
+	{
+		using namespace AngelscriptDateTimeTestHelpers;
+
+		const FDateTime Constructed(2024, 12, 25, 14, 30, 15, 123);
+		const FDateTimeBaseline CtorBaseline = Capture(true, Constructed);
+		const FString ConstructedHttp = Constructed.ToHttpDate();
+		const FString ConstructedIso = Constructed.ToIso8601();
+		const FString ConstructedFormatted = Constructed.ToString(TEXT("%Y-%m-%d %H:%M:%S.%s"));
+
+		FString ScriptSource = FString(VerifyDateValueFunc()) + TEXT(R"(
+int DateTime_CtorComponents()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	return (VerifyDateValue(true, true, Dt, int64(__CTOR_TICKS__), __CTOR_YEAR__, __CTOR_MONTH__, __CTOR_DAY__, __CTOR_HOUR12__, __CTOR_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+int DateTime_ToHttpDate()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	return (Dt.ToHttpDate() == "__CTOR_HTTP__") ? 1 : 0;
+}
+int DateTime_ToIso8601()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	return (Dt.ToIso8601() == "__CTOR_ISO__") ? 1 : 0;
+}
+int DateTime_ToStringFormatted()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	return (Dt.ToString("%Y-%m-%d %H:%M:%S.%s") == "__CTOR_FORMATTED__") ? 1 : 0;
+}
+)");
+		ReplaceValueTokens(ScriptSource, TEXT("CTOR"), CtorBaseline);
+		ScriptSource.ReplaceInline(TEXT("__CTOR_HTTP__"), *ConstructedHttp, ESearchCase::CaseSensitive);
+		ScriptSource.ReplaceInline(TEXT("__CTOR_ISO__"), *ConstructedIso, ESearchCase::CaseSensitive);
+		ScriptSource.ReplaceInline(TEXT("__CTOR_FORMATTED__"), *ConstructedFormatted, ESearchCase::CaseSensitive);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Ctor"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_CtorComponents()"), TEXT("FDateTime component ctor should match native ticks and fields"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ToHttpDate()"), TEXT("FDateTime::ToHttpDate should match native output"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ToIso8601()"), TEXT("FDateTime::ToIso8601 should match native output"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_ToStringFormatted()"), TEXT("FDateTime::ToString with format should match native output"), 1);
+	}
+
+	// ====================================================================
+	// Section: RoundTrip
+	// ====================================================================
+
+	TEST_METHOD(RoundTrip)
+	{
+		using namespace AngelscriptDateTimeTestHelpers;
+
+		const FDateTime Constructed(2024, 12, 25, 14, 30, 15, 123);
+		const FDateTime Sentinel(1999, 1, 2, 3, 4, 5, 6);
+
+		FDateTime HttpRtValue = Sentinel;
+		const FDateTimeBaseline HttpRt = Capture(FDateTime::ParseHttpDate(Constructed.ToHttpDate(), HttpRtValue), HttpRtValue);
+
+		FDateTime IsoRtValue = Sentinel;
+		const FDateTimeBaseline IsoRt = Capture(FDateTime::ParseIso8601(*Constructed.ToIso8601(), IsoRtValue), IsoRtValue);
+
+		const FString Formatted = Constructed.ToString(TEXT("%Y-%m-%d %H:%M:%S.%s"));
+		FDateTime FormattedRtValue = Sentinel;
+		const FDateTimeBaseline FormattedRt = Capture(FDateTime::Parse(Formatted, FormattedRtValue), FormattedRtValue);
+
+		FString ScriptSource = FString(VerifyDateValueFunc()) + TEXT(R"(
+int DateTime_RoundTripHttp()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	FDateTime Parsed = FDateTime::MinValue();
+	const bool bOk = FDateTime::ParseHttpDate(Dt.ToHttpDate(), Parsed);
+	return (VerifyDateValue(bOk, __HTTP_RT_SUCCESS__, Parsed, int64(__HTTP_RT_TICKS__), __HTTP_RT_YEAR__, __HTTP_RT_MONTH__, __HTTP_RT_DAY__, __HTTP_RT_HOUR12__, __HTTP_RT_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+int DateTime_RoundTripIso()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	FDateTime Parsed = FDateTime::MinValue();
+	const bool bOk = FDateTime::ParseIso8601(Dt.ToIso8601(), Parsed);
+	return (VerifyDateValue(bOk, __ISO_RT_SUCCESS__, Parsed, int64(__ISO_RT_TICKS__), __ISO_RT_YEAR__, __ISO_RT_MONTH__, __ISO_RT_DAY__, __ISO_RT_HOUR12__, __ISO_RT_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+int DateTime_RoundTripFormatted()
+{
+	FDateTime Dt(2024, 12, 25, 14, 30, 15, 123);
+	const FString Fmt = Dt.ToString("%Y-%m-%d %H:%M:%S.%s");
+	FDateTime Parsed = FDateTime::MinValue();
+	const bool bOk = FDateTime::Parse(Fmt, Parsed);
+	return (VerifyDateValue(bOk, __FMT_RT_SUCCESS__, Parsed, int64(__FMT_RT_TICKS__), __FMT_RT_YEAR__, __FMT_RT_MONTH__, __FMT_RT_DAY__, __FMT_RT_HOUR12__, __FMT_RT_MILLISECOND__, 10) == 0) ? 1 : 0;
+}
+)");
+		ReplaceValueTokens(ScriptSource, TEXT("HTTP_RT"), HttpRt);
+		ReplaceValueTokens(ScriptSource, TEXT("ISO_RT"), IsoRt);
+		ReplaceValueTokens(ScriptSource, TEXT("FMT_RT"), FormattedRt);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("RoundTrip"), ScriptSource);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_RoundTripHttp()"), TEXT("FDateTime HTTP round-trip should preserve components"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_RoundTripIso()"), TEXT("FDateTime ISO round-trip should preserve components"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GDateTimeProfile, TEXT("int DateTime_RoundTripFormatted()"), TEXT("FDateTime formatted round-trip should preserve components"), 1);
+	}
+};
 
 #endif

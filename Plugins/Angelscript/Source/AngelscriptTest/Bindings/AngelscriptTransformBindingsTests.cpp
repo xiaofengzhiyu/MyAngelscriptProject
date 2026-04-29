@@ -1,405 +1,323 @@
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptTransformBindingsTests.cpp
+//
+// FTransform binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Transform.FAngelscriptTransformBindingsTest.*
+//
+// Sections:
+//   TransformPosition    — TransformPosition, TransformPositionNoScale,
+//                          InverseTransformPosition
+//   RelativeTransform    — GetRelativeTransform, Equals verification
+//   SettersAndGetters    — SetTranslation, SetScale3D, GetTranslation, GetScale3D
+//
+// CQTest adaptation notes:
+//   Native transforms computed at test time and substituted via ReplaceInline
+//   for deterministic parity checks.
+// ============================================================================
+
+#include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
 
 #include "Math/Quat.h"
 #include "Math/Transform.h"
-#include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTransformBindingsTest,
-	"Angelscript.TestModule.Bindings.TransformDeterministicCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
 
-namespace AngelscriptTest_Bindings_AngelscriptTransformBindingsTests_Private
+namespace AngelscriptTransformBindingsTests_Private
 {
-	FString FormatScriptFloatLiteral(const double Value)
+	FString FormatScriptFloat(double Value)
 	{
 		FString Literal = FString::Printf(TEXT("%.9g"), Value);
 		if (!Literal.Contains(TEXT(".")) && !Literal.Contains(TEXT("e")) && !Literal.Contains(TEXT("E")))
 		{
 			Literal += TEXT(".0");
 		}
-
 		return Literal;
 	}
 
-	FString FormatScriptVectorLiteral(const FVector& Value)
+	FString FormatScriptVector(const FVector& V)
 	{
-		return FString::Printf(
-			TEXT("FVector(%s, %s, %s)"),
-			*FormatScriptFloatLiteral(Value.X),
-			*FormatScriptFloatLiteral(Value.Y),
-			*FormatScriptFloatLiteral(Value.Z));
+		return FString::Printf(TEXT("FVector(%s, %s, %s)"),
+			*FormatScriptFloat(V.X), *FormatScriptFloat(V.Y), *FormatScriptFloat(V.Z));
 	}
 
-	FString FormatScriptRotatorLiteral(const FRotator& Value)
+	FString FormatScriptRotator(const FRotator& R)
 	{
-		return FString::Printf(
-			TEXT("FRotator(%s, %s, %s)"),
-			*FormatScriptFloatLiteral(Value.Pitch),
-			*FormatScriptFloatLiteral(Value.Yaw),
-			*FormatScriptFloatLiteral(Value.Roll));
+		return FString::Printf(TEXT("FRotator(%s, %s, %s)"),
+			*FormatScriptFloat(R.Pitch), *FormatScriptFloat(R.Yaw), *FormatScriptFloat(R.Roll));
 	}
 
-	FString FormatScriptQuatLiteral(const FQuat& Value)
+	FString FormatScriptQuat(const FQuat& Q)
 	{
-		return FString::Printf(
-			TEXT("FQuat(%s, %s, %s, %s)"),
-			*FormatScriptFloatLiteral(Value.X),
-			*FormatScriptFloatLiteral(Value.Y),
-			*FormatScriptFloatLiteral(Value.Z),
-			*FormatScriptFloatLiteral(Value.W));
+		return FString::Printf(TEXT("FQuat(%s, %s, %s, %s)"),
+			*FormatScriptFloat(Q.X), *FormatScriptFloat(Q.Y), *FormatScriptFloat(Q.Z), *FormatScriptFloat(Q.W));
 	}
 
-	FString FormatScriptTransformLiteral(const FTransform& Value)
+	FString FormatScriptTransform(const FTransform& T)
 	{
-		return FString::Printf(
-			TEXT("FTransform(%s, %s, %s)"),
-			*FormatScriptQuatLiteral(Value.GetRotation()),
-			*FormatScriptVectorLiteral(Value.GetTranslation()),
-			*FormatScriptVectorLiteral(Value.GetScale3D()));
-	}
-
-	template <typename TValue>
-	bool ReadReturnValue(FAutomationTestBase& Test, asIScriptContext& Context, TValue& OutValue)
-	{
-		void* ReturnValueAddress = Context.GetAddressOfReturnValue();
-		if (!Test.TestNotNull(TEXT("Transform bindings test should expose the return value storage"), ReturnValueAddress))
-		{
-			return false;
-		}
-
-		OutValue = *static_cast<TValue*>(ReturnValueAddress);
-		return true;
-	}
-
-	template <typename TValue>
-	bool ExecuteValueFunction(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		asIScriptFunction& Function,
-		TValue& OutValue)
-	{
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(TEXT("Transform bindings test should create an execution context"), Context))
-		{
-			return false;
-		}
-
-		const int PrepareResult = Context->Prepare(&Function);
-		if (!Test.TestEqual(TEXT("Transform bindings test should prepare the script function"), PrepareResult, asSUCCESS))
-		{
-			Context->Release();
-			return false;
-		}
-
-		const int ExecuteResult = Context->Execute();
-		if (!Test.TestEqual(TEXT("Transform bindings test should execute the script function"), ExecuteResult, asEXECUTION_FINISHED))
-		{
-			if (ExecuteResult == asEXECUTION_EXCEPTION && Context->GetExceptionString() != nullptr)
-			{
-				Test.AddError(FString::Printf(
-					TEXT("Transform bindings test saw a script exception: %s"),
-					UTF8_TO_TCHAR(Context->GetExceptionString())));
-			}
-			Context->Release();
-			return false;
-		}
-
-		const bool bReadReturnValue = ReadReturnValue(Test, *Context, OutValue);
-		Context->Release();
-		return bReadReturnValue;
-	}
-
-	bool QuatMatches(const FQuat& Actual, const FQuat& Expected, double ToleranceDegrees = 0.05)
-	{
-		FQuat ActualQuat = Actual;
-		FQuat ExpectedQuat = Expected;
-		ActualQuat.Normalize();
-		ExpectedQuat.Normalize();
-		if ((ActualQuat | ExpectedQuat) < 0.0)
-		{
-			ExpectedQuat = FQuat(-ExpectedQuat.X, -ExpectedQuat.Y, -ExpectedQuat.Z, -ExpectedQuat.W);
-		}
-
-		return FMath::RadiansToDegrees(ActualQuat.AngularDistance(ExpectedQuat)) <= ToleranceDegrees;
-	}
-
-	bool VerifyVector(
-		FAutomationTestBase& Test,
-		const TCHAR* What,
-		const FVector& Actual,
-		const FVector& Expected,
-		double Tolerance = KINDA_SMALL_NUMBER)
-	{
-		if (!Actual.Equals(Expected, Tolerance))
-		{
-			Test.AddInfo(FString::Printf(
-				TEXT("%s actual=%s expected=%s tolerance=%.6f"),
-				What,
-				*Actual.ToCompactString(),
-				*Expected.ToCompactString(),
-				Tolerance));
-		}
-
-		return Test.TestTrue(What, Actual.Equals(Expected, Tolerance));
-	}
-
-	bool VerifyTransform(
-		FAutomationTestBase& Test,
-		const TCHAR* What,
-		const FTransform& Actual,
-		const FTransform& Expected,
-		double Tolerance = 0.001)
-	{
-		const bool bRotationMatches = QuatMatches(Actual.GetRotation(), Expected.GetRotation(), Tolerance);
-		const bool bTranslationMatches = Actual.GetTranslation().Equals(Expected.GetTranslation(), Tolerance);
-		const bool bScaleMatches = Actual.GetScale3D().Equals(Expected.GetScale3D(), Tolerance);
-		if (!(bRotationMatches && bTranslationMatches && bScaleMatches))
-		{
-			Test.AddInfo(FString::Printf(
-				TEXT("%s actual rotation=%s expected rotation=%s actual translation=%s expected translation=%s actual scale=%s expected scale=%s"),
-				What,
-				*Actual.GetRotation().Rotator().ToCompactString(),
-				*Expected.GetRotation().Rotator().ToCompactString(),
-				*Actual.GetTranslation().ToCompactString(),
-				*Expected.GetTranslation().ToCompactString(),
-				*Actual.GetScale3D().ToCompactString(),
-				*Expected.GetScale3D().ToCompactString()));
-		}
-
-		return Test.TestTrue(What, bRotationMatches && bTranslationMatches && bScaleMatches);
+		return FString::Printf(TEXT("FTransform(%s, %s, %s)"),
+			*FormatScriptQuat(T.GetRotation()),
+			*FormatScriptVector(T.GetTranslation()),
+			*FormatScriptVector(T.GetScale3D()));
 	}
 }
 
-using namespace AngelscriptTest_Bindings_AngelscriptTransformBindingsTests_Private;
+using namespace AngelscriptTransformBindingsTests_Private;
 
-bool FAngelscriptTransformBindingsTest::RunTest(const FString& Parameters)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GTransformProfile{
+	TEXT("Transform"),            // Theme
+	TEXT(""),                     // Variant
+	TEXT("ASTransform"),          // ModulePrefix
+	TEXT("Transform"),            // CasePrefix
+	TEXT("TransformBindings"),    // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptTransformBindingsTest,
+	"Angelscript.TestModule.Bindings.Transform",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	bool bPassed = true;
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	constexpr double Tolerance = 0.001;
-
-	const FRotator BaselineRotator(0.0, 90.0, 0.0);
-	const FVector BaselineTranslation(10.0, 20.0, 30.0);
-	const FVector BaselineScale(2.0, 3.0, 4.0);
-	const FTransform Baseline(BaselineRotator, BaselineTranslation, BaselineScale);
-
-	const FRotator OtherRotator(15.0, -45.0, 5.0);
-	const FVector OtherTranslation(-5.0, 6.0, 7.0);
-	const FVector OtherScale(1.5, 0.5, 2.0);
-	const FTransform Other(OtherRotator, OtherTranslation, OtherScale);
-
-	const FVector InputPosition(1.0, 0.0, 0.0);
-	const FVector UpdatedTranslation(-11.0, 12.0, 13.0);
-	const FVector UpdatedScale(8.0, 9.0, 10.0);
-
-	const FVector ExpectedTransformPosition = Baseline.TransformPosition(InputPosition);
-	const FVector ExpectedTransformPositionNoScale = Baseline.TransformPositionNoScale(InputPosition);
-	const FVector ExpectedInverseTransformPosition = Baseline.InverseTransformPosition(ExpectedTransformPosition);
-	const FTransform ExpectedRelative = Baseline.GetRelativeTransform(Other);
-
-	FTransform ExpectedUpdated = Baseline;
-	ExpectedUpdated.SetTranslation(UpdatedTranslation);
-	ExpectedUpdated.SetScale3D(UpdatedScale);
-
-	bPassed &= TestTrue(
-		TEXT("Native transform baseline should apply scale before rotation and translation"),
-		!ExpectedTransformPosition.Equals(ExpectedTransformPositionNoScale, 0.0));
-	bPassed &= TestTrue(
-		TEXT("Native inverse transform baseline should recover the original local input"),
-		ExpectedInverseTransformPosition.Equals(InputPosition, Tolerance));
-	bPassed &= TestTrue(
-		TEXT("Native relative transform baseline should remain distinguishable from identity"),
-		!ExpectedRelative.Equals(FTransform::Identity, Tolerance));
-	bPassed &= TestTrue(
-		TEXT("Native setter baseline should produce a transform different from the original baseline"),
-		!ExpectedUpdated.Equals(Baseline, 0.0));
-	if (!bPassed)
+	BEFORE_ALL()
 	{
-		return false;
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	FString Script = TEXT(R"AS(
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	// ====================================================================
+	// Section: TransformPosition
+	// ====================================================================
+
+	TEST_METHOD(TransformPosition)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FRotator BaseRot(0.0, 90.0, 0.0);
+		const FVector BaseTrans(10.0, 20.0, 30.0);
+		const FVector BaseScale(2.0, 3.0, 4.0);
+		const FTransform Baseline(BaseRot, BaseTrans, BaseScale);
+		const FVector Input(1.0, 0.0, 0.0);
+
+		const FVector ExpTransformed = Baseline.TransformPosition(Input);
+		const FVector ExpTransformedNoScale = Baseline.TransformPositionNoScale(Input);
+		const FVector ExpInverse = Baseline.InverseTransformPosition(ExpTransformed);
+
+		constexpr double Tol = 0.001;
+
+		FString Script = TEXT(R"(
 FTransform MakeBaseline()
 {
-	return FTransform($BASELINE_ROTATOR$, $BASELINE_TRANSLATION$, $BASELINE_SCALE$);
+	return FTransform($BASELINE_ROT$, $BASELINE_TRANS$, $BASELINE_SCALE$);
 }
 
+int Transform_TransformPosition()
+{
+	FVector Result = MakeBaseline().TransformPosition($INPUT$);
+	return Result.Equals($EXP_TRANSFORMED$, $TOL$) ? 1 : 0;
+}
+int Transform_TransformPositionNoScale()
+{
+	FVector Result = MakeBaseline().TransformPositionNoScale($INPUT$);
+	return Result.Equals($EXP_NO_SCALE$, $TOL$) ? 1 : 0;
+}
+int Transform_InverseTransformPosition()
+{
+	FVector Result = MakeBaseline().InverseTransformPosition($EXP_TRANSFORMED$);
+	return Result.Equals($EXP_INVERSE$, $TOL$) ? 1 : 0;
+}
+int Transform_ScaleAffectsResult()
+{
+	FVector WithScale = MakeBaseline().TransformPosition($INPUT$);
+	FVector NoScale = MakeBaseline().TransformPositionNoScale($INPUT$);
+	return (!WithScale.Equals(NoScale, 0.0)) ? 1 : 0;
+}
+)");
+		Script.ReplaceInline(TEXT("$BASELINE_ROT$"), *FormatScriptRotator(BaseRot));
+		Script.ReplaceInline(TEXT("$BASELINE_TRANS$"), *FormatScriptVector(BaseTrans));
+		Script.ReplaceInline(TEXT("$BASELINE_SCALE$"), *FormatScriptVector(BaseScale));
+		Script.ReplaceInline(TEXT("$INPUT$"), *FormatScriptVector(Input));
+		Script.ReplaceInline(TEXT("$EXP_TRANSFORMED$"), *FormatScriptVector(ExpTransformed));
+		Script.ReplaceInline(TEXT("$EXP_NO_SCALE$"), *FormatScriptVector(ExpTransformedNoScale));
+		Script.ReplaceInline(TEXT("$EXP_INVERSE$"), *FormatScriptVector(ExpInverse));
+		Script.ReplaceInline(TEXT("$TOL$"), *FormatScriptFloat(Tol));
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTransformProfile, TEXT("TransformPosition"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_TransformPosition()"), TEXT("TransformPosition parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_TransformPositionNoScale()"), TEXT("TransformPositionNoScale parity"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_InverseTransformPosition()"), TEXT("InverseTransformPosition recovers input"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_ScaleAffectsResult()"), TEXT("scale affects TransformPosition"), 1);
+	}
+
+	// ====================================================================
+	// Section: RelativeTransform
+	// ====================================================================
+
+	TEST_METHOD(RelativeTransform)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FRotator BaseRot(0.0, 90.0, 0.0);
+		const FVector BaseTrans(10.0, 20.0, 30.0);
+		const FVector BaseScale(2.0, 3.0, 4.0);
+		const FTransform Baseline(BaseRot, BaseTrans, BaseScale);
+
+		const FRotator OtherRot(15.0, -45.0, 5.0);
+		const FVector OtherTrans(-5.0, 6.0, 7.0);
+		const FVector OtherScale(1.5, 0.5, 2.0);
+		const FTransform Other(OtherRot, OtherTrans, OtherScale);
+
+		const FTransform ExpRelative = Baseline.GetRelativeTransform(Other);
+		constexpr double Tol = 0.001;
+
+		FString Script = TEXT(R"(
+FTransform MakeBaseline()
+{
+	return FTransform($BASELINE_ROT$, $BASELINE_TRANS$, $BASELINE_SCALE$);
+}
 FTransform MakeOther()
 {
-	return FTransform($OTHER_ROTATOR$, $OTHER_TRANSLATION$, $OTHER_SCALE$);
+	return FTransform($OTHER_ROT$, $OTHER_TRANS$, $OTHER_SCALE$);
 }
 
-FVector GetTransformedPosition()
+int Transform_GetRelativeTransform()
 {
-	return MakeBaseline().TransformPosition($INPUT_POSITION$);
+	FTransform Rel = MakeBaseline().GetRelativeTransform(MakeOther());
+	return Rel.Equals($EXP_RELATIVE$, $TOL$) ? 1 : 0;
 }
-
-FVector GetTransformedPositionNoScale()
+int Transform_RelativeNotIdentity()
 {
-	return MakeBaseline().TransformPositionNoScale($INPUT_POSITION$);
+	FTransform Rel = MakeBaseline().GetRelativeTransform(MakeOther());
+	return (!Rel.Equals(FTransform::Identity, $TOL$)) ? 1 : 0;
 }
+)");
+		Script.ReplaceInline(TEXT("$BASELINE_ROT$"), *FormatScriptRotator(BaseRot));
+		Script.ReplaceInline(TEXT("$BASELINE_TRANS$"), *FormatScriptVector(BaseTrans));
+		Script.ReplaceInline(TEXT("$BASELINE_SCALE$"), *FormatScriptVector(BaseScale));
+		Script.ReplaceInline(TEXT("$OTHER_ROT$"), *FormatScriptRotator(OtherRot));
+		Script.ReplaceInline(TEXT("$OTHER_TRANS$"), *FormatScriptVector(OtherTrans));
+		Script.ReplaceInline(TEXT("$OTHER_SCALE$"), *FormatScriptVector(OtherScale));
+		Script.ReplaceInline(TEXT("$EXP_RELATIVE$"), *FormatScriptTransform(ExpRelative));
+		Script.ReplaceInline(TEXT("$TOL$"), *FormatScriptFloat(Tol));
 
-FVector GetInverseTransformedPosition()
-{
-	return MakeBaseline().InverseTransformPosition($EXPECTED_TRANSFORM_POSITION$);
-}
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTransformProfile, TEXT("RelativeTransform"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-FTransform GetRelativeTransformResult()
-{
-	return MakeBaseline().GetRelativeTransform(MakeOther());
-}
-
-FTransform GetUpdatedTransformResult()
-{
-	FTransform Updated = MakeBaseline();
-	Updated.SetTranslation($UPDATED_TRANSLATION$);
-	Updated.SetScale3D($UPDATED_SCALE$);
-	return Updated;
-}
-
-bool RelativeMatchesExpected()
-{
-	return GetRelativeTransformResult().Equals($EXPECTED_RELATIVE$, $TOLERANCE$);
-}
-
-bool UpdatedMatchesExpected()
-{
-	return GetUpdatedTransformResult().Equals($EXPECTED_UPDATED$, $TOLERANCE$);
-}
-
-bool UpdatedDiffersFromBaseline()
-{
-	return !GetUpdatedTransformResult().Equals(MakeBaseline(), $TOLERANCE$);
-}
-)AS");
-
-	Script.ReplaceInline(TEXT("$BASELINE_ROTATOR$"), *FormatScriptRotatorLiteral(BaselineRotator));
-	Script.ReplaceInline(TEXT("$BASELINE_TRANSLATION$"), *FormatScriptVectorLiteral(BaselineTranslation));
-	Script.ReplaceInline(TEXT("$BASELINE_SCALE$"), *FormatScriptVectorLiteral(BaselineScale));
-	Script.ReplaceInline(TEXT("$OTHER_ROTATOR$"), *FormatScriptRotatorLiteral(OtherRotator));
-	Script.ReplaceInline(TEXT("$OTHER_TRANSLATION$"), *FormatScriptVectorLiteral(OtherTranslation));
-	Script.ReplaceInline(TEXT("$OTHER_SCALE$"), *FormatScriptVectorLiteral(OtherScale));
-	Script.ReplaceInline(TEXT("$INPUT_POSITION$"), *FormatScriptVectorLiteral(InputPosition));
-	Script.ReplaceInline(TEXT("$EXPECTED_TRANSFORM_POSITION$"), *FormatScriptVectorLiteral(ExpectedTransformPosition));
-	Script.ReplaceInline(TEXT("$UPDATED_TRANSLATION$"), *FormatScriptVectorLiteral(UpdatedTranslation));
-	Script.ReplaceInline(TEXT("$UPDATED_SCALE$"), *FormatScriptVectorLiteral(UpdatedScale));
-	Script.ReplaceInline(TEXT("$EXPECTED_RELATIVE$"), *FormatScriptTransformLiteral(ExpectedRelative));
-	Script.ReplaceInline(TEXT("$EXPECTED_UPDATED$"), *FormatScriptTransformLiteral(ExpectedUpdated));
-	Script.ReplaceInline(TEXT("$TOLERANCE$"), *FormatScriptFloatLiteral(Tolerance));
-
-	asIScriptModule* Module = BuildModule(*this, Engine, "ASTransformDeterministicCompat", Script);
-	if (Module == nullptr)
-	{
-		return false;
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_GetRelativeTransform()"), TEXT("GetRelativeTransform matches native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_RelativeNotIdentity()"), TEXT("relative is not identity"), 1);
 	}
 
-	FVector ScriptTransformPosition = FVector::ZeroVector;
-	FVector ScriptTransformPositionNoScale = FVector::ZeroVector;
-	FVector ScriptInverseTransformPosition = FVector::ZeroVector;
-	FTransform ScriptRelative = FTransform::Identity;
-	FTransform ScriptUpdated = FTransform::Identity;
-	bool bRelativeMatchesExpected = false;
-	bool bUpdatedMatchesExpected = false;
-	bool bUpdatedDiffersFromBaseline = false;
+	// ====================================================================
+	// Section: SettersAndGetters
+	// ====================================================================
 
-	asIScriptFunction* TransformPositionFunction = GetFunctionByDecl(*this, *Module, TEXT("FVector GetTransformedPosition()"));
-	asIScriptFunction* TransformPositionNoScaleFunction = GetFunctionByDecl(*this, *Module, TEXT("FVector GetTransformedPositionNoScale()"));
-	asIScriptFunction* InverseTransformPositionFunction = GetFunctionByDecl(*this, *Module, TEXT("FVector GetInverseTransformedPosition()"));
-	asIScriptFunction* RelativeTransformFunction = GetFunctionByDecl(*this, *Module, TEXT("FTransform GetRelativeTransformResult()"));
-	asIScriptFunction* UpdatedTransformFunction = GetFunctionByDecl(*this, *Module, TEXT("FTransform GetUpdatedTransformResult()"));
-	asIScriptFunction* RelativeMatchesExpectedFunction = GetFunctionByDecl(*this, *Module, TEXT("bool RelativeMatchesExpected()"));
-	asIScriptFunction* UpdatedMatchesExpectedFunction = GetFunctionByDecl(*this, *Module, TEXT("bool UpdatedMatchesExpected()"));
-	asIScriptFunction* UpdatedDiffersFromBaselineFunction = GetFunctionByDecl(*this, *Module, TEXT("bool UpdatedDiffersFromBaseline()"));
-	if (TransformPositionFunction == nullptr
-		|| TransformPositionNoScaleFunction == nullptr
-		|| InverseTransformPositionFunction == nullptr
-		|| RelativeTransformFunction == nullptr
-		|| UpdatedTransformFunction == nullptr
-		|| RelativeMatchesExpectedFunction == nullptr
-		|| UpdatedMatchesExpectedFunction == nullptr
-		|| UpdatedDiffersFromBaselineFunction == nullptr)
+	TEST_METHOD(SettersAndGetters)
 	{
-		return false;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
-	const bool bExecutedAll =
-		ExecuteValueFunction(*this, Engine, *TransformPositionFunction, ScriptTransformPosition) &&
-		ExecuteValueFunction(*this, Engine, *TransformPositionNoScaleFunction, ScriptTransformPositionNoScale) &&
-		ExecuteValueFunction(*this, Engine, *InverseTransformPositionFunction, ScriptInverseTransformPosition) &&
-		ExecuteValueFunction(*this, Engine, *RelativeTransformFunction, ScriptRelative) &&
-		ExecuteValueFunction(*this, Engine, *UpdatedTransformFunction, ScriptUpdated) &&
-		ExecuteValueFunction(*this, Engine, *RelativeMatchesExpectedFunction, bRelativeMatchesExpected) &&
-		ExecuteValueFunction(*this, Engine, *UpdatedMatchesExpectedFunction, bUpdatedMatchesExpected) &&
-		ExecuteValueFunction(*this, Engine, *UpdatedDiffersFromBaselineFunction, bUpdatedDiffersFromBaseline);
-	if (!bExecutedAll)
-	{
-		return false;
-	}
+		const FRotator BaseRot(0.0, 90.0, 0.0);
+		const FVector BaseTrans(10.0, 20.0, 30.0);
+		const FVector BaseScale(2.0, 3.0, 4.0);
+		const FTransform Baseline(BaseRot, BaseTrans, BaseScale);
 
-	bPassed &= VerifyVector(
-		*this,
-		TEXT("FTransform::TransformPosition should match the native baseline exactly for the deterministic sample"),
-		ScriptTransformPosition,
-		ExpectedTransformPosition,
-		Tolerance);
-	bPassed &= VerifyVector(
-		*this,
-		TEXT("FTransform::TransformPositionNoScale should match the native baseline exactly for the deterministic sample"),
-		ScriptTransformPositionNoScale,
-		ExpectedTransformPositionNoScale,
-		Tolerance);
-	bPassed &= VerifyVector(
-		*this,
-		TEXT("FTransform::InverseTransformPosition should recover the original local point from the transformed sample"),
-		ScriptInverseTransformPosition,
-		ExpectedInverseTransformPosition,
-		Tolerance);
-	bPassed &= VerifyTransform(
-		*this,
-		TEXT("FTransform::GetRelativeTransform should match the native baseline transform result"),
-		ScriptRelative,
-		ExpectedRelative,
-		Tolerance);
-	bPassed &= VerifyTransform(
-		*this,
-		TEXT("FTransform::SetTranslation and SetScale3D should preserve the native updated transform result"),
-		ScriptUpdated,
-		ExpectedUpdated,
-		Tolerance);
-	bPassed &= VerifyVector(
-		*this,
-		TEXT("FTransform::GetTranslation should reflect the value set through SetTranslation"),
-		ScriptUpdated.GetTranslation(),
-		UpdatedTranslation,
-		0.0);
-	bPassed &= VerifyVector(
-		*this,
-		TEXT("FTransform::GetScale3D should reflect the value set through SetScale3D"),
-		ScriptUpdated.GetScale3D(),
-		UpdatedScale,
-		0.0);
-	bPassed &= TestTrue(
-		TEXT("FTransform::Equals should confirm that GetRelativeTransform matches the native expected transform"),
-		bRelativeMatchesExpected);
-	bPassed &= TestTrue(
-		TEXT("FTransform::Equals should confirm that the setter-mutated transform matches the native updated baseline"),
-		bUpdatedMatchesExpected);
-	bPassed &= TestTrue(
-		TEXT("FTransform::Equals should report that the setter-mutated transform is no longer equal to the original baseline"),
-		bUpdatedDiffersFromBaseline);
+		const FVector UpdatedTrans(-11.0, 12.0, 13.0);
+		const FVector UpdatedScale(8.0, 9.0, 10.0);
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
+		FTransform ExpUpdated = Baseline;
+		ExpUpdated.SetTranslation(UpdatedTrans);
+		ExpUpdated.SetScale3D(UpdatedScale);
+
+		constexpr double Tol = 0.001;
+
+		FString Script = TEXT(R"(
+FTransform MakeBaseline()
+{
+	return FTransform($BASELINE_ROT$, $BASELINE_TRANS$, $BASELINE_SCALE$);
 }
+
+int Transform_SetTranslation()
+{
+	FTransform T = MakeBaseline();
+	T.SetTranslation($UPDATED_TRANS$);
+	return T.GetTranslation().Equals($UPDATED_TRANS$, 0.0) ? 1 : 0;
+}
+int Transform_SetScale3D()
+{
+	FTransform T = MakeBaseline();
+	T.SetScale3D($UPDATED_SCALE$);
+	return T.GetScale3D().Equals($UPDATED_SCALE$, 0.0) ? 1 : 0;
+}
+int Transform_UpdatedMatchesNative()
+{
+	FTransform T = MakeBaseline();
+	T.SetTranslation($UPDATED_TRANS$);
+	T.SetScale3D($UPDATED_SCALE$);
+	return T.Equals($EXP_UPDATED$, $TOL$) ? 1 : 0;
+}
+int Transform_UpdatedDiffersFromBaseline()
+{
+	FTransform T = MakeBaseline();
+	T.SetTranslation($UPDATED_TRANS$);
+	T.SetScale3D($UPDATED_SCALE$);
+	return (!T.Equals(MakeBaseline(), $TOL$)) ? 1 : 0;
+}
+int Transform_GetLocation()
+{
+	FTransform T = MakeBaseline();
+	return T.GetTranslation().Equals($BASELINE_TRANS$, 0.0) ? 1 : 0;
+}
+int Transform_GetScale()
+{
+	FTransform T = MakeBaseline();
+	return T.GetScale3D().Equals($BASELINE_SCALE$, 0.0) ? 1 : 0;
+}
+)");
+		Script.ReplaceInline(TEXT("$BASELINE_ROT$"), *FormatScriptRotator(BaseRot));
+		Script.ReplaceInline(TEXT("$BASELINE_TRANS$"), *FormatScriptVector(BaseTrans));
+		Script.ReplaceInline(TEXT("$BASELINE_SCALE$"), *FormatScriptVector(BaseScale));
+		Script.ReplaceInline(TEXT("$UPDATED_TRANS$"), *FormatScriptVector(UpdatedTrans));
+		Script.ReplaceInline(TEXT("$UPDATED_SCALE$"), *FormatScriptVector(UpdatedScale));
+		Script.ReplaceInline(TEXT("$EXP_UPDATED$"), *FormatScriptTransform(ExpUpdated));
+		Script.ReplaceInline(TEXT("$TOL$"), *FormatScriptFloat(Tol));
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTransformProfile, TEXT("SettersAndGetters"), Script);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_SetTranslation()"), TEXT("SetTranslation reflected in GetTranslation"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_SetScale3D()"), TEXT("SetScale3D reflected in GetScale3D"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_UpdatedMatchesNative()"), TEXT("updated matches native expected"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_UpdatedDiffersFromBaseline()"), TEXT("updated differs from baseline"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_GetLocation()"), TEXT("GetTranslation returns construction value"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTransformProfile, TEXT("int Transform_GetScale()"), TEXT("GetScale3D returns construction value"), 1);
+	}
+};
 
 #endif

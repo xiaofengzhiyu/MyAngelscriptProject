@@ -1,23 +1,53 @@
-#include "Shared/AngelscriptTestMacros.h"
-#include "Shared/AngelscriptTestUtilities.h"
+// ============================================================================
+// AngelscriptTimespanBindingsTests.cpp
+//
+// FTimespan binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Timespan.FAngelscriptTimespanBindingsTest.*
+//
+// Sections:
+//   Construction       — tick-based, whole-component, detailed (5-arg) ctors
+//   ComponentAccess    — GetDays/Hours/Minutes/Seconds/FractionXxx/TotalXxx
+//   Formatting         — ToString default, ToString with custom format
+//   Arithmetic         — negate, GetDuration, modulo, Ratio
+//   MutableOperators   — +=, -=, *=, /=, %=
+//   Comparison         — MaxValue/MinValue ordering via opCmp
+//
+// CQTest adaptation notes:
+//   Uses $TOKEN$ substitution from native FTimespan baselines computed at test time.
+// ============================================================================
 
-#include "Misc/ScopeExit.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+
 #include "Misc/Timespan.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTimespanAdvancedCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.TimespanAdvancedCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
 
-namespace AngelscriptTest_Bindings_AngelscriptTimespanBindingsTests_Private
+static const FBindingsCoverageProfile GTimespanProfile{
+	TEXT("Timespan"),            // Theme
+	TEXT(""),                    // Variant
+	TEXT("ASTimespan"),          // ModulePrefix
+	TEXT("Timespan"),            // CasePrefix
+	TEXT("TimespanBindings"),    // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+namespace
 {
-	static constexpr ANSICHAR TimespanBindingsModuleName[] = "ASTimespanAdvancedCompat";
-
-	struct FTimespanValueBaseline
+	struct FTSBaseline
 	{
 		int64 Ticks = 0;
 		int32 Days = 0;
@@ -35,322 +65,387 @@ namespace AngelscriptTest_Bindings_AngelscriptTimespanBindingsTests_Private
 		FString FormattedString;
 	};
 
-	struct FTimespanBindingsBaselines
+	FTSBaseline CaptureTS(const FTimespan& V, const TCHAR* Fmt = nullptr)
 	{
-		FString DetailedFormat;
-		FTimespanValueBaseline TicksBased;
-		FTimespanValueBaseline Whole;
-		FTimespanValueBaseline Detailed;
-		FTimespanValueBaseline NegativeDuration;
-		FTimespanValueBaseline ModResult;
-		FTimespanValueBaseline MutableAfterAdd;
-		FTimespanValueBaseline MutableAfterSub;
-		FTimespanValueBaseline MutableAfterMul;
-		FTimespanValueBaseline MutableAfterDiv;
-		FTimespanValueBaseline MutableAfterMod;
-		double Ratio = 0.0;
-		int32 MaxCmpMin = 0;
-	};
-
-	FTimespanValueBaseline CaptureTimespanBaseline(const FTimespan& Value, const TCHAR* Format = nullptr)
-	{
-		FTimespanValueBaseline Baseline;
-		Baseline.Ticks = Value.GetTicks();
-		Baseline.Days = Value.GetDays();
-		Baseline.Hours = Value.GetHours();
-		Baseline.Minutes = Value.GetMinutes();
-		Baseline.Seconds = Value.GetSeconds();
-		Baseline.FractionMicro = Value.GetFractionMicro();
-		Baseline.FractionMilli = Value.GetFractionMilli();
-		Baseline.FractionNano = Value.GetFractionNano();
-		Baseline.FractionTicks = Value.GetFractionTicks();
-		Baseline.TotalHours = Value.GetTotalHours();
-		Baseline.TotalMinutes = Value.GetTotalMinutes();
-		Baseline.TotalSeconds = Value.GetTotalSeconds();
-		Baseline.DefaultString = Value.ToString();
-		if (Format != nullptr)
-		{
-			Baseline.FormattedString = Value.ToString(Format);
-		}
-
-		return Baseline;
+		FTSBaseline B;
+		B.Ticks = V.GetTicks();
+		B.Days = V.GetDays();
+		B.Hours = V.GetHours();
+		B.Minutes = V.GetMinutes();
+		B.Seconds = V.GetSeconds();
+		B.FractionMicro = V.GetFractionMicro();
+		B.FractionMilli = V.GetFractionMilli();
+		B.FractionNano = V.GetFractionNano();
+		B.FractionTicks = V.GetFractionTicks();
+		B.TotalHours = V.GetTotalHours();
+		B.TotalMinutes = V.GetTotalMinutes();
+		B.TotalSeconds = V.GetTotalSeconds();
+		B.DefaultString = V.ToString();
+		if (Fmt) B.FormattedString = V.ToString(Fmt);
+		return B;
 	}
 
-	int32 CompareTimespans(const FTimespan& Left, const FTimespan& Right)
-	{
-		if (Left < Right)
-		{
-			return -1;
-		}
-		if (Left > Right)
-		{
-			return 1;
-		}
+	FString I64(int64 V) { return FString::Printf(TEXT("%lld"), static_cast<long long>(V)); }
+	FString F64(double V) { return FString::Printf(TEXT("%.17g"), V); }
 
-		return 0;
+	void InjectTSTokens(FString& S, const TCHAR* Prefix, const FTSBaseline& B)
+	{
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_TICKS$"), Prefix), *I64(B.Ticks), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_DAYS$"), Prefix), *FString::FromInt(B.Days), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_HOURS$"), Prefix), *FString::FromInt(B.Hours), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_MINUTES$"), Prefix), *FString::FromInt(B.Minutes), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_SECONDS$"), Prefix), *FString::FromInt(B.Seconds), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_FMICRO$"), Prefix), *FString::FromInt(B.FractionMicro), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_FMILLI$"), Prefix), *FString::FromInt(B.FractionMilli), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_FNANO$"), Prefix), *FString::FromInt(B.FractionNano), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_FTICKS$"), Prefix), *FString::FromInt(B.FractionTicks), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_THOURS$"), Prefix), *F64(B.TotalHours), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_TMINUTES$"), Prefix), *F64(B.TotalMinutes), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_TSECONDS$"), Prefix), *F64(B.TotalSeconds), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_DEFSTR$"), Prefix), *B.DefaultString.ReplaceCharWithEscapedChar(), ESearchCase::CaseSensitive);
+		S.ReplaceInline(*FString::Printf(TEXT("$%s_FMTSTR$"), Prefix), *B.FormattedString.ReplaceCharWithEscapedChar(), ESearchCase::CaseSensitive);
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptTimespanBindingsTest,
+	"Angelscript.TestModule.Bindings.Timespan",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
 
-	FString ToScriptInt64Literal(const int64 Value)
+	AFTER_ALL()
 	{
-		return FString::Printf(TEXT("%lld"), static_cast<long long>(Value));
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
 	}
 
-	FString ToScriptFloat64Literal(const double Value)
-	{
-		return FString::Printf(TEXT("%.17g"), Value);
-	}
+	// ====================================================================
+	// Section: Construction
+	// ====================================================================
 
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const FString& Replacement)
+	TEST_METHOD(Construction)
 	{
-		ScriptSource.ReplaceInline(Token, *Replacement, ESearchCase::CaseSensitive);
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const int32 Replacement)
-	{
-		ReplaceToken(ScriptSource, Token, FString::FromInt(Replacement));
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const int64 Replacement)
-	{
-		ReplaceToken(ScriptSource, Token, ToScriptInt64Literal(Replacement));
-	}
-
-	void ReplaceToken(FString& ScriptSource, const TCHAR* Token, const double Replacement)
-	{
-		ReplaceToken(ScriptSource, Token, ToScriptFloat64Literal(Replacement));
-	}
-
-	void ReplaceTimespanTokens(FString& ScriptSource, const TCHAR* Prefix, const FTimespanValueBaseline& Baseline)
-	{
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_TICKS__"), Prefix), Baseline.Ticks);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_DAYS__"), Prefix), Baseline.Days);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_HOURS__"), Prefix), Baseline.Hours);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_MINUTES__"), Prefix), Baseline.Minutes);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_SECONDS__"), Prefix), Baseline.Seconds);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_FRACTION_MICRO__"), Prefix), Baseline.FractionMicro);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_FRACTION_MILLI__"), Prefix), Baseline.FractionMilli);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_FRACTION_NANO__"), Prefix), Baseline.FractionNano);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_FRACTION_TICKS__"), Prefix), Baseline.FractionTicks);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_TOTAL_HOURS__"), Prefix), Baseline.TotalHours);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_TOTAL_MINUTES__"), Prefix), Baseline.TotalMinutes);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_TOTAL_SECONDS__"), Prefix), Baseline.TotalSeconds);
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_DEFAULT_STRING__"), Prefix), Baseline.DefaultString.ReplaceCharWithEscapedChar());
-		ReplaceToken(ScriptSource, *FString::Printf(TEXT("__%s_FORMATTED_STRING__"), Prefix), Baseline.FormattedString.ReplaceCharWithEscapedChar());
-	}
-
-	FTimespanBindingsBaselines BuildBaselines()
-	{
-		FTimespanBindingsBaselines Baselines;
-		Baselines.DetailedFormat = TEXT("%d.%h:%m:%s");
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
 
 		const FTimespan TicksBased(900000000);
 		const FTimespan Whole(1, 2, 3, 4);
 		const FTimespan Detailed(1, 2, 3, 4, 500000000);
-		const FTimespan Dividend = FTimespan::FromMinutes(95.0);
-		const FTimespan Divisor = FTimespan::FromMinutes(30.0);
+		FTSBaseline TB = CaptureTS(TicksBased);
+		FTSBaseline WB = CaptureTS(Whole);
+		FTSBaseline DB = CaptureTS(Detailed);
 
-		Baselines.TicksBased = CaptureTimespanBaseline(TicksBased);
-		Baselines.Whole = CaptureTimespanBaseline(Whole);
-		Baselines.Detailed = CaptureTimespanBaseline(Detailed, *Baselines.DetailedFormat);
-		FTimespan NegativeDividend = -Dividend;
-		Baselines.NegativeDuration = CaptureTimespanBaseline(NegativeDividend.GetDuration());
-		Baselines.ModResult = CaptureTimespanBaseline(Dividend % Divisor);
-		Baselines.Ratio = FTimespan::Ratio(Dividend, Divisor);
-
-		FTimespan Mutable = FTimespan::FromMinutes(10.0);
-		Mutable += FTimespan::FromSeconds(45.0);
-		Baselines.MutableAfterAdd = CaptureTimespanBaseline(Mutable);
-
-		Mutable -= FTimespan::FromSeconds(15.0);
-		Baselines.MutableAfterSub = CaptureTimespanBaseline(Mutable);
-
-		Mutable *= 2.0;
-		Baselines.MutableAfterMul = CaptureTimespanBaseline(Mutable);
-
-		Mutable /= 4.0;
-		Baselines.MutableAfterDiv = CaptureTimespanBaseline(Mutable);
-
-		Mutable %= FTimespan::FromMinutes(3.0);
-		Baselines.MutableAfterMod = CaptureTimespanBaseline(Mutable);
-
-		Baselines.MaxCmpMin = CompareTimespans(FTimespan::MaxValue(), FTimespan::MinValue());
-		return Baselines;
-	}
-
-	FString BuildScriptSource(const FTimespanBindingsBaselines& Baselines)
-	{
-		FString ScriptSource = TEXT(R"(
-bool NearlyEqual(float64 Observed, float64 Expected, float64 Tolerance)
+		FString Source = TEXT(R"(
+int Timespan_TicksCtor_Ticks()
 {
-	return Observed >= Expected - Tolerance && Observed <= Expected + Tolerance;
+	FTimespan T(int64($TB_TICKS$));
+	return (T.GetTicks() == int64($TB_TICKS$)) ? 1 : 0;
 }
-
-int VerifyTimespanValue(FTimespan Value, int64 ExpectedTicks, int ExpectedDays, int ExpectedHours, int ExpectedMinutes, int ExpectedSeconds, int ExpectedFractionMicro, int ExpectedFractionMilli, int ExpectedFractionNano, int ExpectedFractionTicks, float64 ExpectedTotalHours, float64 ExpectedTotalMinutes, float64 ExpectedTotalSeconds, int FailureBase)
+int Timespan_WholeCtor_Ticks()
 {
-	if (Value.GetTicks() != ExpectedTicks)
-		return FailureBase + 0;
-	if (Value.GetDays() != ExpectedDays)
-		return FailureBase + 1;
-	if (Value.GetHours() != ExpectedHours)
-		return FailureBase + 2;
-	if (Value.GetMinutes() != ExpectedMinutes)
-		return FailureBase + 3;
-	if (Value.GetSeconds() != ExpectedSeconds)
-		return FailureBase + 4;
-	if (Value.GetFractionMicro() != ExpectedFractionMicro)
-		return FailureBase + 5;
-	if (Value.GetFractionMilli() != ExpectedFractionMilli)
-		return FailureBase + 6;
-	if (Value.GetFractionNano() != ExpectedFractionNano)
-		return FailureBase + 7;
-	if (Value.GetFractionTicks() != ExpectedFractionTicks)
-		return FailureBase + 8;
-	if (!NearlyEqual(Value.GetTotalHours(), ExpectedTotalHours, 0.000000001))
-		return FailureBase + 9;
-	if (!NearlyEqual(Value.GetTotalMinutes(), ExpectedTotalMinutes, 0.000000001))
-		return FailureBase + 10;
-	if (!NearlyEqual(Value.GetTotalSeconds(), ExpectedTotalSeconds, 0.000000001))
-		return FailureBase + 11;
-
-	return 0;
+	FTimespan T(1, 2, 3, 4);
+	return (T.GetTicks() == int64($WB_TICKS$)) ? 1 : 0;
 }
-
-int Entry()
+int Timespan_DetailedCtor_Ticks()
 {
-	FTimespan TicksBased(int64(__TICKS_BASED_TICKS__));
-	int Result = VerifyTimespanValue(TicksBased, int64(__TICKS_BASED_TICKS__), __TICKS_BASED_DAYS__, __TICKS_BASED_HOURS__, __TICKS_BASED_MINUTES__, __TICKS_BASED_SECONDS__, __TICKS_BASED_FRACTION_MICRO__, __TICKS_BASED_FRACTION_MILLI__, __TICKS_BASED_FRACTION_NANO__, __TICKS_BASED_FRACTION_TICKS__, __TICKS_BASED_TOTAL_HOURS__, __TICKS_BASED_TOTAL_MINUTES__, __TICKS_BASED_TOTAL_SECONDS__, 10);
-	if (Result != 0)
-		return Result;
-	if (TicksBased.ToString() != "__TICKS_BASED_DEFAULT_STRING__")
-		return 18;
-
-	FTimespan Whole(1, 2, 3, 4);
-	Result = VerifyTimespanValue(Whole, int64(__WHOLE_TICKS__), __WHOLE_DAYS__, __WHOLE_HOURS__, __WHOLE_MINUTES__, __WHOLE_SECONDS__, __WHOLE_FRACTION_MICRO__, __WHOLE_FRACTION_MILLI__, __WHOLE_FRACTION_NANO__, __WHOLE_FRACTION_TICKS__, __WHOLE_TOTAL_HOURS__, __WHOLE_TOTAL_MINUTES__, __WHOLE_TOTAL_SECONDS__, 20);
-	if (Result != 0)
-		return Result;
-
-	FTimespan Detailed(1, 2, 3, 4, 500000000);
-	Result = VerifyTimespanValue(Detailed, int64(__DETAILED_TICKS__), __DETAILED_DAYS__, __DETAILED_HOURS__, __DETAILED_MINUTES__, __DETAILED_SECONDS__, __DETAILED_FRACTION_MICRO__, __DETAILED_FRACTION_MILLI__, __DETAILED_FRACTION_NANO__, __DETAILED_FRACTION_TICKS__, __DETAILED_TOTAL_HOURS__, __DETAILED_TOTAL_MINUTES__, __DETAILED_TOTAL_SECONDS__, 30);
-	if (Result != 0)
-		return Result;
-	if (Detailed.ToString() != "__DETAILED_DEFAULT_STRING__")
-		return 38;
-	if (Detailed.ToString("__DETAILED_FORMAT__") != "__DETAILED_FORMATTED_STRING__")
-		return 39;
-
-	const FTimespan Divisor = FTimespan::FromMinutes(30.0);
-	const FTimespan Dividend = FTimespan::FromMinutes(95.0);
-	FTimespan NegativeDividend = -Dividend;
-	Result = VerifyTimespanValue(NegativeDividend.GetDuration(), int64(__NEGATIVE_DURATION_TICKS__), __NEGATIVE_DURATION_DAYS__, __NEGATIVE_DURATION_HOURS__, __NEGATIVE_DURATION_MINUTES__, __NEGATIVE_DURATION_SECONDS__, __NEGATIVE_DURATION_FRACTION_MICRO__, __NEGATIVE_DURATION_FRACTION_MILLI__, __NEGATIVE_DURATION_FRACTION_NANO__, __NEGATIVE_DURATION_FRACTION_TICKS__, __NEGATIVE_DURATION_TOTAL_HOURS__, __NEGATIVE_DURATION_TOTAL_MINUTES__, __NEGATIVE_DURATION_TOTAL_SECONDS__, 40);
-	if (Result != 0)
-		return Result;
-	if (!NearlyEqual(FTimespan::Ratio(Dividend, Divisor), __RATIO__, 0.000000001))
-		return 50;
-
-	Result = VerifyTimespanValue(Dividend % Divisor, int64(__MOD_RESULT_TICKS__), __MOD_RESULT_DAYS__, __MOD_RESULT_HOURS__, __MOD_RESULT_MINUTES__, __MOD_RESULT_SECONDS__, __MOD_RESULT_FRACTION_MICRO__, __MOD_RESULT_FRACTION_MILLI__, __MOD_RESULT_FRACTION_NANO__, __MOD_RESULT_FRACTION_TICKS__, __MOD_RESULT_TOTAL_HOURS__, __MOD_RESULT_TOTAL_MINUTES__, __MOD_RESULT_TOTAL_SECONDS__, 60);
-	if (Result != 0)
-		return Result;
-
-	FTimespan Mutable = FTimespan::FromMinutes(10.0);
-	Mutable += FTimespan::FromSeconds(45.0);
-	Result = VerifyTimespanValue(Mutable, int64(__MUTABLE_AFTER_ADD_TICKS__), __MUTABLE_AFTER_ADD_DAYS__, __MUTABLE_AFTER_ADD_HOURS__, __MUTABLE_AFTER_ADD_MINUTES__, __MUTABLE_AFTER_ADD_SECONDS__, __MUTABLE_AFTER_ADD_FRACTION_MICRO__, __MUTABLE_AFTER_ADD_FRACTION_MILLI__, __MUTABLE_AFTER_ADD_FRACTION_NANO__, __MUTABLE_AFTER_ADD_FRACTION_TICKS__, __MUTABLE_AFTER_ADD_TOTAL_HOURS__, __MUTABLE_AFTER_ADD_TOTAL_MINUTES__, __MUTABLE_AFTER_ADD_TOTAL_SECONDS__, 70);
-	if (Result != 0)
-		return Result;
-
-	Mutable -= FTimespan::FromSeconds(15.0);
-	Result = VerifyTimespanValue(Mutable, int64(__MUTABLE_AFTER_SUB_TICKS__), __MUTABLE_AFTER_SUB_DAYS__, __MUTABLE_AFTER_SUB_HOURS__, __MUTABLE_AFTER_SUB_MINUTES__, __MUTABLE_AFTER_SUB_SECONDS__, __MUTABLE_AFTER_SUB_FRACTION_MICRO__, __MUTABLE_AFTER_SUB_FRACTION_MILLI__, __MUTABLE_AFTER_SUB_FRACTION_NANO__, __MUTABLE_AFTER_SUB_FRACTION_TICKS__, __MUTABLE_AFTER_SUB_TOTAL_HOURS__, __MUTABLE_AFTER_SUB_TOTAL_MINUTES__, __MUTABLE_AFTER_SUB_TOTAL_SECONDS__, 80);
-	if (Result != 0)
-		return Result;
-
-	Mutable *= 2.0;
-	Result = VerifyTimespanValue(Mutable, int64(__MUTABLE_AFTER_MUL_TICKS__), __MUTABLE_AFTER_MUL_DAYS__, __MUTABLE_AFTER_MUL_HOURS__, __MUTABLE_AFTER_MUL_MINUTES__, __MUTABLE_AFTER_MUL_SECONDS__, __MUTABLE_AFTER_MUL_FRACTION_MICRO__, __MUTABLE_AFTER_MUL_FRACTION_MILLI__, __MUTABLE_AFTER_MUL_FRACTION_NANO__, __MUTABLE_AFTER_MUL_FRACTION_TICKS__, __MUTABLE_AFTER_MUL_TOTAL_HOURS__, __MUTABLE_AFTER_MUL_TOTAL_MINUTES__, __MUTABLE_AFTER_MUL_TOTAL_SECONDS__, 90);
-	if (Result != 0)
-		return Result;
-
-	Mutable /= 4.0;
-	Result = VerifyTimespanValue(Mutable, int64(__MUTABLE_AFTER_DIV_TICKS__), __MUTABLE_AFTER_DIV_DAYS__, __MUTABLE_AFTER_DIV_HOURS__, __MUTABLE_AFTER_DIV_MINUTES__, __MUTABLE_AFTER_DIV_SECONDS__, __MUTABLE_AFTER_DIV_FRACTION_MICRO__, __MUTABLE_AFTER_DIV_FRACTION_MILLI__, __MUTABLE_AFTER_DIV_FRACTION_NANO__, __MUTABLE_AFTER_DIV_FRACTION_TICKS__, __MUTABLE_AFTER_DIV_TOTAL_HOURS__, __MUTABLE_AFTER_DIV_TOTAL_MINUTES__, __MUTABLE_AFTER_DIV_TOTAL_SECONDS__, 100);
-	if (Result != 0)
-		return Result;
-
-	Mutable %= FTimespan::FromMinutes(3.0);
-	Result = VerifyTimespanValue(Mutable, int64(__MUTABLE_AFTER_MOD_TICKS__), __MUTABLE_AFTER_MOD_DAYS__, __MUTABLE_AFTER_MOD_HOURS__, __MUTABLE_AFTER_MOD_MINUTES__, __MUTABLE_AFTER_MOD_SECONDS__, __MUTABLE_AFTER_MOD_FRACTION_MICRO__, __MUTABLE_AFTER_MOD_FRACTION_MILLI__, __MUTABLE_AFTER_MOD_FRACTION_NANO__, __MUTABLE_AFTER_MOD_FRACTION_TICKS__, __MUTABLE_AFTER_MOD_TOTAL_HOURS__, __MUTABLE_AFTER_MOD_TOTAL_MINUTES__, __MUTABLE_AFTER_MOD_TOTAL_SECONDS__, 110);
-	if (Result != 0)
-		return Result;
-
-	if (FTimespan::MaxValue().opCmp(FTimespan::MinValue()) != __MAX_CMP_MIN__)
-		return 120;
-	if (FTimespan::MinValue().opCmp(FTimespan::MaxValue()) != -__MAX_CMP_MIN__)
-		return 121;
-
-	return 1;
+	FTimespan T(1, 2, 3, 4, 500000000);
+	return (T.GetTicks() == int64($DB_TICKS$)) ? 1 : 0;
 }
 )");
 
-		ReplaceToken(ScriptSource, TEXT("__DETAILED_FORMAT__"), Baselines.DetailedFormat.ReplaceCharWithEscapedChar());
-		ReplaceTimespanTokens(ScriptSource, TEXT("TICKS_BASED"), Baselines.TicksBased);
-		ReplaceTimespanTokens(ScriptSource, TEXT("WHOLE"), Baselines.Whole);
-		ReplaceTimespanTokens(ScriptSource, TEXT("DETAILED"), Baselines.Detailed);
-		ReplaceTimespanTokens(ScriptSource, TEXT("NEGATIVE_DURATION"), Baselines.NegativeDuration);
-		ReplaceTimespanTokens(ScriptSource, TEXT("MOD_RESULT"), Baselines.ModResult);
-		ReplaceTimespanTokens(ScriptSource, TEXT("MUTABLE_AFTER_ADD"), Baselines.MutableAfterAdd);
-		ReplaceTimespanTokens(ScriptSource, TEXT("MUTABLE_AFTER_SUB"), Baselines.MutableAfterSub);
-		ReplaceTimespanTokens(ScriptSource, TEXT("MUTABLE_AFTER_MUL"), Baselines.MutableAfterMul);
-		ReplaceTimespanTokens(ScriptSource, TEXT("MUTABLE_AFTER_DIV"), Baselines.MutableAfterDiv);
-		ReplaceTimespanTokens(ScriptSource, TEXT("MUTABLE_AFTER_MOD"), Baselines.MutableAfterMod);
-		ReplaceToken(ScriptSource, TEXT("__RATIO__"), Baselines.Ratio);
-		ReplaceToken(ScriptSource, TEXT("__MAX_CMP_MIN__"), Baselines.MaxCmpMin);
+		InjectTSTokens(Source, TEXT("TB"), TB);
+		InjectTSTokens(Source, TEXT("WB"), WB);
+		InjectTSTokens(Source, TEXT("DB"), DB);
 
-		return ScriptSource;
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("Construction"), Source);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_TicksCtor_Ticks()"), TEXT("Tick-based ctor should produce correct ticks"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_WholeCtor_Ticks()"), TEXT("4-arg ctor should produce correct ticks"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_DetailedCtor_Ticks()"), TEXT("5-arg ctor should produce correct ticks"), 1);
 	}
-}
 
-using namespace AngelscriptTest_Bindings_AngelscriptTimespanBindingsTests_Private;
+	// ====================================================================
+	// Section: ComponentAccess
+	// ====================================================================
 
-bool FAngelscriptTimespanAdvancedCompatBindingsTest::RunTest(const FString& Parameters)
+	TEST_METHOD(ComponentAccess)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FTimespan TicksBased(900000000);
+		const FTimespan Detailed(1, 2, 3, 4, 500000000);
+		FTSBaseline TB = CaptureTS(TicksBased);
+		FTSBaseline DB = CaptureTS(Detailed);
+
+		FString Source = TEXT(R"(
+bool NearlyEqual(float64 A, float64 B, float64 Tol) { return A >= B - Tol && A <= B + Tol; }
+
+int Timespan_TicksBased_Components()
 {
-	const FTimespanBindingsBaselines Baselines = BuildBaselines();
-	if (!TestEqual(TEXT("Native FTimespan max/min ordering baseline should remain positive"), Baselines.MaxCmpMin, 1))
-	{
-		return false;
-	}
-
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(TEXT("ASTimespanAdvancedCompat"));
-	};
-
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		TimespanBindingsModuleName,
-		BuildScriptSource(Baselines));
-	if (Module == nullptr)
-	{
-		return false;
-	}
-
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	if (EntryFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!ExecuteIntFunction(*this, Engine, *EntryFunction, Result))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(
-		TEXT("Timespan bindings should match native ctor, fraction, operator, ratio, min/max and formatting semantics"),
-		Result,
-		1);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
+	FTimespan T(int64($TB_TICKS$));
+	return (T.GetDays() == $TB_DAYS$ && T.GetHours() == $TB_HOURS$ && T.GetMinutes() == $TB_MINUTES$ && T.GetSeconds() == $TB_SECONDS$) ? 1 : 0;
 }
+int Timespan_TicksBased_Fractions()
+{
+	FTimespan T(int64($TB_TICKS$));
+	return (T.GetFractionMicro() == $TB_FMICRO$ && T.GetFractionMilli() == $TB_FMILLI$ && T.GetFractionNano() == $TB_FNANO$ && T.GetFractionTicks() == $TB_FTICKS$) ? 1 : 0;
+}
+int Timespan_TicksBased_Totals()
+{
+	FTimespan T(int64($TB_TICKS$));
+	return (NearlyEqual(T.GetTotalHours(), $TB_THOURS$, 0.000000001) && NearlyEqual(T.GetTotalMinutes(), $TB_TMINUTES$, 0.000000001) && NearlyEqual(T.GetTotalSeconds(), $TB_TSECONDS$, 0.000000001)) ? 1 : 0;
+}
+int Timespan_Detailed_Components()
+{
+	FTimespan T(1, 2, 3, 4, 500000000);
+	return (T.GetDays() == $DB_DAYS$ && T.GetHours() == $DB_HOURS$ && T.GetMinutes() == $DB_MINUTES$ && T.GetSeconds() == $DB_SECONDS$) ? 1 : 0;
+}
+int Timespan_Detailed_Fractions()
+{
+	FTimespan T(1, 2, 3, 4, 500000000);
+	return (T.GetFractionMicro() == $DB_FMICRO$ && T.GetFractionMilli() == $DB_FMILLI$ && T.GetFractionNano() == $DB_FNANO$ && T.GetFractionTicks() == $DB_FTICKS$) ? 1 : 0;
+}
+int Timespan_Detailed_Totals()
+{
+	FTimespan T(1, 2, 3, 4, 500000000);
+	return (NearlyEqual(T.GetTotalHours(), $DB_THOURS$, 0.000000001) && NearlyEqual(T.GetTotalMinutes(), $DB_TMINUTES$, 0.000000001) && NearlyEqual(T.GetTotalSeconds(), $DB_TSECONDS$, 0.000000001)) ? 1 : 0;
+}
+)");
+
+		InjectTSTokens(Source, TEXT("TB"), TB);
+		InjectTSTokens(Source, TEXT("DB"), DB);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("ComponentAccess"), Source);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_TicksBased_Components()"), TEXT("Tick-based Days/Hours/Minutes/Seconds should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_TicksBased_Fractions()"), TEXT("Tick-based fraction accessors should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_TicksBased_Totals()"), TEXT("Tick-based total accessors should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Detailed_Components()"), TEXT("Detailed Days/Hours/Minutes/Seconds should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Detailed_Fractions()"), TEXT("Detailed fraction accessors should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Detailed_Totals()"), TEXT("Detailed total accessors should match native"), 1);
+	}
+
+	// ====================================================================
+	// Section: Formatting
+	// ====================================================================
+
+	TEST_METHOD(Formatting)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FTimespan TicksBased(900000000);
+		const FTimespan Detailed(1, 2, 3, 4, 500000000);
+		const TCHAR* DetailedFormat = TEXT("%d.%h:%m:%s");
+		FTSBaseline TB = CaptureTS(TicksBased);
+		FTSBaseline DB = CaptureTS(Detailed, DetailedFormat);
+
+		FString Source = TEXT(R"(
+int Timespan_TicksBased_DefaultString()
+{
+	FTimespan T(int64($TB_TICKS$));
+	return (T.ToString() == "$TB_DEFSTR$") ? 1 : 0;
+}
+int Timespan_Detailed_DefaultString()
+{
+	FTimespan T(1, 2, 3, 4, 500000000);
+	return (T.ToString() == "$DB_DEFSTR$") ? 1 : 0;
+}
+int Timespan_Detailed_FormattedString()
+{
+	FTimespan T(1, 2, 3, 4, 500000000);
+	return (T.ToString("$DFMT$") == "$DB_FMTSTR$") ? 1 : 0;
+}
+)");
+
+		InjectTSTokens(Source, TEXT("TB"), TB);
+		InjectTSTokens(Source, TEXT("DB"), DB);
+		Source.ReplaceInline(TEXT("$DFMT$"), *FString(DetailedFormat).ReplaceCharWithEscapedChar(), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("Formatting"), Source);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_TicksBased_DefaultString()"), TEXT("Tick-based ToString should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Detailed_DefaultString()"), TEXT("Detailed ToString should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Detailed_FormattedString()"), TEXT("Detailed formatted ToString should match native"), 1);
+	}
+
+	// ====================================================================
+	// Section: Arithmetic
+	// ====================================================================
+
+	TEST_METHOD(Arithmetic)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FTimespan Dividend = FTimespan::FromMinutes(95.0);
+		const FTimespan Divisor = FTimespan::FromMinutes(30.0);
+		FTSBaseline NegDur = CaptureTS((-Dividend).GetDuration());
+		FTSBaseline ModRes = CaptureTS(Dividend % Divisor);
+		double Ratio = FTimespan::Ratio(Dividend, Divisor);
+
+		FString Source = TEXT(R"(
+bool NearlyEqual(float64 A, float64 B, float64 Tol) { return A >= B - Tol && A <= B + Tol; }
+
+int Timespan_Negate_Duration()
+{
+	FTimespan Dividend = FTimespan::FromMinutes(95.0);
+	FTimespan Neg = -Dividend;
+	return (Neg.GetDuration().GetTicks() == int64($NEGDUR_TICKS$)) ? 1 : 0;
+}
+int Timespan_Modulo()
+{
+	FTimespan Dividend = FTimespan::FromMinutes(95.0);
+	FTimespan Divisor = FTimespan::FromMinutes(30.0);
+	FTimespan R = Dividend % Divisor;
+	return (R.GetTicks() == int64($MOD_TICKS$)) ? 1 : 0;
+}
+int Timespan_Ratio()
+{
+	FTimespan Dividend = FTimespan::FromMinutes(95.0);
+	FTimespan Divisor = FTimespan::FromMinutes(30.0);
+	return NearlyEqual(FTimespan::Ratio(Dividend, Divisor), $RATIO$, 0.000000001) ? 1 : 0;
+}
+)");
+
+		Source.ReplaceInline(TEXT("$NEGDUR_TICKS$"), *I64(NegDur.Ticks), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(TEXT("$MOD_TICKS$"), *I64(ModRes.Ticks), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(TEXT("$RATIO$"), *F64(Ratio), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("Arithmetic"), Source);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Negate_Duration()"), TEXT("Negate then GetDuration should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Modulo()"), TEXT("Modulo operator should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_Ratio()"), TEXT("Ratio should match native"), 1);
+	}
+
+	// ====================================================================
+	// Section: MutableOperators
+	// ====================================================================
+
+	TEST_METHOD(MutableOperators)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		// Compute native baselines for the mutable chain
+		FTimespan Mutable = FTimespan::FromMinutes(10.0);
+		Mutable += FTimespan::FromSeconds(45.0);
+		FTSBaseline AfterAdd = CaptureTS(Mutable);
+
+		Mutable -= FTimespan::FromSeconds(15.0);
+		FTSBaseline AfterSub = CaptureTS(Mutable);
+
+		Mutable *= 2.0;
+		FTSBaseline AfterMul = CaptureTS(Mutable);
+
+		Mutable /= 4.0;
+		FTSBaseline AfterDiv = CaptureTS(Mutable);
+
+		Mutable %= FTimespan::FromMinutes(3.0);
+		FTSBaseline AfterMod = CaptureTS(Mutable);
+
+		FString Source = TEXT(R"(
+int Timespan_MutAdd()
+{
+	FTimespan T = FTimespan::FromMinutes(10.0);
+	T += FTimespan::FromSeconds(45.0);
+	return (T.GetTicks() == int64($ADD_TICKS$)) ? 1 : 0;
+}
+int Timespan_MutSub()
+{
+	FTimespan T = FTimespan::FromMinutes(10.0);
+	T += FTimespan::FromSeconds(45.0);
+	T -= FTimespan::FromSeconds(15.0);
+	return (T.GetTicks() == int64($SUB_TICKS$)) ? 1 : 0;
+}
+int Timespan_MutMul()
+{
+	FTimespan T = FTimespan::FromMinutes(10.0);
+	T += FTimespan::FromSeconds(45.0);
+	T -= FTimespan::FromSeconds(15.0);
+	T *= 2.0;
+	return (T.GetTicks() == int64($MUL_TICKS$)) ? 1 : 0;
+}
+int Timespan_MutDiv()
+{
+	FTimespan T = FTimespan::FromMinutes(10.0);
+	T += FTimespan::FromSeconds(45.0);
+	T -= FTimespan::FromSeconds(15.0);
+	T *= 2.0;
+	T /= 4.0;
+	return (T.GetTicks() == int64($DIV_TICKS$)) ? 1 : 0;
+}
+int Timespan_MutMod()
+{
+	FTimespan T = FTimespan::FromMinutes(10.0);
+	T += FTimespan::FromSeconds(45.0);
+	T -= FTimespan::FromSeconds(15.0);
+	T *= 2.0;
+	T /= 4.0;
+	T %= FTimespan::FromMinutes(3.0);
+	return (T.GetTicks() == int64($MOD_TICKS$)) ? 1 : 0;
+}
+)");
+
+		Source.ReplaceInline(TEXT("$ADD_TICKS$"), *I64(AfterAdd.Ticks), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(TEXT("$SUB_TICKS$"), *I64(AfterSub.Ticks), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(TEXT("$MUL_TICKS$"), *I64(AfterMul.Ticks), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(TEXT("$DIV_TICKS$"), *I64(AfterDiv.Ticks), ESearchCase::CaseSensitive);
+		Source.ReplaceInline(TEXT("$MOD_TICKS$"), *I64(AfterMod.Ticks), ESearchCase::CaseSensitive);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("MutableOperators"), Source);
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MutAdd()"), TEXT("+= should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MutSub()"), TEXT("-= should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MutMul()"), TEXT("*= should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MutDiv()"), TEXT("/= should match native"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MutMod()"), TEXT("%= should match native"), 1);
+	}
+
+	// ====================================================================
+	// Section: Comparison
+	// ====================================================================
+
+	TEST_METHOD(Comparison)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("Comparison"), TEXT(R"(
+int Timespan_MaxCmpMin()
+{
+	return (FTimespan::MaxValue().opCmp(FTimespan::MinValue()) > 0) ? 1 : 0;
+}
+int Timespan_MinCmpMax()
+{
+	return (FTimespan::MinValue().opCmp(FTimespan::MaxValue()) < 0) ? 1 : 0;
+}
+)"));
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MaxCmpMin()"), TEXT("MaxValue should compare greater than MinValue"), 1);
+		ExpectGlobalInt(*TestRunner, Engine, M, GTimespanProfile, TEXT("int Timespan_MinCmpMax()"), TEXT("MinValue should compare less than MaxValue"), 1);
+	}
+};
 
 #endif

@@ -1,87 +1,72 @@
-#include "Shared/AngelscriptTestUtilities.h"
-#include "Shared/AngelscriptTestMacros.h"
+// ============================================================================
+// AngelscriptDebugBindingsTests.cpp
+//
+// Debug drawing/logging API binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Debug.FAngelscriptDebugBindingsTest.*
+//
+// Sections:
+//   Callstack    — GetAngelscriptCallstack / FormatAngelscriptCallstack
+//   Throw        — throw() propagation, exception capture, function site
+//
+// CQTest adaptation notes:
+//   The throw test requires AddExpectedError and manual context execution.
+//   Callstack test is split into a single ExpectGlobalInt check.
+// ============================================================================
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptBindingsCoverage.h"
+#include "Shared/AngelscriptBindingsModuleBuilder.h"
+#include "Shared/AngelscriptBindingsAssertions.h"
+
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
+using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebugBindingsTest,
-	"Angelscript.TestModule.Bindings.DebuggingThrowAndCallstackCompat",
+// ----------------------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------------------
+
+static const FBindingsCoverageProfile GDebugProfile{
+	TEXT("Debug"),              // Theme
+	TEXT(""),                   // Variant
+	TEXT("ASDebug"),            // ModulePrefix
+	TEXT("Debug"),              // CasePrefix
+	TEXT("DebugBindings"),     // LogCategory
+};
+
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptDebugBindingsTest,
+	"Angelscript.TestModule.Bindings.Debug",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-namespace AngelscriptTest_Bindings_AngelscriptDebugBindingsTests_Private
 {
-	static constexpr ANSICHAR DebugBindingsModuleName[] = "ASDebuggingCompat";
-
-	struct FDebugBindingsExceptionResult
+	BEFORE_ALL()
 	{
-		int32 PrepareResult = MIN_int32;
-		int32 ExecuteResult = MIN_int32;
-		FString ExceptionString;
-		FString ExceptionFunctionName;
-		FString ExceptionFunctionDeclaration;
-	};
-
-	bool ExecuteFunctionAndCaptureException(
-		FAutomationTestBase& Test,
-		FAngelscriptEngine& Engine,
-		asIScriptFunction& Function,
-		FDebugBindingsExceptionResult& OutResult)
-	{
-		FAngelscriptEngineScope EngineScope(Engine);
-		asIScriptContext* Context = Engine.CreateContext();
-		if (!Test.TestNotNull(TEXT("Debug bindings test should create an execution context"), Context))
-		{
-			return false;
-		}
-
-		ON_SCOPE_EXIT
-		{
-			Context->Release();
-		};
-
-		OutResult.PrepareResult = Context->Prepare(&Function);
-		OutResult.ExecuteResult = OutResult.PrepareResult == asSUCCESS ? Context->Execute() : OutResult.PrepareResult;
-		OutResult.ExceptionString = Context->GetExceptionString() != nullptr ? UTF8_TO_TCHAR(Context->GetExceptionString()) : TEXT("");
-
-		if (asIScriptFunction* ExceptionFunction = Context->GetExceptionFunction())
-		{
-			OutResult.ExceptionFunctionName = UTF8_TO_TCHAR(ExceptionFunction->GetName());
-			OutResult.ExceptionFunctionDeclaration = UTF8_TO_TCHAR(ExceptionFunction->GetDeclaration());
-		}
-
-		return true;
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
-}
 
-using namespace AngelscriptTest_Bindings_AngelscriptDebugBindingsTests_Private;
-
-bool FAngelscriptDebugBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	AddExpectedError(TEXT("DebuggingThrowCompat"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("ASDebuggingCompat"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("void ThrowLeaf()"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("void ThrowMiddle()"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("int EntryThrow()"), EAutomationExpectedErrorFlags::Contains, 1);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	AFTER_ALL()
 	{
-		Engine.DiscardModule(TEXT("ASDebuggingCompat"));
-	};
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	asIScriptModule* Module = BuildModule(
-		*this,
-		Engine,
-		DebugBindingsModuleName,
-		TEXT(R"AS(
+	// ====================================================================
+	// Section: Callstack
+	// ====================================================================
+
+	TEST_METHOD(Callstack)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDebugProfile, TEXT("Callstack"), TEXT(R"(
 bool StackContains(const TArray<FString>& Stack, const FString& Needle)
 {
 	for (int Index = 0; Index < Stack.Num(); ++Index)
@@ -91,107 +76,101 @@ bool StackContains(const TArray<FString>& Stack, const FString& Needle)
 			return true;
 		}
 	}
-
 	return false;
 }
 
-int ProbeCallstack()
+int Callstack_ProbeCallstack()
 {
 	TArray<FString> Stack = GetAngelscriptCallstack();
 	FString Formatted = FormatAngelscriptCallstack();
 	if (Stack.Num() < 3)
-	{
-		return 10;
-	}
-	if (!StackContains(Stack, "ProbeCallstack"))
-	{
-		return 11;
-	}
-	if (!StackContains(Stack, "EntryCallstack"))
-	{
-		return 12;
-	}
-	if (!Formatted.Contains("ProbeCallstack"))
-	{
-		return 13;
-	}
-	if (!Formatted.Contains("EntryCallstack"))
-	{
-		return 14;
-	}
-
+		return 0;
+	if (!StackContains(Stack, "Callstack_ProbeCallstack"))
+		return 0;
+	if (!StackContains(Stack, "Callstack_EntryCallstack"))
+		return 0;
+	if (!Formatted.Contains("Callstack_ProbeCallstack"))
+		return 0;
+	if (!Formatted.Contains("Callstack_EntryCallstack"))
+		return 0;
 	return 1;
 }
 
-int EntryCallstack()
+int Callstack_EntryCallstack()
 {
-	return ProbeCallstack();
+	return Callstack_ProbeCallstack();
 }
+)"));
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
 
-void ThrowLeaf()
+		ExpectGlobalInt(*TestRunner, Engine, M, GDebugProfile, TEXT("int Callstack_EntryCallstack()"), TEXT("GetAngelscriptCallstack and FormatAngelscriptCallstack should capture the full call chain"), 1);
+	}
+
+	// ====================================================================
+	// Section: Throw
+	// ====================================================================
+
+	TEST_METHOD(Throw)
+	{
+		TestRunner->AddExpectedError(TEXT("DebuggingThrowCompat"), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(TEXT("ASDebug"), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(TEXT("void Throw_ThrowLeaf()"), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(TEXT("void Throw_ThrowMiddle()"), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(TEXT("int Throw_Entry()"), EAutomationExpectedErrorFlags::Contains, 1);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+
+		FCoverageModuleScope Mod(*TestRunner, Engine, GDebugProfile, TEXT("Throw"), TEXT(R"(
+void Throw_ThrowLeaf()
 {
 	throw("DebuggingThrowCompat");
 }
 
-void ThrowMiddle()
+void Throw_ThrowMiddle()
 {
-	ThrowLeaf();
+	Throw_ThrowLeaf();
 }
 
-int EntryThrow()
+int Throw_Entry()
 {
-	ThrowMiddle();
+	Throw_ThrowMiddle();
 	return 0;
 }
-)AS"));
-	if (Module == nullptr)
-	{
-		return false;
+)"));
+		if (!Mod.IsValid()) return;
+		auto& M = Mod.GetModule();
+
+		asIScriptFunction* ThrowFunction = GetFunctionByDecl(*TestRunner, M, TEXT("int Throw_Entry()"));
+		if (ThrowFunction == nullptr) return;
+
+		asIScriptContext* Context = Engine.CreateContext();
+		UTEST_NOT_NULL(TEXT("Should create execution context"), Context);
+
+		ON_SCOPE_EXIT
+		{
+			Context->Release();
+		};
+
+		int32 PrepareResult = Context->Prepare(ThrowFunction);
+		int32 ExecuteResult = PrepareResult == asSUCCESS ? Context->Execute() : PrepareResult;
+		FString ExceptionString = Context->GetExceptionString() != nullptr ? UTF8_TO_TCHAR(Context->GetExceptionString()) : TEXT("");
+
+		FString ExceptionFunctionName;
+		FString ExceptionFunctionDeclaration;
+		if (asIScriptFunction* ExceptionFunction = Context->GetExceptionFunction())
+		{
+			ExceptionFunctionName = UTF8_TO_TCHAR(ExceptionFunction->GetName());
+			ExceptionFunctionDeclaration = UTF8_TO_TCHAR(ExceptionFunction->GetDeclaration());
+		}
+
+		UTEST_EQUAL(TEXT("Throw path should prepare the entry function"), PrepareResult, static_cast<int32>(asSUCCESS));
+		UTEST_EQUAL(TEXT("Throw path should raise a script exception"), ExecuteResult, static_cast<int32>(asEXECUTION_EXCEPTION));
+		UTEST_TRUE(TEXT("Throw path should surface the thrown message"), ExceptionString.Contains(TEXT("DebuggingThrowCompat")));
+		UTEST_FALSE(TEXT("Throw path should capture a non-empty exception function name"), ExceptionFunctionName.IsEmpty());
+		UTEST_TRUE(TEXT("Throw path should report ThrowLeaf as the exception site"), ExceptionFunctionDeclaration.Contains(TEXT("Throw_ThrowLeaf")));
 	}
-
-	asIScriptFunction* CallstackFunction = GetFunctionByDecl(*this, *Module, TEXT("int EntryCallstack()"));
-	asIScriptFunction* ThrowFunction = GetFunctionByDecl(*this, *Module, TEXT("int EntryThrow()"));
-	if (CallstackFunction == nullptr || ThrowFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 CallstackResult = INDEX_NONE;
-	if (!ExecuteIntFunction(*this, Engine, *CallstackFunction, CallstackResult))
-	{
-		return false;
-	}
-
-	FDebugBindingsExceptionResult ExceptionResult;
-	if (!ExecuteFunctionAndCaptureException(*this, Engine, *ThrowFunction, ExceptionResult))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Debug bindings callstack path should report success"),
-		CallstackResult,
-		1);
-	bPassed &= TestEqual(
-		TEXT("Debug bindings throw path should prepare the entry function"),
-		ExceptionResult.PrepareResult,
-		static_cast<int32>(asSUCCESS));
-	bPassed &= TestEqual(
-		TEXT("Debug bindings throw path should raise a script exception"),
-		ExceptionResult.ExecuteResult,
-		static_cast<int32>(asEXECUTION_EXCEPTION));
-	bPassed &= TestTrue(
-		TEXT("Debug bindings throw path should surface the thrown message"),
-		ExceptionResult.ExceptionString.Contains(TEXT("DebuggingThrowCompat")));
-	bPassed &= TestFalse(
-		TEXT("Debug bindings throw path should capture a non-empty exception function name"),
-		ExceptionResult.ExceptionFunctionName.IsEmpty());
-	bPassed &= TestTrue(
-		TEXT("Debug bindings throw path should report ThrowLeaf as the exception site"),
-		ExceptionResult.ExceptionFunctionDeclaration.Contains(TEXT("ThrowLeaf")));
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif
