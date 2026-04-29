@@ -238,8 +238,8 @@ bool FMyCustomEngineTest::RunTest(const FString& Parameters)
     // use the utility functions directly:
     FAngelscriptEngineConfig Config;
     FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-    TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
-    TUniquePtr<FAngelscriptEngine> EngineB = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+    TUniquePtr<FAngelscriptEngine> EngineA = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies);
+    TUniquePtr<FAngelscriptEngine> EngineB = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies);
     // ... test multi-engine interaction ...
     return true;
 }
@@ -283,7 +283,7 @@ Examples: `ASControlFlowForLoop`, `ASTypePrimitiveAndEnum`
 
 The following test cases should use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` directly without the `ASTEST_*` macros:
 
-1. **Engine creation tests** - Testing `CreateForTesting`, `CreateTestingFullEngine`, etc.
+1. **Engine creation tests** - Testing `CreateScriptScanFreeEngineForTesting`, `CreateScriptScanFreeFullEngineForTesting`, etc.
 2. **Multi-engine interaction tests** - Tests that create and manage multiple engine instances
 3. **Engine isolation / context stack tests** - Tests verifying engine scope behavior
 4. **Production-like engine tests** - Tests using `AcquireProductionLikeEngine`

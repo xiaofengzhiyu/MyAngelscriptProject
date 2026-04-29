@@ -132,7 +132,7 @@ namespace AngelscriptTest_Core_AngelscriptBindConfigTests_Private
 
 		FAngelscriptBindExecutionObservation::Reset();
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 		check(Engine.IsValid());
 		FAngelscriptBindExecutionSnapshot Snapshot = FAngelscriptBindExecutionObservation::GetLastSnapshot();
 		Engine.Reset();
@@ -532,7 +532,7 @@ bool FAngelscriptGeneratedFunctionEntryPopulationTest::RunTest(const FString& Pa
 	}
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("GeneratedBlueprintCallableEntriesPopulateClassMaps should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -633,7 +633,7 @@ bool FAngelscriptScriptMethodMetadataCoverageTest::RunTest(const FString& Parame
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("FunctionLevelScriptMethodUsesFirstParameterAsMixin should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -676,7 +676,7 @@ bool FAngelscriptCallableWithoutWorldContextMetadataTest::RunTest(const FString&
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("CallableWithoutWorldContextKeepsHiddenWorldContextButClearsTrait should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -735,7 +735,7 @@ bool FAngelscriptScriptAllowTemporaryThisMetadataTest::RunTest(const FString& Pa
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("ScriptAllowTemporaryThisAppendsAcceptTemporaryThis should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -775,7 +775,7 @@ bool FAngelscriptUnsafeDuringActorConstructionMetadataTest::RunTest(const FStrin
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("UnsafeDuringActorConstructionSetsUnsafeTrait should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -831,7 +831,7 @@ bool FAngelscriptOverloadResolutionCoverageTest::RunTest(const FString& Paramete
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("OverloadedExportedFunctionsCanRecoverDirectBind should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -879,7 +879,7 @@ bool FAngelscriptInlineDefinitionCoverageTest::RunTest(const FString& Parameters
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("InlineDefinitionFunctionsCanRecoverDirectBind should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -927,7 +927,7 @@ bool FAngelscriptInlineOutRefCoverageTest::RunTest(const FString& Parameters)
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("InlineOutRefFunctionsCanRecoverDirectBind should create a testing engine"), Engine.IsValid()))
 	{
 		return false;

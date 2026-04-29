@@ -101,7 +101,7 @@ bool FAngelscriptCoreCreateCompileExecuteFreshEngineBootstrapTest::RunTest(const
 
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> LocalEngine = FAngelscriptEngine::CreateForTesting(
+	TUniquePtr<FAngelscriptEngine> LocalEngine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(
 		Config,
 		Dependencies,
 		EAngelscriptEngineCreationMode::Full);
@@ -230,8 +230,8 @@ bool FAngelscriptCoreCreateEngineTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngineConfig Config;
 	FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> LocalEngineA = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
-	TUniquePtr<FAngelscriptEngine> LocalEngineB = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> LocalEngineA = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> LocalEngineB = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies);
 	if (!TestNotNull(TEXT("Core.CreateEngine should create a first test engine wrapper"), LocalEngineA.Get()))
 	{
 		return false;
@@ -284,7 +284,7 @@ bool FAngelscriptCoreCreateEngineRequestedModeTest::RunTest(const FString& Param
 		return false;
 	}
 
-	TUniquePtr<FAngelscriptEngine> FallbackCloneRequest = FAngelscriptEngine::CreateForTesting(
+	TUniquePtr<FAngelscriptEngine> FallbackCloneRequest = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(
 		Config,
 		Dependencies,
 		EAngelscriptEngineCreationMode::Clone);
@@ -319,11 +319,11 @@ bool FAngelscriptCoreCreateEngineRequestedModeTest::RunTest(const FString& Param
 			return false;
 		}
 
-		ScopedCloneRequest = FAngelscriptEngine::CreateForTesting(
+		ScopedCloneRequest = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(
 			Config,
 			Dependencies,
 			EAngelscriptEngineCreationMode::Clone);
-		ExplicitFullRequest = FAngelscriptEngine::CreateForTesting(
+		ExplicitFullRequest = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(
 			Config,
 			Dependencies,
 			EAngelscriptEngineCreationMode::Full);
@@ -392,8 +392,8 @@ bool FAngelscriptCoreCreateEngineIsolatedModuleRegistriesTest::RunTest(const FSt
 	const FName ModuleName(TEXT("ASCoreCreateEngineIsolationA"));
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
-	TUniquePtr<FAngelscriptEngine> EngineB = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> EngineA = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> EngineB = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 	int32 Result = 0;
 	if (!TestNotNull(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create engine A"), EngineA.Get()) || !TestNotNull(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create engine B"), EngineB.Get())) return false;
 	if (!TestTrue(TEXT("Core.CreateEngine.IsolatedModuleRegistries should create distinct script engines"), EngineA->GetScriptEngine() != nullptr && EngineB->GetScriptEngine() != nullptr && EngineA->GetScriptEngine() != EngineB->GetScriptEngine())

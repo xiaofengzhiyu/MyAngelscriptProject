@@ -117,7 +117,7 @@ namespace AngelscriptTestSupport
 			FAngelscriptEngineConfig EngineConfig;
 			EngineConfig.DebugServerPort = Config.DebugServerPort > 0 ? Config.DebugServerPort : MakeUniqueDebugServerPort();
 			FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-			OwnedEngine = FAngelscriptEngine::CreateTestingFullEngine(EngineConfig, Dependencies);
+			OwnedEngine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(EngineConfig, Dependencies);
 			Engine = OwnedEngine.Get();
 		}
 

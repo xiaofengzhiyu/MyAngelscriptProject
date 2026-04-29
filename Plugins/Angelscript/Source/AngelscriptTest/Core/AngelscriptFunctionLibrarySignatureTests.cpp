@@ -395,7 +395,7 @@ bool FAngelscriptSubsystemGetterMetadataTest::RunTest(const FString& Parameters)
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("SubsystemGetterMetadata should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -475,7 +475,7 @@ bool FAngelscriptMathReturnValueHelperMetadataTest::RunTest(const FString& Param
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("MathReturnValueHelperMetadata should create a testing engine"), Engine.IsValid()))
 	{
 		return false;
@@ -523,7 +523,7 @@ bool FAngelscriptProductionScriptMixinSignaturesTest::RunTest(const FString& Par
 	};
 
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(FAngelscriptEngineConfig(), Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(FAngelscriptEngineConfig(), Dependencies);
 	if (!TestTrue(TEXT("ProductionScriptMixinSignatures should create a testing engine"), Engine.IsValid()))
 	{
 		return false;

@@ -623,7 +623,7 @@ FString FAngelscriptEngine::MakeModuleName(const FString& ModuleName) const
 
 TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::Create(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies)
 {
-	return CreateTestingFullEngine(InConfig, InDependencies);
+	return CreateUncompiled(InConfig, InDependencies);
 }
 
 TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateCloneFrom(FAngelscriptEngine& Source, const FAngelscriptEngineConfig& InConfig)
@@ -631,16 +631,16 @@ TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateCloneFrom(FAngelscriptE
 	return CreateCloneFrom(Source, InConfig, Source.Dependencies);
 }
 
-TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateTestingFullEngine(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies)
+TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateUncompiled(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies)
 {
 	TUniquePtr<FAngelscriptEngine> EngineInstance = MakeUnique<FAngelscriptEngine>(InConfig, InDependencies);
 	EngineInstance->CreationMode = EAngelscriptEngineCreationMode::Full;
 	EngineInstance->SourceEngine = nullptr;
 	EngineInstance->bOwnsEngine = true;
 	EngineInstance->InstanceId = MakeEngineInstanceId(TEXT("Full"));
-	UE_LOG(Angelscript, Verbose, TEXT("[EngineLifecycle] CreateTestingFullEngine -> %p id='%s'"),
+	UE_LOG(Angelscript, Verbose, TEXT("[EngineLifecycle] CreateUncompiled -> %p id='%s'"),
 		EngineInstance.Get(), *EngineInstance->InstanceId);
-	EngineInstance->InitializeForTesting();
+	EngineInstance->InitializeWithoutInitialCompile();
 	return EngineInstance;
 }
 
@@ -670,11 +670,11 @@ TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateCloneFrom(FAngelscriptE
 	return EngineInstance;
 }
 
-TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateForTesting(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies, EAngelscriptEngineCreationMode Mode)
+TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateUncompiledWithMode(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies, EAngelscriptEngineCreationMode Mode)
 {
 	if (Mode == EAngelscriptEngineCreationMode::Full)
 	{
-		return CreateTestingFullEngine(InConfig, InDependencies);
+		return CreateUncompiled(InConfig, InDependencies);
 	}
 
 	if (FAngelscriptEngine* CurrentEngine = TryGetCurrentEngine())
@@ -682,7 +682,7 @@ TUniquePtr<FAngelscriptEngine> FAngelscriptEngine::CreateForTesting(const FAngel
 		return CreateCloneFrom(*CurrentEngine, InConfig, InDependencies);
 	}
 
-	return CreateTestingFullEngine(InConfig, InDependencies);
+	return CreateUncompiled(InConfig, InDependencies);
 }
 
 #if WITH_EDITOR && ENGINE_MAJOR_VERSION >= 5
@@ -907,7 +907,7 @@ void FAngelscriptEngine::Initialize()
 	InitializeOwnedSharedState();
 }
 
-void FAngelscriptEngine::InitializeForTesting()
+void FAngelscriptEngine::InitializeWithoutInitialCompile()
 {
 	if (Engine != nullptr)
 	{

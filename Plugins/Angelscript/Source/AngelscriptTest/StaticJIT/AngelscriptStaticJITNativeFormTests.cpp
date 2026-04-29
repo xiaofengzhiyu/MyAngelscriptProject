@@ -119,7 +119,7 @@ bool FAngelscriptStaticJITTArrayIndexCustomCallTest::RunTest(const FString& Para
 	Config.bGeneratePrecompiledData = true;
 
 	FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 	if (!TestNotNull(
 		TEXT("StaticJIT.NativeForms.TArrayIndexCustomCall should create a dedicated engine with precompiled-data generation enabled"),
 		OwnedEngine.Get()))

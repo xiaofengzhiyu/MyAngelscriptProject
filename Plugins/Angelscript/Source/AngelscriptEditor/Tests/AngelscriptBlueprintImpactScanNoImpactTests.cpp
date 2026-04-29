@@ -31,7 +31,7 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptBlueprintImpactScanNoImpact
 	{
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		return FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
 	}
 
 	struct FScopedAutomaticImportsOverride

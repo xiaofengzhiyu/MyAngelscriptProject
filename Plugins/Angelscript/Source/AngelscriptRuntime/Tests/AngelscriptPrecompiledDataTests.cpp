@@ -24,7 +24,7 @@ bool FAngelscriptPrecompiledEditorOnlyFlagRoundtripTest::RunTest(const FString& 
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	if (!TestNotNull(TEXT("A test script engine wrapper should be created for the precompiled flag roundtrip"), OwnedEngine.Get()))
 	{
 		return false;
@@ -68,7 +68,7 @@ bool FAngelscriptModuleDiffHighBitFlagTest::RunTest(const FString& Parameters)
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	if (!TestNotNull(TEXT("A test script engine wrapper should be created for the module-diff regression"), OwnedEngine.Get()))
 	{
 		return false;

@@ -1,4 +1,4 @@
-﻿#include "Angelscript/AngelscriptTestSupport.h"
+#include "Angelscript/AngelscriptTestSupport.h"
 
 #include "Misc/AutomationTest.h"
 #include "Misc/Guid.h"
@@ -82,11 +82,11 @@ bool FAngelscriptContextPoolReuseAndResetPerEngineTest::RunTest(const FString& P
 
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> EngineA = FAngelscriptEngine::CreateForTesting(
+	TUniquePtr<FAngelscriptEngine> EngineA = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(
 		Config,
 		Dependencies,
 		EAngelscriptEngineCreationMode::Full);
-	TUniquePtr<FAngelscriptEngine> EngineB = FAngelscriptEngine::CreateForTesting(
+	TUniquePtr<FAngelscriptEngine> EngineB = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(
 		Config,
 		Dependencies,
 		EAngelscriptEngineCreationMode::Full);

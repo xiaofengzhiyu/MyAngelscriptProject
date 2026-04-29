@@ -354,7 +354,7 @@ bool FAngelscriptTypeFloatConfigurationModesTest::RunTest(const FString& Paramet
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
 
 	ApplyFloatSettings(false);
-	TUniquePtr<FAngelscriptEngine> Float32Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
+	TUniquePtr<FAngelscriptEngine> Float32Engine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
 	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should create a float32 testing engine"), Float32Engine.Get()))
 	{
 		return false;
@@ -405,7 +405,7 @@ bool FAngelscriptTypeFloatConfigurationModesTest::RunTest(const FString& Paramet
 		0);
 
 	ApplyFloatSettings(true);
-	TUniquePtr<FAngelscriptEngine> Float64Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
+	TUniquePtr<FAngelscriptEngine> Float64Engine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
 	if (!TestNotNull(TEXT("Types.Float.ConfigurationModes should create a float64 testing engine"), Float64Engine.Get()))
 	{
 		return false;

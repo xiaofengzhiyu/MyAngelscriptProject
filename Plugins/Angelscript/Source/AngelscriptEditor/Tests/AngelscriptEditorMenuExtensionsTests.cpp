@@ -54,7 +54,7 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptEditorMenuExtensionsTests_P
 
 		FAngelscriptEngineConfig Config;
 		FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		OutResolved.OwnedEngine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		OutResolved.OwnedEngine = FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
 		if (!Test.TestNotNull(TEXT("MenuExtensions test should acquire an Angelscript engine"), OutResolved.OwnedEngine.Get()))
 		{
 			return false;

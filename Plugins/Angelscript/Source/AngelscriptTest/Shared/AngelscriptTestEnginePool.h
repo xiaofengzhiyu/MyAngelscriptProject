@@ -17,11 +17,25 @@ namespace AngelscriptTestSupport
 		int32 RawModuleDiscardCount = 0;
 		int32 DetachedClassCleanupCount = 0;
 		int32 RootedDetachedClassCleanupCount = 0;
+		int32 DetachedStructCleanupCount = 0;
+		int32 RootedDetachedStructCleanupCount = 0;
+		int32 DiscardedEnumCleanupCount = 0;
+		int32 RootedDiscardedEnumCleanupCount = 0;
+		int32 DiscardedDelegateFunctionCleanupCount = 0;
+		int32 RootedDiscardedDelegateFunctionCleanupCount = 0;
+		int32 BlueprintActionCacheClearCount = 0;
 		int32 GarbageCollectCount = 0;
 		int32 LastActiveModuleDiscardCount = 0;
 		int32 LastRawModuleDiscardCount = 0;
 		int32 LastDetachedClassCount = 0;
 		int32 LastRootedDetachedClassCount = 0;
+		int32 LastDetachedStructCount = 0;
+		int32 LastRootedDetachedStructCount = 0;
+		int32 LastDiscardedEnumCount = 0;
+		int32 LastRootedDiscardedEnumCount = 0;
+		int32 LastDiscardedDelegateFunctionCount = 0;
+		int32 LastRootedDiscardedDelegateFunctionCount = 0;
+		int32 LastBlueprintActionCacheClearedCount = 0;
 		double LastModuleCleanSeconds = 0.0;
 		double LastGarbageCollectSeconds = 0.0;
 	};
@@ -101,11 +115,13 @@ namespace AngelscriptTestSupport
 			int32 ActiveDiscardCount = 0;
 			int32 RawDiscardCount = 0;
 
+			TArray<TSharedRef<FAngelscriptModuleDesc>> DiscardedModules;
 			TArray<FString> ActiveModuleNames;
 			for (const TSharedRef<FAngelscriptModuleDesc>& Module : Engine.GetActiveModules())
 			{
 				if (!Baseline.ActiveModuleNames.Contains(Module->ModuleName))
 				{
+					DiscardedModules.Add(Module);
 					ActiveModuleNames.Add(Module->ModuleName);
 				}
 			}
@@ -147,16 +163,30 @@ namespace AngelscriptTestSupport
 				}
 			}
 
-			const FDetachedClassCleanupResult DetachedClassResult = CleanupDetachedClasses();
+			const FDetachedASTypeCleanupResult DetachedTypeResult = CleanupDetachedTypes(DiscardedModules);
 			++Metrics.ModuleCleanCount;
 			Metrics.ActiveModuleDiscardCount += ActiveDiscardCount;
 			Metrics.RawModuleDiscardCount += RawDiscardCount;
-			Metrics.DetachedClassCleanupCount += DetachedClassResult.DetachedClassCount;
-			Metrics.RootedDetachedClassCleanupCount += DetachedClassResult.RootedDetachedClassCount;
+			Metrics.DetachedClassCleanupCount += DetachedTypeResult.DetachedClassCount;
+			Metrics.RootedDetachedClassCleanupCount += DetachedTypeResult.RootedDetachedClassCount;
+			Metrics.DetachedStructCleanupCount += DetachedTypeResult.DetachedStructCount;
+			Metrics.RootedDetachedStructCleanupCount += DetachedTypeResult.RootedDetachedStructCount;
+			Metrics.DiscardedEnumCleanupCount += DetachedTypeResult.DiscardedEnumCount;
+			Metrics.RootedDiscardedEnumCleanupCount += DetachedTypeResult.RootedDiscardedEnumCount;
+			Metrics.DiscardedDelegateFunctionCleanupCount += DetachedTypeResult.DiscardedDelegateFunctionCount;
+			Metrics.RootedDiscardedDelegateFunctionCleanupCount += DetachedTypeResult.RootedDiscardedDelegateFunctionCount;
+			Metrics.BlueprintActionCacheClearCount += DetachedTypeResult.BlueprintActionCacheClearedCount;
 			Metrics.LastActiveModuleDiscardCount = ActiveDiscardCount;
 			Metrics.LastRawModuleDiscardCount = RawDiscardCount;
-			Metrics.LastDetachedClassCount = DetachedClassResult.DetachedClassCount;
-			Metrics.LastRootedDetachedClassCount = DetachedClassResult.RootedDetachedClassCount;
+			Metrics.LastDetachedClassCount = DetachedTypeResult.DetachedClassCount;
+			Metrics.LastRootedDetachedClassCount = DetachedTypeResult.RootedDetachedClassCount;
+			Metrics.LastDetachedStructCount = DetachedTypeResult.DetachedStructCount;
+			Metrics.LastRootedDetachedStructCount = DetachedTypeResult.RootedDetachedStructCount;
+			Metrics.LastDiscardedEnumCount = DetachedTypeResult.DiscardedEnumCount;
+			Metrics.LastRootedDiscardedEnumCount = DetachedTypeResult.RootedDiscardedEnumCount;
+			Metrics.LastDiscardedDelegateFunctionCount = DetachedTypeResult.DiscardedDelegateFunctionCount;
+			Metrics.LastRootedDiscardedDelegateFunctionCount = DetachedTypeResult.RootedDiscardedDelegateFunctionCount;
+			Metrics.LastBlueprintActionCacheClearedCount = DetachedTypeResult.BlueprintActionCacheClearedCount;
 			Metrics.LastModuleCleanSeconds = FPlatformTime::Seconds() - StartSeconds;
 
 			if (Metrics.ModuleCleanCount % GarbageCollectEveryNCleanups == 0)
@@ -176,31 +206,9 @@ namespace AngelscriptTestSupport
 		}
 
 	private:
-		struct FDetachedClassCleanupResult
+		FDetachedASTypeCleanupResult CleanupDetachedTypes(const TArray<TSharedRef<FAngelscriptModuleDesc>>& DiscardedModules)
 		{
-			int32 DetachedClassCount = 0;
-			int32 RootedDetachedClassCount = 0;
-		};
-
-		FDetachedClassCleanupResult CleanupDetachedClasses()
-		{
-			FDetachedClassCleanupResult Result;
-			for (TObjectIterator<UASClass> It; It; ++It)
-			{
-				if (It->ScriptTypePtr != nullptr)
-				{
-					continue;
-				}
-
-				++Result.DetachedClassCount;
-				if (It->IsRooted())
-				{
-					It->RemoveFromRoot();
-					++Result.RootedDetachedClassCount;
-				}
-				It->ClearFlags(RF_Standalone);
-			}
-			return Result;
+			return CleanupDetachedASTypesForGarbageCollection(&DiscardedModules);
 		}
 
 		void CollectGarbageForPool()

@@ -2,7 +2,7 @@
 // AngelscriptClassBindingsTests.cpp
 //
 // UClass / TSubclassOf / TSoftClassPtr / StaticClass binding coverage.
-// All 7 Automation IDs are grouped under the Class. prefix so a single
+// All 10 Automation IDs are grouped under the Class. prefix so a single
 // `RunTests.ps1 -Prefix Angelscript.TestModule.Bindings.Class` invocation
 // covers everything in one Editor startup.
 //
@@ -13,6 +13,9 @@
 //   - Angelscript.TestModule.Bindings.Class.StaticClassCompat
 //   - Angelscript.TestModule.Bindings.Class.NativeStaticClassNamespace
 //   - Angelscript.TestModule.Bindings.Class.NativeStaticTypeGlobal
+//   - Angelscript.TestModule.Bindings.Class.UClassReflectionCompat
+//   - Angelscript.TestModule.Bindings.Class.TSoftClassPtrRejectsUnrelatedClass
+//   - Angelscript.TestModule.Bindings.Class.ClassReturnTypeAndLogDiag
 // ============================================================================
 
 #include "Shared/AngelscriptBindingsCoverage.h"
@@ -94,6 +97,28 @@ int GetAllClasses_ContainsActor()
 	}
 	return 0;
 }
+int IsChildOf_ChildToParent()
+{
+	UClass Camera = ACameraActor::StaticClass();
+	UClass Actor = AActor::StaticClass();
+	return Camera.IsChildOf(Actor) ? 1 : 0;
+}
+int IsChildOf_ParentToChildFalse()
+{
+	UClass Camera = ACameraActor::StaticClass();
+	UClass Actor = AActor::StaticClass();
+	return Actor.IsChildOf(Camera) ? 1 : 0;
+}
+int GetSuperClass_CameraIsActor()
+{
+	UClass Camera = ACameraActor::StaticClass();
+	return (Camera.GetSuperClass() == AActor::StaticClass()) ? 1 : 0;
+}
+int GetSuperClass_ActorNotNull()
+{
+	UClass Actor = AActor::StaticClass();
+	return (Actor.GetSuperClass() != null) ? 1 : 0;
+}
 )"));
 		if (!ModuleScope.IsValid()) return false;
 		asIScriptModule& Module = ModuleScope.GetModule();
@@ -103,6 +128,10 @@ int GetAllClasses_ContainsActor()
 			{ TEXT("int FindClass_MissingIsNull()"),    TEXT("FindClass on missing name should return null"),       1 },
 			{ TEXT("int GetAllClasses_NonEmpty()"),     TEXT("GetAllClasses should populate at least one entry"),    1 },
 			{ TEXT("int GetAllClasses_ContainsActor()"),TEXT("GetAllClasses should include AActor"),                  1 },
+			{ TEXT("int IsChildOf_ChildToParent()"),    TEXT("ACameraActor should be child of AActor"),              1 },
+			{ TEXT("int IsChildOf_ParentToChildFalse()"),TEXT("AActor should NOT be child of ACameraActor"),         0 },
+			{ TEXT("int GetSuperClass_CameraIsActor()"),TEXT("ACameraActor.GetSuperClass() should be AActor"),       1 },
+			{ TEXT("int GetSuperClass_ActorNotNull()"), TEXT("AActor.GetSuperClass() should not be null"),           1 },
 		};
 		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
@@ -195,6 +224,39 @@ int Array_LiteralIndex()
 	H.Add(ACameraActor::StaticClass());
 	return (H[1] == ACameraActor::StaticClass()) ? 1 : 0;
 }
+int IsChildOf_CameraToActor()
+{
+	TSubclassOf<AActor> S = ACameraActor::StaticClass();
+	return S.IsChildOf(AActor::StaticClass()) ? 1 : 0;
+}
+int IsChildOf_ActorToCameraFalse()
+{
+	TSubclassOf<AActor> S = AActor::StaticClass();
+	return S.IsChildOf(ACameraActor::StaticClass()) ? 1 : 0;
+}
+int OpEquals_TwoSubclassOf()
+{
+	TSubclassOf<AActor> A = AActor::StaticClass();
+	TSubclassOf<AActor> B = AActor::StaticClass();
+	return (A == B) ? 1 : 0;
+}
+int SetKey_Contains()
+{
+	TSet<TSubclassOf<AActor>> S;
+	S.Add(AActor::StaticClass());
+	S.Add(ACameraActor::StaticClass());
+	return S.Contains(ACameraActor::StaticClass()) ? 1 : 0;
+}
+int MapKey_FindValue()
+{
+	TMap<TSubclassOf<AActor>, int> M;
+	M.Add(AActor::StaticClass(), 42);
+	M.Add(ACameraActor::StaticClass(), 99);
+	int Value = 0;
+	if (M.Find(ACameraActor::StaticClass(), Value))
+		return Value;
+	return 0;
+}
 )"));
 		if (!ModuleScope.IsValid()) return false;
 		asIScriptModule& Module = ModuleScope.GetModule();
@@ -212,6 +274,11 @@ int Array_LiteralIndex()
 			{ TEXT("int GetDefaultObject_IsACameraActor()"),TEXT("GetDefaultObject should be a ACameraActor"),                1 },
 			{ TEXT("int Array_LiteralNum()"),              TEXT("TArray<TSubclassOf<AActor>> Num after Add x2 should be 2"), 2 },
 			{ TEXT("int Array_LiteralIndex()"),            TEXT("Array index access should preserve narrowed class"),       1 },
+			{ TEXT("int IsChildOf_CameraToActor()"),       TEXT("TSubclassOf(Camera).IsChildOf(Actor) should be true"),     1 },
+			{ TEXT("int IsChildOf_ActorToCameraFalse()"),  TEXT("TSubclassOf(Actor).IsChildOf(Camera) should be false"),    0 },
+			{ TEXT("int OpEquals_TwoSubclassOf()"),        TEXT("Two TSubclassOf with same class should be equal"),          1 },
+			{ TEXT("int SetKey_Contains()"),                TEXT("TSet<TSubclassOf<AActor>> should support Contains"),        1 },
+			{ TEXT("int MapKey_FindValue()"),               TEXT("TMap<TSubclassOf<AActor>, int> should find value by key"),  99 },
 		};
 		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
@@ -414,6 +481,42 @@ int Reset_IsNull()
 	A.Reset();
 	return A.IsNull() ? 1 : 0;
 }
+int FromTSubclassOf_Ctor()
+{
+	TSubclassOf<AActor> Sub = AActor::StaticClass();
+	TSoftClassPtr<AActor> S(Sub);
+	return (S == AActor::StaticClass()) ? 1 : 0;
+}
+int FromTSubclassOf_Assign()
+{
+	TSubclassOf<AActor> Sub = ACameraActor::StaticClass();
+	TSoftClassPtr<AActor> S;
+	S = Sub;
+	return (S == ACameraActor::StaticClass()) ? 1 : 0;
+}
+int OpEquals_TSubclassOf()
+{
+	TSubclassOf<AActor> Sub = AActor::StaticClass();
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	return (S == Sub) ? 1 : 0;
+}
+int Get_ReturnsSubclassOf_IsValid()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	TSubclassOf<AActor> G = S.Get();
+	return G.IsValid() ? 1 : 0;
+}
+int ToSoftObjectPath_NonEmpty()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	FSoftObjectPath P = S.ToSoftObjectPath();
+	return P.ToString().IsEmpty() ? 0 : 1;
+}
+int GetAssetName_NonEmpty()
+{
+	TSoftClassPtr<AActor> S(AActor::StaticClass());
+	return S.GetAssetName().IsEmpty() ? 0 : 1;
+}
 )"));
 		if (!ModuleScope.IsValid()) return false;
 		asIScriptModule& Module = ModuleScope.GetModule();
@@ -431,6 +534,12 @@ int Reset_IsNull()
 			{ TEXT("int Array_LiteralNum()"),            TEXT("TArray<TSoftClassPtr<AActor>> Num should be 2"),    2 },
 			{ TEXT("int Array_LiteralIndex()"),          TEXT("Array element [1] should equal camera class"),       1 },
 			{ TEXT("int Reset_IsNull()"),                TEXT("Reset should make TSoftClassPtr null"),              1 },
+			{ TEXT("int FromTSubclassOf_Ctor()"),        TEXT("TSoftClassPtr from TSubclassOf ctor should match"), 1 },
+			{ TEXT("int FromTSubclassOf_Assign()"),      TEXT("TSoftClassPtr = TSubclassOf should match"),         1 },
+			{ TEXT("int OpEquals_TSubclassOf()"),         TEXT("TSoftClassPtr == TSubclassOf should be true"),      1 },
+			{ TEXT("int Get_ReturnsSubclassOf_IsValid()"),TEXT("TSoftClassPtr.Get() as TSubclassOf should be valid"), 1 },
+			{ TEXT("int ToSoftObjectPath_NonEmpty()"),    TEXT("ToSoftObjectPath().ToString() should not be empty"), 1 },
+			{ TEXT("int GetAssetName_NonEmpty()"),        TEXT("GetAssetName() should not be empty"),                1 },
 		};
 		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
 	}
@@ -672,6 +781,10 @@ int StaticType_DefaultObjectIsValid()
 {
 	return IsValid(__StaticType_AActor.GetDefaultObject()) ? 1 : 0;
 }
+int StaticType_RoundTrip_MatchNamespace()
+{
+	return (__StaticType_AActor.Get() == AActor::StaticClass()) ? 1 : 0;
+}
 )"));
 		if (!ModuleScope.IsValid()) return false;
 		asIScriptModule& Module = ModuleScope.GetModule();
@@ -682,13 +795,306 @@ int StaticType_DefaultObjectIsValid()
 			{ TEXT("int StaticType_OpEqualsClass()"),         TEXT("__StaticType_AActor opEquals AActor::StaticClass()"),  1 },
 			{ TEXT("int StaticType_IsChildOfSelf()"),         TEXT("__StaticType_AActor.IsChildOf(self) should be true"),  1 },
 			{ TEXT("int StaticType_DefaultObjectIsValid()"),  TEXT("__StaticType_AActor.GetDefaultObject should be valid"),1 },
+			{ TEXT("int StaticType_RoundTrip_MatchNamespace()"),TEXT("__StaticType_AActor.Get() should match AActor::StaticClass() round-trip"), 1 },
 		};
 		return ExpectGlobalInts(Test, Engine, Module, Profile, Cases);
+	}
+
+	// -----------------------------------------------------------------------
+	// Section: UClassReflection — annotated ASClass reflection methods
+	//
+	// Covers: GetSourceFilePath, GetScriptModuleName, GetScriptTypeDeclaration,
+	//         IsFunctionImplementedInScript, FindFunctionByName, IsAbstract
+	// -----------------------------------------------------------------------
+	bool RunUClassReflectionSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
+	{
+		bool bPassed = true;
+
+		// (a) Annotated ASClass — reflection queries that require a script class.
+		{
+			const TCHAR* ReflModuleName = TEXT("ASAnnotatedReflectionCompat");
+			const bool bCompiled = CompileAnnotatedModuleFromMemory(
+				&Engine,
+				ReflModuleName,
+				TEXT("ASAnnotatedReflectionCompat.as"),
+				TEXT(R"(
+UCLASS()
+class ABindingReflectionActor : AActor
+{
+	UFUNCTION()
+	int ReadReflection()
+	{
+		UClass SelfClass = ABindingReflectionActor::StaticClass();
+
+		// GetSourceFilePath — for script classes should be non-empty
+		FString SourcePath = SelfClass.GetSourceFilePath();
+		if (SourcePath.IsEmpty())
+			return 10;
+
+		// GetScriptModuleName — should be non-empty
+		FString ModName = SelfClass.GetScriptModuleName();
+		if (ModName.IsEmpty())
+			return 20;
+
+		// GetScriptTypeDeclaration — should contain class name
+		FString TypeDecl = SelfClass.GetScriptTypeDeclaration();
+		if (!TypeDecl.Contains("BindingReflectionActor"))
+			return 30;
+
+		// IsFunctionImplementedInScript — ReadReflection should be true
+		if (!SelfClass.IsFunctionImplementedInScript(n"ReadReflection"))
+			return 40;
+
+		// FindFunctionByName — ReadReflection should not be null
+		UFunction Func = SelfClass.FindFunctionByName(n"ReadReflection");
+		if (Func == null)
+			return 50;
+
+		return 1;
+	}
+}
+)"));
+			ON_SCOPE_EXIT { Engine.DiscardModule(ReflModuleName); };
+
+			bPassed &= Test.TestTrue(
+				TEXT("[Class] Reflection compat module should compile"),
+				bCompiled);
+
+			if (bCompiled)
+			{
+				UClass* ReflActorClass = FindGeneratedClass(&Engine, TEXT("ABindingReflectionActor"));
+				bPassed &= Test.TestNotNull(
+					TEXT("[Class] Generated reflection actor class should exist"),
+					ReflActorClass);
+
+				UFunction* ReadReflectionFunc = ReflActorClass != nullptr
+					? FindGeneratedFunction(ReflActorClass, TEXT("ReadReflection"))
+					: nullptr;
+				bPassed &= Test.TestNotNull(
+					TEXT("[Class] ReadReflection function should exist"),
+					ReadReflectionFunc);
+
+				if (ReflActorClass != nullptr && ReadReflectionFunc != nullptr)
+				{
+					AActor* ReflActor = NewObject<AActor>(GetTransientPackage(), ReflActorClass);
+					bPassed &= Test.TestNotNull(
+						TEXT("[Class] Reflection actor should instantiate"),
+						ReflActor);
+
+					if (ReflActor != nullptr)
+					{
+						int32 Result = 0;
+						const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(
+							&Engine, ReflActor, ReadReflectionFunc, Result);
+						bPassed &= Test.TestTrue(
+							TEXT("[Class] Reflection call should execute"),
+							bExecuted);
+						bPassed &= Test.TestEqual(
+							TEXT("[Class] Reflection queries should all pass (1)"),
+							Result, 1);
+					}
+				}
+			}
+		}
+
+		// (b) Plain module — IsAbstract on native classes.
+		{
+			FCoverageModuleScope AbstractScope(Test, Engine, Profile, TEXT("IsAbstract"), TEXT(R"(
+int IsAbstract_AActor_False()
+{
+	UClass C = AActor::StaticClass();
+	return C.IsAbstract() ? 1 : 0;
+}
+int IsAbstract_FindAbstract()
+{
+	// UNavigationData is abstract in most UE builds
+	UClass C = FindClass("ANavigationData");
+	if (C == null)
+		return -1;
+	return C.IsAbstract() ? 1 : 0;
+}
+)"));
+			if (!AbstractScope.IsValid()) return false;
+			asIScriptModule& AbstractModule = AbstractScope.GetModule();
+
+			bPassed &= ExpectGlobalInt(Test, Engine, AbstractModule, Profile,
+				TEXT("int IsAbstract_AActor_False()"),
+				TEXT("AActor should NOT be abstract"),
+				0);
+			// IsAbstract_FindAbstract may return -1 if ANavigationData not found;
+			// just verify execution succeeds (non-crash). Skip value check if -1.
+			{
+				AngelscriptReflectiveAccess::FASGlobalFunctionInvoker Invoker(
+					Test, Engine, AbstractModule,
+					TEXT("int IsAbstract_FindAbstract()"));
+				if (Invoker.IsValid())
+				{
+					const int32 Val = Invoker.CallAndReturn<int32>(INDEX_NONE);
+					if (Val >= 0)
+					{
+						bPassed &= Test.TestEqual(
+							TEXT("[Class] ANavigationData should be abstract"),
+							Val, 1);
+					}
+					else
+					{
+						Test.AddInfo(TEXT("[Class] ANavigationData not found — skipping IsAbstract positive test"));
+					}
+				}
+			}
+		}
+
+		return bPassed;
+	}
+
+	// -----------------------------------------------------------------------
+	// Section: TSoftClassPtrReject — exception path on unrelated class assign
+	// -----------------------------------------------------------------------
+	bool RunTSoftClassPtrRejectSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
+	{
+		const FString DiagnosticText(TEXT("Provided class is does not inherit from TSoftClassPtr subtype."));
+		Test.AddExpectedErrorPlain(DiagnosticText, EAutomationExpectedErrorFlags::Contains, 0);
+		Test.AddExpectedErrorPlain(
+			MakeCoverageModuleName(Profile, TEXT("SoftClassReject")),
+			EAutomationExpectedErrorFlags::Contains, 0);
+		Test.AddExpectedErrorPlain(TEXT("TriggerBadSoftAssign"),
+			EAutomationExpectedErrorFlags::Contains, 0);
+
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("SoftClassReject"), TEXT(R"(
+void TriggerBadSoftAssign()
+{
+	TSoftClassPtr<AActor> S;
+	S = UPackage::StaticClass();
+}
+)"));
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		return ExecuteFunctionExpectingScriptException(
+			Test, Engine, Module, Profile,
+			TEXT("void TriggerBadSoftAssign()"),
+			TEXT("TSoftClassPtr opAssign with unrelated class should raise exception"),
+			DiagnosticText);
+	}
+
+	// -----------------------------------------------------------------------
+	// Section: ClassReturnType — return type matrix coverage
+	// -----------------------------------------------------------------------
+	bool RunClassReturnTypeSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
+	{
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("ReturnType"), TEXT(R"(
+bool ClassRet_Bool_FindClassIsValid()
+{
+	UClass C = FindClass("AActor");
+	return C != null;
+}
+bool ClassRet_Bool_IsChildOf()
+{
+	UClass Camera = ACameraActor::StaticClass();
+	return Camera.IsChildOf(AActor::StaticClass());
+}
+int ClassRet_FString_ClassNameLen()
+{
+	UClass C = AActor::StaticClass();
+	FString Name = C.GetName().ToString();
+	return Name.Len();
+}
+int ClassRet_FString_SuperClassNameLen()
+{
+	UClass C = ACameraActor::StaticClass();
+	UClass Super = C.GetSuperClass();
+	return Super.GetName().ToString().Len();
+}
+int ClassRet_UClass_Echo()
+{
+	UClass C = AActor::StaticClass();
+	return (C == AActor::StaticClass()) ? 1 : 0;
+}
+int ClassRet_SubclassOf_Echo()
+{
+	TSubclassOf<AActor> S = ACameraActor::StaticClass();
+	return (S.Get() == ACameraActor::StaticClass()) ? 1 : 0;
+}
+)"));
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		bool bPassed = true;
+		bPassed &= ExpectGlobalReturnBool(Test, Engine, Module, Profile,
+			TEXT("bool ClassRet_Bool_FindClassIsValid()"),
+			TEXT("FindClass should return valid (bool return path)"),
+			true);
+		bPassed &= ExpectGlobalReturnBool(Test, Engine, Module, Profile,
+			TEXT("bool ClassRet_Bool_IsChildOf()"),
+			TEXT("IsChildOf should return true (bool return path)"),
+			true);
+
+		// FString return — verify via length proxy (> 0)
+		bPassed &= ExpectGlobalIntAtLeast(Test, Engine, Module, Profile,
+			TEXT("int ClassRet_FString_ClassNameLen()"),
+			TEXT("AActor class name length should be > 0"),
+			1);
+		bPassed &= ExpectGlobalIntAtLeast(Test, Engine, Module, Profile,
+			TEXT("int ClassRet_FString_SuperClassNameLen()"),
+			TEXT("CameraActor super class name length should be > 0"),
+			1);
+
+		// UClass / TSubclassOf echo paths
+		bPassed &= ExpectGlobalInt(Test, Engine, Module, Profile,
+			TEXT("int ClassRet_UClass_Echo()"),
+			TEXT("UClass echo should round-trip"),
+			1);
+		bPassed &= ExpectGlobalInt(Test, Engine, Module, Profile,
+			TEXT("int ClassRet_SubclassOf_Echo()"),
+			TEXT("TSubclassOf echo should round-trip"),
+			1);
+
+		return bPassed;
+	}
+
+	// -----------------------------------------------------------------------
+	// Section: ClassLogDiagnostic — class string diagnostics in Log()
+	// -----------------------------------------------------------------------
+	bool RunClassLogDiagnosticSection(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const FBindingsCoverageProfile& Profile)
+	{
+		FCoverageModuleScope ModuleScope(Test, Engine, Profile, TEXT("LogDiag"), TEXT(R"(
+int ClassLog_Types()
+{
+	UClass C = AActor::StaticClass();
+	TSubclassOf<AActor> S = AActor::StaticClass();
+	TSoftClassPtr<AActor> Soft(AActor::StaticClass());
+
+	Log("UClass: " + C);
+	Log("TSubclassOf: " + S);
+	Log("TSoftClassPtr: " + Soft.ToString());
+
+	return 1;
+}
+)"));
+		if (!ModuleScope.IsValid()) return false;
+		asIScriptModule& Module = ModuleScope.GetModule();
+
+		return ExpectGlobalInt(Test, Engine, Module, Profile,
+			TEXT("int ClassLog_Types()"),
+			TEXT("Log() with class string diagnostics should succeed"),
+			1);
 	}
 }
 
 // ============================================================================
-// Automation ID registrations (7 IDs under Class. prefix)
+// Automation ID registrations (10 IDs under Class. prefix)
 // ============================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -726,8 +1132,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Angelscript.TestModule.Bindings.Class.NativeStaticTypeGlobal",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// ============================================================================
-// RunTest implementations
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptUClassReflectionBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.UClassReflectionCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTSoftClassPtrRejectsUnrelatedClassBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.TSoftClassPtrRejectsUnrelatedClass",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptClassReturnTypeAndLogDiagBindingsTest,
+	"Angelscript.TestModule.Bindings.Class.ClassReturnTypeAndLogDiag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 // ============================================================================
 
 bool FAngelscriptClassLookupBindingsTest::RunTest(const FString& Parameters)
@@ -803,6 +1221,43 @@ bool FAngelscriptNativeStaticTypeGlobalBindingTest::RunTest(const FString& Param
 	ASTEST_BEGIN_SHARE_CLEAN
 	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
 	bPassed &= RunNativeStaticTypeGlobalSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptUClassReflectionBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunUClassReflectionSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptTSoftClassPtrRejectsUnrelatedClassBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	bPassed &= RunTSoftClassPtrRejectSection(*this, Engine, GClassProfile);
+	ASTEST_END_SHARE_CLEAN
+	return bPassed;
+}
+
+bool FAngelscriptClassReturnTypeAndLogDiagBindingsTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	bool bPassed = true;
+	ASTEST_BEGIN_SHARE_CLEAN
+	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	if (!RunClassReturnTypeSection(*this, Engine, GClassProfile))
+	{
+		return false;
+	}
+	bPassed &= RunClassLogDiagnosticSection(*this, Engine, GClassProfile);
 	ASTEST_END_SHARE_CLEAN
 	return bPassed;
 }

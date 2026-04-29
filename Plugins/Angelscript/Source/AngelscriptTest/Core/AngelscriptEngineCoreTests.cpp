@@ -70,7 +70,7 @@ bool FAngelscriptTestModuleLifecycleTest::RunTest(const FString& Parameters)
 	FAngelscriptEngineConfig Config;
 	FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
 
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies);
 	if (!TestNotNull(TEXT("Test module should create an angelscript engine instance"), Engine.Get()))
 	{
 		return false;

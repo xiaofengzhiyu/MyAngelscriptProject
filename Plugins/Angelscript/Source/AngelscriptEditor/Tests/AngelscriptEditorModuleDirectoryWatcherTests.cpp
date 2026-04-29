@@ -72,7 +72,7 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptEditorModuleDirectoryWatche
 	{
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
 		if (Engine.IsValid())
 		{
 			Engine->AllRootPaths = { FPaths::ConvertRelativePathToFull(RootPath) };

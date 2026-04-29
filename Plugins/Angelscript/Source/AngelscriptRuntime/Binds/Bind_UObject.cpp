@@ -213,7 +213,11 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_UObject_Base((int32)FAngelscri
 		else
 		{
 			UClass* ObjClass = Object->GetClass();
-			UASClass* asClass = Cast<UASClass>(ObjClass);
+			const UASClass* ASClass = Cast<UASClass>(ObjClass);
+			const bool bUseClassPrefix =
+				ObjClass->HasAnyClassFlags(CLASS_Native)
+				|| (ASClass != nullptr && ASClass->bIsScriptClass);
+			const TCHAR* ClassPrefix = bUseClassPrefix ? ObjClass->GetPrefixCPP() : TEXT("");
 
 			FString Suffix;
 			auto& Delegate = FAngelscriptRuntimeModule::GetDebugObjectSuffix();
@@ -229,7 +233,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_UObject_Base((int32)FAngelscri
 					*Actor->GetActorLabel(),
 					*Suffix,
 					//(ObjClass->HasAnyClassFlags(CLASS_Native) || ObjClass->bIsScriptClass) ? ObjClass->GetPrefixCPP() : TEXT(""),
-					(ObjClass->HasAnyClassFlags(CLASS_Native) || asClass->bIsScriptClass) ? asClass->GetPrefixCPP() : TEXT(""),
+					ClassPrefix,
 					*ObjClass->GetName(),
 					*Object->GetName());
 			}
@@ -241,7 +245,7 @@ AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_UObject_Base((int32)FAngelscri
 					*Object->GetName(),
 					*Suffix,
 					//(ObjClass->HasAnyClassFlags(CLASS_Native) || ObjClass->bIsScriptClass) ? ObjClass->GetPrefixCPP() : TEXT(""),
-					(ObjClass->HasAnyClassFlags(CLASS_Native) || asClass->bIsScriptClass) ? asClass->GetPrefixCPP() : TEXT(""),
+					ClassPrefix,
 					*ObjClass->GetName());
 			}
 		}

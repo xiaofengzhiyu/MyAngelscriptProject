@@ -125,7 +125,7 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptEngine
 	~FAngelscriptEngine();
 
 	static TUniquePtr<FAngelscriptEngine> Create(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies);
-	static TUniquePtr<FAngelscriptEngine> CreateTestingFullEngine(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies);
+	static TUniquePtr<FAngelscriptEngine> CreateUncompiled(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies);
 	static TUniquePtr<FAngelscriptEngine> CreateCloneFrom(FAngelscriptEngine& Source, const FAngelscriptEngineConfig& InConfig);
 	static TUniquePtr<FAngelscriptEngine> CreateCloneFrom(FAngelscriptEngine& Source, const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies);
 	static FAngelscriptEngine* TryGetCurrentEngine();
@@ -133,7 +133,7 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptEngine
 	static bool IsInitialized();
 	static FString GetScriptRootDirectory();
 	static UPackage* GetPackage();
-	static TUniquePtr<FAngelscriptEngine> CreateForTesting(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies, EAngelscriptEngineCreationMode Mode = EAngelscriptEngineCreationMode::Clone);
+	static TUniquePtr<FAngelscriptEngine> CreateUncompiledWithMode(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies, EAngelscriptEngineCreationMode Mode = EAngelscriptEngineCreationMode::Clone);
 	static UObject* TryGetCurrentWorldContextObject();
 	static UObject* GetAmbientWorldContext();
 	static bool ShouldUseEditorScriptsForCurrentContext();
@@ -159,7 +159,8 @@ struct ANGELSCRIPTRUNTIME_API FAngelscriptEngine
 	static bool IsScriptDevelopmentModeForCurrentContext();
 
 	void Initialize();
-	void InitializeForTesting();
+	/* Initialize bindings and runtime services without scanning Script roots or compiling disk scripts. */
+	void InitializeWithoutInitialCompile();
 	void Shutdown();
 	FInterfaceMethodSignature* RegisterInterfaceMethodSignature(FName FunctionName);
 	void ReleaseInterfaceMethodSignature(FInterfaceMethodSignature* Signature);

@@ -2,6 +2,7 @@
 
 #include "Shared/AngelscriptNativeScriptTestObject.h"
 #include "ClassGenerator/ASClass.h"
+#include "ClassGenerator/ASStruct.h"
 #include "Components/ActorTestSpawner.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/Actor.h"
@@ -91,6 +92,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTestEngineHelperScriptScanFreeEngineStartsCleanTest,
+	"Angelscript.TestModule.Shared.EngineHelper.ScriptScanFreeEngineStartsClean",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTestEngineHelperGetResetSharedTestEngineResetsSharedStateTest,
 	"Angelscript.TestModule.Shared.EngineHelper.GetResetSharedTestEngineResetsSharedState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -113,6 +119,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FAngelscriptTestEngineHelperResetSharedEngineReleasesGeneratedComponentClassesTest,
 	"Angelscript.TestModule.Shared.EngineHelper.ResetSharedEngineReleasesGeneratedComponentClasses",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTestEngineHelperResetSharedEngineReleasesGeneratedStructsTest,
+	"Angelscript.TestModule.Shared.EngineHelper.ResetSharedEngineReleasesGeneratedStructs",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptTestEngineHelperResetSharedEngineReleasesGeneratedEnumsAndDelegatesTest,
+	"Angelscript.TestModule.Shared.EngineHelper.ResetSharedEngineReleasesGeneratedEnumsAndDelegates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -311,6 +327,42 @@ bool FAngelscriptTestEngineHelperGetSharedTestEngineAliasesSharedCloneTest::RunT
 		FAngelscriptTestEngineScopeAccess::GetGlobalEngine() == &FirstSharedEngine);
 }
 
+bool FAngelscriptTestEngineHelperScriptScanFreeEngineStartsCleanTest::RunTest(const FString& Parameters)
+{
+	TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting();
+	if (!TestNotNull(TEXT("Script-scan-free test engine should be created"), Engine.Get()))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Script-scan-free test engine should still satisfy the initial compile gate"), Engine->IsInitialCompileFinished());
+	TestEqual(TEXT("Script-scan-free test engine should not contain modules compiled from Script roots"), Engine->GetActiveModules().Num(), 0);
+
+	asCScriptEngine* ScriptEngine = reinterpret_cast<asCScriptEngine*>(Engine->GetScriptEngine());
+	if (!TestNotNull(TEXT("Script-scan-free test engine should own a script engine"), ScriptEngine))
+	{
+		return false;
+	}
+
+	TArray<FString> RawModuleNames;
+	const asUINT RawModuleCount = ScriptEngine->GetModuleCount();
+	RawModuleNames.Reserve(static_cast<int32>(RawModuleCount));
+	for (asUINT ModuleIndex = 0; ModuleIndex < RawModuleCount; ++ModuleIndex)
+	{
+		if (asIScriptModule* Module = ScriptEngine->GetModuleByIndex(ModuleIndex))
+		{
+			RawModuleNames.Add(UTF8_TO_TCHAR(Module->GetName()));
+		}
+	}
+
+	if (RawModuleNames.Num() > 0)
+	{
+		AddError(FString::Printf(TEXT("Script-scan-free test engine unexpectedly has raw modules: %s"), *FString::Join(RawModuleNames, TEXT(", "))));
+	}
+
+	return TestEqual(TEXT("Script-scan-free test engine should not contain raw AS modules"), RawModuleCount, static_cast<asUINT>(0));
+}
+
 bool FAngelscriptTestEngineHelperGetResetSharedTestEngineResetsSharedStateTest::RunTest(const FString& Parameters)
 {
 	static const FName ModuleName(TEXT("HelperGetResetSharedAlias"));
@@ -387,6 +439,13 @@ class UHelperResetGeneratedComponent : UAngelscriptComponent
 	{
 		return false;
 	}
+	UASClass* GeneratedASClass = Cast<UASClass>(GeneratedClass);
+	if (!TestNotNull(TEXT("Generated component helper class should be a UASClass"), GeneratedASClass))
+	{
+		return false;
+	}
+	TWeakObjectPtr<UASClass> WeakGeneratedClass(GeneratedASClass);
+	const FString GeneratedClassPath = GeneratedASClass->GetPathName();
 
 	{
 		FActorTestSpawner Spawner;
@@ -421,8 +480,8 @@ class UHelperResetGeneratedComponent : UAngelscriptComponent
 
 	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
 
+	UASClass* FoundGeneratedClassByPath = FindObject<UASClass>(nullptr, *GeneratedClassPath);
 	int32 MatchingClasses = 0;
-	int32 DetachedMatchingClasses = 0;
 	int32 RootedMatchingClasses = 0;
 	int32 StandaloneMatchingClasses = 0;
 	for (TObjectIterator<UASClass> It; It; ++It)
@@ -433,10 +492,6 @@ class UHelperResetGeneratedComponent : UAngelscriptComponent
 		}
 
 		++MatchingClasses;
-		if (It->ScriptTypePtr == nullptr)
-		{
-			++DetachedMatchingClasses;
-		}
 		if (It->IsRooted())
 		{
 			++RootedMatchingClasses;
@@ -447,17 +502,172 @@ class UHelperResetGeneratedComponent : UAngelscriptComponent
 		}
 	}
 
-	// After ResetSharedCloneEngine, the generated UASClass may still be reachable
-	// via the global /Script/Angelscript package outer chain. UE's GC treats package
-	// inner objects as reachable even when they are unrooted. What matters is that
-	// the class has been fully detached from the script engine.
-	if (MatchingClasses > 0)
-	{
-		TestEqual(TEXT("Generated component class should be detached from the script engine after shared reset"), DetachedMatchingClasses, MatchingClasses);
-	}
+	TestFalse(TEXT("Generated component class weak pointer should be invalid after shared reset"), WeakGeneratedClass.IsValid());
+	TestNull(TEXT("Generated component class should not be findable by path after shared reset"), FoundGeneratedClassByPath);
+	TestEqual(TEXT("Generated component class should be garbage collected after shared reset"), MatchingClasses, 0);
 	TestEqual(TEXT("Generated component class should not remain rooted after shared reset"), RootedMatchingClasses, 0);
 	TestEqual(TEXT("Generated component class should not remain standalone after shared reset"), StandaloneMatchingClasses, 0);
-	return RootedMatchingClasses == 0 && StandaloneMatchingClasses == 0;
+	return !WeakGeneratedClass.IsValid()
+		&& FoundGeneratedClassByPath == nullptr
+		&& MatchingClasses == 0
+		&& RootedMatchingClasses == 0
+		&& StandaloneMatchingClasses == 0;
+}
+
+bool FAngelscriptTestEngineHelperResetSharedEngineReleasesGeneratedStructsTest::RunTest(const FString& Parameters)
+{
+	static const FName ModuleName(TEXT("HelperResetGeneratedStruct"));
+	static const FString Filename(TEXT("HelperResetGeneratedStruct.as"));
+	static const FName GeneratedStructName(TEXT("HelperResetGeneratedStruct"));
+
+	FAngelscriptEngine& Engine = AngelscriptTestSupport::AcquireFreshSharedCloneEngine();
+	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+		&Engine,
+		ModuleName,
+		Filename,
+		TEXT(R"AS(
+USTRUCT()
+struct FHelperResetGeneratedStruct
+{
+	UPROPERTY()
+	int Value = 11;
+}
+)AS"));
+	if (!TestTrue(TEXT("Generated struct helper module should compile"), bCompiled))
+	{
+		return false;
+	}
+
+	UASStruct* GeneratedStruct = FindObject<UASStruct>(FAngelscriptEngine::GetPackage(), *GeneratedStructName.ToString());
+	if (!TestNotNull(TEXT("Generated helper struct should exist before reset"), GeneratedStruct))
+	{
+		return false;
+	}
+	TWeakObjectPtr<UASStruct> WeakGeneratedStruct(GeneratedStruct);
+	const FString GeneratedStructPath = GeneratedStruct->GetPathName();
+
+	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+
+	UASStruct* FoundGeneratedStructByPath = FindObject<UASStruct>(nullptr, *GeneratedStructPath);
+	int32 MatchingStructs = 0;
+	int32 RootedMatchingStructs = 0;
+	int32 StandaloneMatchingStructs = 0;
+	for (TObjectIterator<UASStruct> It; It; ++It)
+	{
+		if (It->GetFName() != GeneratedStructName)
+		{
+			continue;
+		}
+
+		++MatchingStructs;
+		if (It->IsRooted())
+		{
+			++RootedMatchingStructs;
+		}
+		if (It->HasAnyFlags(RF_Standalone))
+		{
+			++StandaloneMatchingStructs;
+		}
+	}
+
+	TestFalse(TEXT("Generated struct weak pointer should be invalid after shared reset"), WeakGeneratedStruct.IsValid());
+	TestNull(TEXT("Generated struct should not be findable by path after shared reset"), FoundGeneratedStructByPath);
+	TestEqual(TEXT("Generated struct should be garbage collected after shared reset"), MatchingStructs, 0);
+	TestEqual(TEXT("Generated struct should not remain rooted after shared reset"), RootedMatchingStructs, 0);
+	TestEqual(TEXT("Generated struct should not remain standalone after shared reset"), StandaloneMatchingStructs, 0);
+	return !WeakGeneratedStruct.IsValid()
+		&& FoundGeneratedStructByPath == nullptr
+		&& MatchingStructs == 0
+		&& RootedMatchingStructs == 0
+		&& StandaloneMatchingStructs == 0;
+}
+
+bool FAngelscriptTestEngineHelperResetSharedEngineReleasesGeneratedEnumsAndDelegatesTest::RunTest(const FString& Parameters)
+{
+	static const FName ModuleName(TEXT("HelperResetGeneratedEnumDelegate"));
+	static const FString Filename(TEXT("HelperResetGeneratedEnumDelegate.as"));
+
+	FAngelscriptEngine& Engine = AngelscriptTestSupport::AcquireFreshSharedCloneEngine();
+	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+		&Engine,
+		ModuleName,
+		Filename,
+		TEXT(R"(
+UENUM(BlueprintType)
+enum class EHelperResetGeneratedState : uint8
+{
+	Idle,
+	Active
+}
+
+delegate void FHelperResetGeneratedDelegate(int Value);
+event void FHelperResetGeneratedEvent(int Value);
+)"));
+	if (!TestTrue(TEXT("Generated enum/delegate helper fixture should compile"), bCompiled))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FAngelscriptEnumDesc> GeneratedEnumDesc = Engine.GetEnum(TEXT("EHelperResetGeneratedState"));
+	if (!TestTrue(TEXT("Generated enum descriptor should exist before reset"), GeneratedEnumDesc.IsValid()))
+	{
+		return false;
+	}
+	UEnum* GeneratedEnum = GeneratedEnumDesc->Enum;
+	if (!TestNotNull(TEXT("Generated enum UObject should exist before reset"), GeneratedEnum))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FAngelscriptDelegateDesc> GeneratedDelegateDesc = Engine.GetDelegate(TEXT("FHelperResetGeneratedDelegate"));
+	if (!TestTrue(TEXT("Generated delegate descriptor should exist before reset"), GeneratedDelegateDesc.IsValid()))
+	{
+		return false;
+	}
+	TestFalse(TEXT("Generated delegate descriptor should be single-cast before reset"), GeneratedDelegateDesc->bIsMulticast);
+	UDelegateFunction* GeneratedDelegateFunction = GeneratedDelegateDesc->Function;
+	if (!TestNotNull(TEXT("Generated delegate function should exist before reset"), GeneratedDelegateFunction))
+	{
+		return false;
+	}
+
+	const TSharedPtr<FAngelscriptDelegateDesc> GeneratedEventDesc = Engine.GetDelegate(TEXT("FHelperResetGeneratedEvent"));
+	if (!TestTrue(TEXT("Generated event descriptor should exist before reset"), GeneratedEventDesc.IsValid()))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Generated event descriptor should be multicast before reset"), GeneratedEventDesc->bIsMulticast);
+	UDelegateFunction* GeneratedEventFunction = GeneratedEventDesc->Function;
+	if (!TestNotNull(TEXT("Generated event function should exist before reset"), GeneratedEventFunction))
+	{
+		return false;
+	}
+
+	TWeakObjectPtr<UEnum> WeakGeneratedEnum(GeneratedEnum);
+	TWeakObjectPtr<UDelegateFunction> WeakGeneratedDelegateFunction(GeneratedDelegateFunction);
+	TWeakObjectPtr<UDelegateFunction> WeakGeneratedEventFunction(GeneratedEventFunction);
+	const FString GeneratedEnumPath = GeneratedEnum->GetPathName();
+	const FString GeneratedDelegateFunctionPath = GeneratedDelegateFunction->GetPathName();
+	const FString GeneratedEventFunctionPath = GeneratedEventFunction->GetPathName();
+
+	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+
+	UEnum* FoundGeneratedEnumByPath = FindObject<UEnum>(nullptr, *GeneratedEnumPath);
+	UDelegateFunction* FoundGeneratedDelegateFunctionByPath = FindObject<UDelegateFunction>(nullptr, *GeneratedDelegateFunctionPath);
+	UDelegateFunction* FoundGeneratedEventFunctionByPath = FindObject<UDelegateFunction>(nullptr, *GeneratedEventFunctionPath);
+
+	TestFalse(TEXT("Generated enum weak pointer should be invalid after shared reset"), WeakGeneratedEnum.IsValid());
+	TestFalse(TEXT("Generated delegate function weak pointer should be invalid after shared reset"), WeakGeneratedDelegateFunction.IsValid());
+	TestFalse(TEXT("Generated event function weak pointer should be invalid after shared reset"), WeakGeneratedEventFunction.IsValid());
+	TestNull(TEXT("Generated enum should not be findable by path after shared reset"), FoundGeneratedEnumByPath);
+	TestNull(TEXT("Generated delegate function should not be findable by path after shared reset"), FoundGeneratedDelegateFunctionByPath);
+	TestNull(TEXT("Generated event function should not be findable by path after shared reset"), FoundGeneratedEventFunctionByPath);
+	return !WeakGeneratedEnum.IsValid()
+		&& !WeakGeneratedDelegateFunction.IsValid()
+		&& !WeakGeneratedEventFunction.IsValid()
+		&& FoundGeneratedEnumByPath == nullptr
+		&& FoundGeneratedDelegateFunctionByPath == nullptr
+		&& FoundGeneratedEventFunctionByPath == nullptr;
 }
 
 bool FAngelscriptTestEngineHelperProductionHelperRejectsMissingProductionTest::RunTest(const FString& Parameters)

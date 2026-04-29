@@ -82,7 +82,7 @@ bool FAngelscriptInjectedScriptRootDiscoveryTest::RunTest(const FString& Paramet
 		};
 	};
 
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies);
 	TArray<FString> Roots = Engine->DiscoverScriptRoots(false);
 
 	TestEqual(TEXT("Injected project root should be first"), Roots[0], FString(TEXT("C:/InjectedProject/Script")));
@@ -128,7 +128,7 @@ bool FAngelscriptInjectedProjectOnlyScriptRootDiscoveryTest::RunTest(const FStri
 		};
 	};
 
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies);
 	TArray<FString> Roots = Engine->DiscoverScriptRoots(true);
 
 	TestEqual(TEXT("Project-only discovery should return exactly one root"), Roots.Num(), 1);
@@ -178,7 +178,7 @@ bool FAngelscriptInjectedMissingPluginScriptRootSkipTest::RunTest(const FString&
 		};
 	};
 
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies);
 	TArray<FString> Roots = Engine->DiscoverScriptRoots(false);
 
 	TestEqual(TEXT("Missing plugin roots should be skipped and project root should not be duplicated"), Roots.Num(), 2);
@@ -229,7 +229,7 @@ bool FAngelscriptInjectedEditorCreatesProjectScriptRootTest::RunTest(const FStri
 		return TArray<FString>();
 	};
 
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies);
 	TArray<FString> Roots = Engine->DiscoverScriptRoots(false);
 
 	TestTrue(TEXT("Editor discovery should create the missing project script root"), bMakeDirectoryCalled);
@@ -319,7 +319,7 @@ bool FAngelscriptCreateTestingFullEngineSkipsProductionDirectorySetupTest::RunTe
 		return TArray<FString>();
 	};
 
-	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+	TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
 	if (!TestNotNull(TEXT("CreateTestingFullEngine.SkipsProductionDirectorySetup should create a testing full engine"), Engine.Get()))
 	{
 		return false;

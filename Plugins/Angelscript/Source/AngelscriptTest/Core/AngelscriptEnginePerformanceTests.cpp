@@ -11,6 +11,8 @@
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Guid.h"
+#include "UObject/ReferenceChainSearch.h"
+#include "UObject/ReferencerFinder.h"
 #include "UObject/UObjectGlobals.h"
 #include "UObject/UObjectIterator.h"
 
@@ -68,8 +70,13 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		int32 DetachedGeneratedClassCountAfterReset = 0;
 		int32 RootedGeneratedClassCountAfterReset = 0;
 		int32 StandaloneGeneratedClassCountAfterReset = 0;
+		int32 StrongReferencerCountAfterReset = 0;
+		int32 ExternalStrongReferencerCountAfterReset = 0;
+		bool bReferenceRootPathCapturedAfterReset = false;
 		FString GeneratedClassName;
 		FString GeneratedClassPathName;
+		FString ReferenceRootPathAfterReset;
+		TArray<FString> ReferencerSummariesAfterReset;
 
 		bool WasGeneratedClassGarbageCollectedAfterReset() const
 		{
@@ -158,7 +165,7 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
 		const double StartTime = FPlatformTime::Seconds();
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 		const double TotalSeconds = FPlatformTime::Seconds() - StartTime;
 		check(Engine.IsValid());
 		const FAngelscriptBindExecutionSnapshot Snapshot = FAngelscriptBindExecutionObservation::GetLastSnapshot();
@@ -170,7 +177,7 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		FAngelscriptBindExecutionObservation::Reset();
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		TUniquePtr<FAngelscriptEngine> SourceEngine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		TUniquePtr<FAngelscriptEngine> SourceEngine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 		check(SourceEngine.IsValid());
 		FAngelscriptBindExecutionObservation::Reset();
 		const double StartTime = FPlatformTime::Seconds();
@@ -187,7 +194,7 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
 		const double StartTime = FPlatformTime::Seconds();
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+		TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 		const double TotalSeconds = FPlatformTime::Seconds() - StartTime;
 		check(Engine.IsValid());
 		const FAngelscriptBindExecutionSnapshot Snapshot = FAngelscriptBindExecutionObservation::GetLastSnapshot();
@@ -199,12 +206,12 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 		FAngelscriptBindExecutionObservation::Reset();
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		TUniquePtr<FAngelscriptEngine> SourceEngine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		TUniquePtr<FAngelscriptEngine> SourceEngine = AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 		check(SourceEngine.IsValid());
 		FAngelscriptEngineScope GlobalScope(*SourceEngine);
 		FAngelscriptBindExecutionObservation::Reset();
 		const double StartTime = FPlatformTime::Seconds();
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+		TUniquePtr<FAngelscriptEngine> Engine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 		const double TotalSeconds = FPlatformTime::Seconds() - StartTime;
 		check(Engine.IsValid());
 		const FAngelscriptBindExecutionSnapshot Snapshot = FAngelscriptBindExecutionObservation::GetLastSnapshot();
@@ -219,6 +226,81 @@ namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private
 	FString MakeShareCleanGeneratedClassName(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
 	{
 		return FString::Printf(TEXT("UASShareCleanCycle_%s_%d_%s"), Workload.Name, CycleIndex, *RunSuffix);
+	}
+
+	FString FormatReferenceDiagnosticFlags(const UObject* Object)
+	{
+		if (Object == nullptr)
+		{
+			return TEXT("null");
+		}
+
+		TArray<FString> Flags;
+		if (Object->IsRooted())
+		{
+			Flags.Add(TEXT("Rooted"));
+		}
+		if (Object->HasAnyFlags(RF_Standalone))
+		{
+			Flags.Add(TEXT("Standalone"));
+		}
+		if (Object->HasAnyFlags(RF_Public))
+		{
+			Flags.Add(TEXT("Public"));
+		}
+		if (Object->HasAnyFlags(RF_Transient))
+		{
+			Flags.Add(TEXT("Transient"));
+		}
+		if (Object->HasAnyFlags(RF_BeginDestroyed))
+		{
+			Flags.Add(TEXT("BeginDestroyed"));
+		}
+		if (Object->HasAnyFlags(RF_FinishDestroyed))
+		{
+			Flags.Add(TEXT("FinishDestroyed"));
+		}
+		if (Object->IsUnreachable())
+		{
+			Flags.Add(TEXT("Unreachable"));
+		}
+		if (Object->HasAnyInternalFlags(EInternalObjectFlags::Garbage))
+		{
+			Flags.Add(TEXT("Garbage"));
+		}
+
+		return Flags.Num() > 0 ? FString::Join(Flags, TEXT("|")) : FString(TEXT("None"));
+	}
+
+	FString FormatReferenceDiagnosticObject(const UObject* Object, const UObject* TargetObject)
+	{
+		if (Object == nullptr)
+		{
+			return TEXT("<null>");
+		}
+
+		const UObject* Outer = Object->GetOuter();
+		const bool bInnerOfTarget = TargetObject != nullptr && Object->IsIn(TargetObject);
+		return FString::Printf(
+			TEXT("class=%s path=%s outer=%s relation=%s flags=%s"),
+			*Object->GetClass()->GetName(),
+			*Object->GetPathName(),
+			Outer != nullptr ? *Outer->GetPathName() : TEXT("<null>"),
+			bInnerOfTarget ? TEXT("inner") : TEXT("external"),
+			*FormatReferenceDiagnosticFlags(Object));
+	}
+
+	FString MakeSingleLineReferenceDiagnostic(FString Value)
+	{
+		Value.ReplaceInline(TEXT("\r\n"), TEXT(" | "));
+		Value.ReplaceInline(TEXT("\n"), TEXT(" | "));
+		Value.ReplaceInline(TEXT("\t"), TEXT(" "));
+		if (Value.Len() > 2000)
+		{
+			Value.LeftInline(2000);
+			Value += TEXT("...");
+		}
+		return Value;
 	}
 
 	FString MakeShareCleanScript(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
@@ -320,6 +402,60 @@ class %s : UObject
 		}
 	}
 
+	void CaptureGeneratedClassReferenceDiagnosticsAfterReset(FShareCleanCycleSample& Sample, const TWeakObjectPtr<UASClass>& WeakGeneratedClass)
+	{
+		if (!Sample.bGeneratedClassExpected)
+		{
+			return;
+		}
+
+		UASClass* GeneratedClass = WeakGeneratedClass.Get();
+		if (GeneratedClass == nullptr && !Sample.GeneratedClassPathName.IsEmpty())
+		{
+			GeneratedClass = FindObject<UASClass>(nullptr, *Sample.GeneratedClassPathName);
+		}
+		if (GeneratedClass == nullptr || !IsValid(GeneratedClass))
+		{
+			return;
+		}
+
+		constexpr int32 MaxReferencerSummaries = 8;
+		TArray<UObject*> Referencees;
+		Referencees.Add(GeneratedClass);
+		const TArray<UObject*> Referencers = FReferencerFinder::GetAllReferencers(
+			Referencees,
+			nullptr,
+			EReferencerFinderFlags::SkipWeakReferences);
+
+		for (UObject* Referencer : Referencers)
+		{
+			if (Referencer == nullptr)
+			{
+				continue;
+			}
+
+			++Sample.StrongReferencerCountAfterReset;
+			if (!Referencer->IsIn(GeneratedClass))
+			{
+				++Sample.ExternalStrongReferencerCountAfterReset;
+			}
+			if (Sample.ReferencerSummariesAfterReset.Num() < MaxReferencerSummaries)
+			{
+				Sample.ReferencerSummariesAfterReset.Add(FormatReferenceDiagnosticObject(Referencer, GeneratedClass));
+			}
+		}
+
+		if (Sample.CycleIndex == 0)
+		{
+			FReferenceChainSearch ReferenceChainSearch(
+				GeneratedClass,
+				EReferenceChainSearchMode::Shortest,
+				ELogVerbosity::Verbose);
+			Sample.ReferenceRootPathAfterReset = MakeSingleLineReferenceDiagnostic(ReferenceChainSearch.GetRootPath(GeneratedClass));
+			Sample.bReferenceRootPathCapturedAfterReset = !Sample.ReferenceRootPathAfterReset.IsEmpty();
+		}
+	}
+
 	FShareCleanCycleSample MeasureShareCleanCycle(const FShareCleanWorkload& Workload, const FString& RunSuffix, int32 CycleIndex)
 	{
 		FShareCleanCycleSample Sample;
@@ -345,6 +481,7 @@ class %s : UObject
 		Sample.ResetActiveModuleCount = Engine.GetActiveModules().Num();
 		CaptureGeneratedClassAfterReset(Sample, WeakGeneratedClass);
 		Sample.TotalSeconds = FPlatformTime::Seconds() - TotalStartTime;
+		CaptureGeneratedClassReferenceDiagnosticsAfterReset(Sample, WeakGeneratedClass);
 		return Sample;
 	}
 
@@ -366,7 +503,7 @@ class %s : UObject
 		if (Sample.bGeneratedClassExpected)
 		{
 			const FString GeneratedClassLine = FString::Printf(
-				TEXT("[PERF] share_clean.%s cycle=%d generated_class=%s found_before_reset=%s gc_after_reset=%s weak_valid_after_reset=%s path_findable_after_reset=%s matching_uasclass_after_reset=%d detached_after_reset=%d rooted_after_reset=%d standalone_after_reset=%d"),
+				TEXT("[PERF] share_clean.%s cycle=%d generated_class=%s found_before_reset=%s gc_after_reset=%s weak_valid_after_reset=%s path_findable_after_reset=%s matching_uasclass_after_reset=%d detached_after_reset=%d rooted_after_reset=%d standalone_after_reset=%d strong_referencers_after_reset=%d external_strong_referencers_after_reset=%d"),
 				*Sample.WorkloadName,
 				Sample.CycleIndex,
 				*Sample.GeneratedClassName,
@@ -377,9 +514,34 @@ class %s : UObject
 				Sample.GeneratedClassCountAfterReset,
 				Sample.DetachedGeneratedClassCountAfterReset,
 				Sample.RootedGeneratedClassCountAfterReset,
-				Sample.StandaloneGeneratedClassCountAfterReset);
+				Sample.StandaloneGeneratedClassCountAfterReset,
+				Sample.StrongReferencerCountAfterReset,
+				Sample.ExternalStrongReferencerCountAfterReset);
 			UE_LOG(LogTemp, Log, TEXT("%s"), *GeneratedClassLine);
 			Test.AddInfo(GeneratedClassLine);
+
+			if (Sample.bReferenceRootPathCapturedAfterReset)
+			{
+				const FString ReferenceRootLine = FString::Printf(
+					TEXT("[PERF] share_clean.%s cycle=%d generated_class_reference_root_path=%s"),
+					*Sample.WorkloadName,
+					Sample.CycleIndex,
+					*Sample.ReferenceRootPathAfterReset);
+				UE_LOG(LogTemp, Log, TEXT("%s"), *ReferenceRootLine);
+				Test.AddInfo(ReferenceRootLine);
+			}
+
+			for (int32 ReferencerIndex = 0; ReferencerIndex < Sample.ReferencerSummariesAfterReset.Num(); ++ReferencerIndex)
+			{
+				const FString ReferencerLine = FString::Printf(
+					TEXT("[PERF] share_clean.%s cycle=%d generated_class_referencer[%d]=%s"),
+					*Sample.WorkloadName,
+					Sample.CycleIndex,
+					ReferencerIndex,
+					*Sample.ReferencerSummariesAfterReset[ReferencerIndex]);
+				UE_LOG(LogTemp, Log, TEXT("%s"), *ReferencerLine);
+				Test.AddInfo(ReferencerLine);
+			}
 		}
 	}
 
@@ -425,6 +587,8 @@ class %s : UObject
 		TArray<double> DetachedClassCountAfterReset;
 		TArray<double> RootedClassCountAfterReset;
 		TArray<double> StandaloneClassCountAfterReset;
+		TArray<double> StrongReferencerCountAfterReset;
+		TArray<double> ExternalStrongReferencerCountAfterReset;
 
 		for (const FShareCleanCycleSample& Sample : Samples)
 		{
@@ -440,6 +604,8 @@ class %s : UObject
 			DetachedClassCountAfterReset.Add(static_cast<double>(Sample.DetachedGeneratedClassCountAfterReset));
 			RootedClassCountAfterReset.Add(static_cast<double>(Sample.RootedGeneratedClassCountAfterReset));
 			StandaloneClassCountAfterReset.Add(static_cast<double>(Sample.StandaloneGeneratedClassCountAfterReset));
+			StrongReferencerCountAfterReset.Add(static_cast<double>(Sample.StrongReferencerCountAfterReset));
+			ExternalStrongReferencerCountAfterReset.Add(static_cast<double>(Sample.ExternalStrongReferencerCountAfterReset));
 		}
 
 		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_gc_after_reset"), GcAfterReset, TEXT("boolean"));
@@ -449,6 +615,8 @@ class %s : UObject
 		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_detached_count_after_reset"), DetachedClassCountAfterReset, TEXT("count"));
 		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_rooted_count_after_reset"), RootedClassCountAfterReset, TEXT("count"));
 		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_standalone_count_after_reset"), StandaloneClassCountAfterReset, TEXT("count"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_strong_referencer_count_after_reset"), StrongReferencerCountAfterReset, TEXT("count"));
+		AddShareCleanMetric(Metrics, TEXT("share_clean.uclass.generated_class_external_strong_referencer_count_after_reset"), ExternalStrongReferencerCountAfterReset, TEXT("count"));
 	}
 
 	FString ValidateAndWriteShareCleanMetrics(FAutomationTestBase& Test, const TArray<FShareCleanCycleSample>& Samples)
@@ -467,6 +635,7 @@ class %s : UObject
 			{
 				TEXT("Measures ASTEST_CREATE_ENGINE_SHARE_CLEAN acquire/create, AS compile, and explicit ResetSharedCloneEngine latency across serial cycles."),
 				TEXT("Cycle 0 starts after destroying the shared test engine; later cycles observe the hot shared-engine path."),
+				TEXT("Generated UASClass diagnostics run after timing capture and report GC state plus strong referencers."),
 				TEXT("No timing thresholds are enforced; this is an optimization baseline artifact.")
 			});
 		Test.TestTrue(TEXT("Share-clean cycle performance test should write a metrics.json artifact"), FPlatformFileManager::Get().GetPlatformFile().FileExists(*MetricsPath));
@@ -556,6 +725,17 @@ bool FAngelscriptShareCleanCyclePerformanceTest::RunTest(const FString& Paramete
 					*FString::Printf(TEXT("Share-clean %s cycle %d generated UASClass should not remain standalone after reset"), Workload.Name, CycleIndex),
 					Sample.StandaloneGeneratedClassCountAfterReset,
 					0);
+				TestEqual(
+					*FString::Printf(TEXT("Share-clean %s cycle %d generated UASClass should have no strong referencers after reset"), Workload.Name, CycleIndex),
+					Sample.StrongReferencerCountAfterReset,
+					0);
+				TestEqual(
+					*FString::Printf(TEXT("Share-clean %s cycle %d generated UASClass should have no external strong referencers after reset"), Workload.Name, CycleIndex),
+					Sample.ExternalStrongReferencerCountAfterReset,
+					0);
+				TestTrue(
+					*FString::Printf(TEXT("Share-clean %s cycle %d generated UASClass should be garbage collected after reset"), Workload.Name, CycleIndex),
+					Sample.WasGeneratedClassGarbageCollectedAfterReset());
 			}
 			Samples.Add(MoveTemp(Sample));
 		}

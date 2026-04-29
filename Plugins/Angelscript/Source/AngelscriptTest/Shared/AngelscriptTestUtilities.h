@@ -14,12 +14,17 @@
 #include "UObject/UObjectIterator.h"
 #include "Preprocessor/AngelscriptPreprocessor.h"
 #include "ClassGenerator/ASClass.h"
+#include "ClassGenerator/ASStruct.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_context.h"
 #include "source/as_module.h"
 #include "source/as_scriptengine.h"
 #include "EndAngelscriptHeaders.h"
+
+#if WITH_EDITOR
+#include "BlueprintActionDatabase.h"
+#endif
 
 struct FAngelscriptTestEngineScopeAccess
 {
@@ -134,22 +139,56 @@ namespace AngelscriptTestSupport
 		return static_cast<asCScriptEngine*>(RawEngine);
 	}
 
-	inline TUniquePtr<FAngelscriptEngine> CreateIsolatedFullEngine()
+	inline TUniquePtr<FAngelscriptEngine> CreateScriptScanFreeFullEngineForTesting(
+		const FAngelscriptEngineConfig& Config,
+		const FAngelscriptEngineDependencies& Dependencies)
+	{
+		// Test-only full engines bind UE/AS types and mark the initial compile gate
+		// complete, but intentionally do not scan project/plugin Script roots or
+		// compile disk .as files. Test scripts are supplied explicitly through the
+		// in-memory helpers below, so the shared engine starts without
+		// Script/Examples modules or generated classes.
+		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
+		UE_LOG(Angelscript, Verbose, TEXT("[TestEngine] Created script-scan-free Full engine %p id='%s'"),
+			Engine.Get(), Engine.IsValid() ? *Engine->GetInstanceId() : TEXT("null"));
+		return Engine;
+	}
+
+	inline TUniquePtr<FAngelscriptEngine> CreateScriptScanFreeFullEngineForTesting()
 	{
 		FAngelscriptEngineConfig Config;
 		FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
+		return CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
+	}
 
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
-		UE_LOG(Angelscript, Verbose, TEXT("[TestEngine] Created isolated Full engine %p id='%s'"),
-			Engine.Get(), Engine.IsValid() ? *Engine->GetInstanceId() : TEXT("null"));
-		return Engine;
+	inline TUniquePtr<FAngelscriptEngine> CreateScriptScanFreeEngineForTesting(
+		const FAngelscriptEngineConfig& Config,
+		const FAngelscriptEngineDependencies& Dependencies,
+		EAngelscriptEngineCreationMode Mode = EAngelscriptEngineCreationMode::Clone)
+	{
+		if (Mode == EAngelscriptEngineCreationMode::Full)
+		{
+			return CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
+		}
+
+		if (FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine())
+		{
+			return FAngelscriptEngine::CreateCloneFrom(*CurrentEngine, Config, Dependencies);
+		}
+
+		return CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
+	}
+
+	inline TUniquePtr<FAngelscriptEngine> CreateIsolatedFullEngine()
+	{
+		return CreateScriptScanFreeFullEngineForTesting();
 	}
 
 	inline TUniquePtr<FAngelscriptEngine> CreateIsolatedCloneEngine()
 	{
 		FAngelscriptEngineConfig Config;
 		FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		TUniquePtr<FAngelscriptEngine> Engine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+		TUniquePtr<FAngelscriptEngine> Engine = CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 		UE_LOG(Angelscript, Verbose, TEXT("[TestEngine] Created isolated Clone engine %p id='%s'"),
 			Engine.Get(), Engine.IsValid() ? *Engine->GetInstanceId() : TEXT("null"));
 		return Engine;
@@ -216,6 +255,128 @@ namespace AngelscriptTestSupport
 		return GetOrCreateSharedCloneEngine();
 	}
 
+	struct FDetachedASTypeCleanupResult
+	{
+		int32 DetachedClassCount = 0;
+		int32 RootedDetachedClassCount = 0;
+		int32 DetachedStructCount = 0;
+		int32 RootedDetachedStructCount = 0;
+		int32 DiscardedEnumCount = 0;
+		int32 RootedDiscardedEnumCount = 0;
+		int32 DiscardedDelegateFunctionCount = 0;
+		int32 RootedDiscardedDelegateFunctionCount = 0;
+		int32 BlueprintActionCacheClearedCount = 0;
+	};
+
+	inline FDetachedASTypeCleanupResult CleanupDetachedASTypesForGarbageCollection(const TArray<TSharedRef<FAngelscriptModuleDesc>>* DiscardedModules = nullptr)
+	{
+		FDetachedASTypeCleanupResult Result;
+#if WITH_EDITOR
+		// Editor Blueprint action entries can keep test-generated UASClass objects alive.
+		// The action database references UBlueprintNodeSpawner objects during GC, and
+		// variable node spawners can point at FProperty objects owned by the generated class.
+		// Use TryGet() so reset only cleans an existing database instead of initializing one.
+		FBlueprintActionDatabase* BlueprintActionDatabase = FBlueprintActionDatabase::TryGet();
+#endif
+		auto CleanupGeneratedObject = [&Result
+#if WITH_EDITOR
+			, BlueprintActionDatabase
+#endif
+		](UObject* Object, int32& ObjectCount, int32& RootedObjectCount)
+		{
+			if (Object == nullptr)
+			{
+				return;
+			}
+
+			++ObjectCount;
+#if WITH_EDITOR
+			if (BlueprintActionDatabase != nullptr && BlueprintActionDatabase->ClearAssetActions(Object))
+			{
+				++Result.BlueprintActionCacheClearedCount;
+			}
+#endif
+			if (Object->IsRooted())
+			{
+				Object->RemoveFromRoot();
+				++RootedObjectCount;
+			}
+			Object->ClearFlags(RF_Standalone);
+		};
+
+		for (TObjectIterator<UASClass> It; It; ++It)
+		{
+			if (It->ScriptTypePtr == nullptr)
+			{
+				++Result.DetachedClassCount;
+#if WITH_EDITOR
+				// Drop cached actions before GC; otherwise Blueprint action spawners may
+				// remain external strong references to this detached generated class.
+				if (BlueprintActionDatabase != nullptr && BlueprintActionDatabase->ClearAssetActions(*It))
+				{
+					++Result.BlueprintActionCacheClearedCount;
+				}
+#endif
+				if (It->IsRooted())
+				{
+					It->RemoveFromRoot();
+					++Result.RootedDetachedClassCount;
+				}
+				It->ClearFlags(RF_Standalone);
+			}
+		}
+
+		for (TObjectIterator<UASStruct> It; It; ++It)
+		{
+			if (It->ScriptType == nullptr)
+			{
+				++Result.DetachedStructCount;
+#if WITH_EDITOR
+				// Script structs are also rooted/standalone generated objects. If the
+				// editor created struct actions, drop those cache entries before GC.
+				if (BlueprintActionDatabase != nullptr && BlueprintActionDatabase->ClearAssetActions(*It))
+				{
+					++Result.BlueprintActionCacheClearedCount;
+				}
+#endif
+				if (It->IsRooted())
+				{
+					It->RemoveFromRoot();
+					++Result.RootedDetachedStructCount;
+				}
+				It->ClearFlags(RF_Standalone);
+			}
+		}
+
+		if (DiscardedModules != nullptr)
+		{
+			// UEnum and UDelegateFunction do not carry an object-local "detached"
+			// marker like UASClass::ScriptTypePtr or UASStruct::ScriptType. Limit
+			// cleanup to objects recorded by modules we just discarded so reset will
+			// not touch generated types that may still belong to another live engine.
+			for (const TSharedRef<FAngelscriptModuleDesc>& Module : *DiscardedModules)
+			{
+				for (const TSharedRef<FAngelscriptEnumDesc>& Enum : Module->Enums)
+				{
+					CleanupGeneratedObject(
+						Enum->Enum,
+						Result.DiscardedEnumCount,
+						Result.RootedDiscardedEnumCount);
+				}
+
+				for (const TSharedRef<FAngelscriptDelegateDesc>& Delegate : Module->Delegates)
+				{
+					CleanupGeneratedObject(
+						Delegate->Function,
+						Result.DiscardedDelegateFunctionCount,
+						Result.RootedDiscardedDelegateFunctionCount);
+				}
+			}
+		}
+
+		return Result;
+	}
+
 	inline void ResetSharedCloneEngine(FAngelscriptEngine& Engine)
 	{
 		const TArray<TSharedRef<FAngelscriptModuleDesc>> ActiveModules = Engine.GetActiveModules();
@@ -255,26 +416,22 @@ namespace AngelscriptTestSupport
 			ScriptEngine->DeleteDiscardedModules();
 		}
 
-		int32 DetachedClassCount = 0;
-		int32 UnrootedCount = 0;
-		for (TObjectIterator<UASClass> It; It; ++It)
+		const FDetachedASTypeCleanupResult DetachedTypeResult = CleanupDetachedASTypesForGarbageCollection(&ActiveModules);
+		if (DetachedTypeResult.DetachedClassCount > 0
+			|| DetachedTypeResult.DetachedStructCount > 0
+			|| DetachedTypeResult.DiscardedEnumCount > 0
+			|| DetachedTypeResult.DiscardedDelegateFunctionCount > 0)
 		{
-			if (It->ScriptTypePtr == nullptr)
-			{
-				++DetachedClassCount;
-				if (It->IsRooted())
-				{
-					It->RemoveFromRoot();
-					++UnrootedCount;
-				}
-				It->ClearFlags(RF_Standalone);
-			}
-		}
-
-		if (DetachedClassCount > 0)
-		{
-			UE_LOG(Angelscript, Verbose, TEXT("[TestEngine] ResetShared: cleaned %d detached UASClass objects (%d unrooted)"),
-				DetachedClassCount, UnrootedCount);
+			UE_LOG(Angelscript, Verbose, TEXT("[TestEngine] ResetShared: cleaned %d detached UASClass objects (%d unrooted), %d detached UASStruct objects (%d unrooted), %d discarded UEnum objects (%d unrooted), and %d discarded delegate functions (%d unrooted, %d blueprint action entries cleared)"),
+				DetachedTypeResult.DetachedClassCount,
+				DetachedTypeResult.RootedDetachedClassCount,
+				DetachedTypeResult.DetachedStructCount,
+				DetachedTypeResult.RootedDetachedStructCount,
+				DetachedTypeResult.DiscardedEnumCount,
+				DetachedTypeResult.RootedDiscardedEnumCount,
+				DetachedTypeResult.DiscardedDelegateFunctionCount,
+				DetachedTypeResult.RootedDiscardedDelegateFunctionCount,
+				DetachedTypeResult.BlueprintActionCacheClearedCount);
 		}
 
 		CollectGarbage(RF_NoFlags, true);

@@ -70,7 +70,7 @@ bool FAngelscriptCreateForTestingLifecycleModeTest::RunTest(const FString& Param
 			return false;
 		}
 
-		TUniquePtr<FAngelscriptEngine> CloneEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+		TUniquePtr<FAngelscriptEngine> CloneEngine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 		if (!TestNotNull(TEXT("Scoped source engine should allow CreateForTesting(Clone) to return an engine"), CloneEngine.Get()))
 		{
 			return false;
@@ -87,7 +87,7 @@ bool FAngelscriptCreateForTestingLifecycleModeTest::RunTest(const FString& Param
 		return false;
 	}
 
-	TUniquePtr<FAngelscriptEngine> FallbackEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> FallbackEngine = AngelscriptTestSupport::CreateScriptScanFreeEngineForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	if (!TestNotNull(TEXT("No-current-engine CreateForTesting(Clone) should fall back to a full engine"), FallbackEngine.Get()))
 	{
 		return false;

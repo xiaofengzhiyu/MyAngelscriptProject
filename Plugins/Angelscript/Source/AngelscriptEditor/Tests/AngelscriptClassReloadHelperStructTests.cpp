@@ -28,7 +28,7 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptClassReloadHelperStructTest
 	{
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		return FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
 	}
 
 	void EnsureClassReloadHelperInitialized()

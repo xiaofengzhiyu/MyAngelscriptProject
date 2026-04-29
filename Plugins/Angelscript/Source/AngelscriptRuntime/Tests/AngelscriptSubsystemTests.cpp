@@ -164,7 +164,7 @@ bool FAngelscriptGameInstanceSubsystemTest::RunTest(const FString& Parameters)
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	if (!TestNotNull(TEXT("Game instance subsystem test should create a test engine wrapper"), OwnedEngine.Get()))
 	{
 		return false;
@@ -212,7 +212,7 @@ bool FAngelscriptSubsystemCreatesPrimaryEngineTest::RunTest(const FString& Param
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	TStrongObjectPtr<UGameInstance> GameInstance;
 	UAngelscriptGameInstanceSubsystem* Subsystem = CreateInjectedSubsystem(*this, OwnedEngine.Get(), GameInstance);
 	if (!TestNotNull(TEXT("Subsystem create test should expose the Angelscript subsystem"), Subsystem))
@@ -240,7 +240,7 @@ bool FAngelscriptSubsystemTicksPrimaryEngineTest::RunTest(const FString& Paramet
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	TStrongObjectPtr<UGameInstance> GameInstance;
 	UAngelscriptGameInstanceSubsystem* Subsystem = CreateInjectedSubsystem(*this, OwnedEngine.Get(), GameInstance);
 	if (!TestNotNull(TEXT("Subsystem tick test should expose the Angelscript subsystem"), Subsystem))
@@ -280,7 +280,7 @@ bool FAngelscriptSubsystemDeinitializeDestroysPrimaryEngineTest::RunTest(const F
 
 	FAngelscriptEngineConfig Config;
 	FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Full);
 	if (!TestNotNull(TEXT("Subsystem deinitialize test should create a test-owned primary engine"), OwnedEngine.Get()))
 	{
 		return false;
@@ -304,7 +304,7 @@ bool FAngelscriptRuntimeFallbackDoesNotTickWhenSubsystemOwnsEngineTest::RunTest(
 {
 	const FAngelscriptEngineConfig Config;
 	const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateForTesting(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
+	TUniquePtr<FAngelscriptEngine> OwnedEngine = FAngelscriptEngine::CreateUncompiledWithMode(Config, Dependencies, EAngelscriptEngineCreationMode::Clone);
 	TStrongObjectPtr<UGameInstance> GameInstance;
 	UAngelscriptGameInstanceSubsystem* Subsystem = CreateInjectedSubsystem(*this, OwnedEngine.Get(), GameInstance);
 	if (!TestNotNull(TEXT("Fallback tick test should expose the Angelscript subsystem"), Subsystem))
@@ -340,7 +340,7 @@ bool FAngelscriptRuntimeModuleInitializeCreatesGlobalEngineTest::RunTest(const F
 	{
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies).Release();
+		return FAngelscriptEngine::CreateUncompiled(Config, Dependencies).Release();
 	});
 	ON_SCOPE_EXIT
 	{
@@ -367,7 +367,7 @@ bool FAngelscriptRuntimeModuleStartupRegistersFallbackTickerTest::RunTest(const 
 	{
 		const FAngelscriptEngineConfig Config;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies).Release();
+		return FAngelscriptEngine::CreateUncompiled(Config, Dependencies).Release();
 	});
 	FAngelscriptRuntimeModule RuntimeModule;
 	ON_SCOPE_EXIT
@@ -394,7 +394,7 @@ bool FAngelscriptRuntimeFallbackTicksGlobalEngineWithoutSubsystemOwnerTest::RunT
 		FAngelscriptEngineConfig Config;
 		Config.bDevelopmentMode = true;
 		const FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies).Release();
+		return FAngelscriptEngine::CreateUncompiled(Config, Dependencies).Release();
 	});
 	ON_SCOPE_EXIT
 	{

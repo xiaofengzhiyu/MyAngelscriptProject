@@ -20,7 +20,7 @@ namespace AngelscriptTest_Preprocessor_AngelscriptPreprocessorDirectiveTests_Pri
 		Config.bIsEditor = true;
 
 		FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		return FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		return AngelscriptTestSupport::CreateScriptScanFreeFullEngineForTesting(Config, Dependencies);
 	}
 
 	FString GetPreprocessorDirectiveFixtureRoot()

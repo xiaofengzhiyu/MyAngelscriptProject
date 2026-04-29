@@ -91,7 +91,7 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptDirectoryWatcherTests_Priva
 	{
 		FAngelscriptEngineConfig Config;
 		FAngelscriptEngineDependencies Dependencies = FAngelscriptEngineDependencies::CreateDefault();
-		OutResolved.OwnedEngine = FAngelscriptEngine::CreateTestingFullEngine(Config, Dependencies);
+		OutResolved.OwnedEngine = FAngelscriptEngine::CreateUncompiled(Config, Dependencies);
 		if (!Test.TestNotNull(TEXT("DirectoryWatcher.GatherLoadedScriptsForFolder.DeduplicatesAndRejectsPrefixCollisions should acquire an Angelscript engine"), OutResolved.OwnedEngine.Get()))
 		{
 			return false;
