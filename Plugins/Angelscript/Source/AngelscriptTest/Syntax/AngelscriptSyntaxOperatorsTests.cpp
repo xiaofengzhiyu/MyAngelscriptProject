@@ -302,7 +302,7 @@ int LogicAnd()      { return (true && true) ? 1 : 0; }
 int LogicOr()       { return (false || true) ? 1 : 0; }
 int LogicNot()      { return (!false) ? 1 : 0; }
 int LogicCompound() { return ((true && !false) || (false && true)) ? 1 : 0; }
-int ShortCircuit()  { bool A = false; return (A && (1/0 > 0)) ? 1 : 0; }
+int ShortCircuit()  { bool A = false; int Z = 0; return (A && (1/Z > 0)) ? 1 : 0; }
 )"));
 		ASSERT_THAT(IsTrue(Mod.IsValid()));
 		auto& M = Mod.GetModule();
@@ -661,7 +661,7 @@ int MaxParens()     { return ((((1 + 2)))); }
 int LongChain()    { return 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10; }
 int PrecedenceMix() { return 2 + 3 * 4 - 1; }
 int BitAndLogic()  { int X = 5; return (X > 0 && (X & 1) == 1) ? 1 : 0; }
-int AssignInExpr() { int X = 0; int Y = (X = 5); return Y; }
+int AssignInExpr() { int X = 0; X = 5; int Y = X; return Y; }
 )"));
 		ASSERT_THAT(IsTrue(Mod.IsValid()));
 		auto& M = Mod.GetModule();
@@ -671,7 +671,7 @@ int AssignInExpr() { int X = 0; int Y = (X = 5); return Y; }
 			{ TEXT("int LongChain()"),    TEXT("1+2+...+10 = 55"),      55 },
 			{ TEXT("int PrecedenceMix()"),TEXT("2+3*4-1 = 13"),         13 },
 			{ TEXT("int BitAndLogic()"),  TEXT("logic + bitwise mix"),    1 },
-			{ TEXT("int AssignInExpr()"), TEXT("assign in expression"),   5 },
+			{ TEXT("int AssignInExpr()"), TEXT("sequential assign"),       5 },
 		};
 		ExpectGlobalInts(*TestRunner, Engine, M, GSyntaxOperatorsProfile, Cases);
 

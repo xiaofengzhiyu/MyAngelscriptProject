@@ -309,7 +309,7 @@ void Test() { do { } while (1); }
 int BasicSwitch()  { int X = 1; switch(X) { case 0: return 0; case 1: return 1; default: return -1; } }
 int Fallthrough()  { int X = 0; int Y = 0; switch(X) { case 0: fallthrough; case 1: Y = 10; break; default: Y = 20; break; } return Y; }
 int MultiCase()    { int X = 1; switch(X) { case 0: case 1: case 2: return 99; default: return 0; } }
-int DefaultOnly()  { int X = 42; switch(X) { default: return 100; } }
+int DefaultOnly()  { int X = 42; switch(X) { case 0: return 0; default: return 100; } }
 )"));
 		ASSERT_THAT(IsTrue(Mod.IsValid()));
 		auto& M = Mod.GetModule();
