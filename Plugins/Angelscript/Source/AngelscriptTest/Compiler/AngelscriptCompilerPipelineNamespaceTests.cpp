@@ -62,14 +62,13 @@ namespace CompilerPipelineNamespaceTest
 	}
 }
 
-using namespace CompilerPipelineNamespaceTest;
-
 TEST_CLASS_WITH_FLAGS(FCompilerPipelineNamespaceTests,
 	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	TEST_METHOD(NamespacedAnnotatedClassStaticHelperRoundTrip)
 	{
+	using namespace CompilerPipelineNamespaceTest;
 	using namespace AngelscriptTestSupport;
 
 

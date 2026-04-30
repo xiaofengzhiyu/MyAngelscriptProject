@@ -31,14 +31,13 @@ class UExactNameCarrier : UObject
 )AS");
 }
 
-using namespace CompilerPipelineNamingTest;
-
 TEST_CLASS_WITH_FLAGS(FCompilerPipelineNamingTests,
 	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	TEST_METHOD(GeneratedClassExactNameLookup)
 	{
+	using namespace CompilerPipelineNamingTest;
 	using namespace AngelscriptTestSupport;
 
 

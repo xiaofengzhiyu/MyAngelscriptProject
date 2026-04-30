@@ -140,14 +140,13 @@ int Entry()
 	}
 }
 
-using namespace CompilerPipelineRecompileTest;
-
 TEST_CLASS_WITH_FLAGS(FCompilerPipelineRecompileTests,
 	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	TEST_METHOD(SuccessfulRecompileReplacesStaleOutputs)
 	{
+	using namespace CompilerPipelineRecompileTest;
 	using namespace AngelscriptTestSupport;
 
 
