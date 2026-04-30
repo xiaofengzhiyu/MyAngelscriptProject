@@ -147,5 +147,6 @@
 ├── Note_UBT.md                            // UBT 构建约束
 ├── Note_InterfaceBinding.md               // 接口绑定现状
 ├── Note_InternalsEngineFactory.md         // Internals 引擎工厂分析
-└── Note_ScreenshotTestHelper.md           // 截图测试 Helper
+├── Note_ScreenshotTestHelper.md           // 截图测试 Helper
+└── Note_CQTest.md                         // CQTest 测试框架使用笔记
 ```

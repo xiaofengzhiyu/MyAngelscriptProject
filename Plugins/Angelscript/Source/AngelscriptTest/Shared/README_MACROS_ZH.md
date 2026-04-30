@@ -1,21 +1,20 @@
-# Angelscript 测试宏说明（中文补充）
+# Angelscript 测试宏说明
 
-本文是 `README_MACROS.md` 的中文补充，聚焦当前生效的 `ASTEST_*` 宏体系与生命周期边界规则。
+## 当前宏（定义在 `AngelscriptTestMacros.h`）
 
-## 当前有效入口
+| 宏 | 用途 |
+|---|---|
+| `ASTEST_CREATE_ENGINE()` | 共享引擎 + reset（BEFORE_ALL 用） |
+| `ASTEST_GET_ENGINE()` | 共享引擎，不 reset（TEST_METHOD 用） |
+| `ASTEST_CREATE_ENGINE_FULL()` | 独立完整引擎 |
+| `ASTEST_CREATE_ENGINE_NATIVE()` | 原生 SDK 引擎 |
+| `ASTEST_RESET_ENGINE(Engine)` | 重置共享引擎（AFTER_ALL 用） |
 
-- 宏定义：`AngelscriptTestMacros.h`
-- 测试指南：`../TESTING_GUIDE.md`
-- 中文补充：`../TESTING_GUIDE_ZH.md`
+## 废弃宏（定义在 `AngelscriptTestLegacyHelpers.h`）
 
-## 关键结论
+仅供约 11 个旧式 `IMPLEMENT_SIMPLE_AUTOMATION_TEST` 文件使用，新测试不要用。
 
-- `ASTEST_END_*` 不是“主动执行清理”的运行时代码点，它主要是 `ASTEST_BEGIN_*` 对应的源码级作用域闭合。
-- 清理动作来自 `ASTEST_BEGIN_*` 内创建的 `FAngelscriptEngineScope` 和 `ON_SCOPE_EXIT`。
-- 因此，提前 `return` 时清理仍然会发生，但终结 `return` 仍然应该写在 `ASTEST_END_*` 之后，让源码里的生命周期边界保持显式。
+## 参考
 
-## 迁移规则
-
-- 不再使用旧的 `ANGELSCRIPT_*` 包装宏命名。
-- 终结 `return` 放在 `ASTEST_END_*` 之后。
-- 如果返回值依赖作用域内局部变量，先保存到外层变量，再结束生命周期宏，再返回。
+- 完整指南：`TESTING_GUIDE.md` / `TESTING_GUIDE_ZH.md`
+- CQTest 模板：`Template/Template_CQTest.cpp`

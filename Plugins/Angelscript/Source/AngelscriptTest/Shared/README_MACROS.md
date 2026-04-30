@@ -1,59 +1,26 @@
-# Angelscript Test Macro Notes
+# Angelscript Test Macros
 
-Chinese companion: `README_MACROS_ZH.md`
+Chinese: `README_MACROS_ZH.md`
 
-## Status
+## Current Macros (defined in `AngelscriptTestMacros.h`)
 
-This file previously documented an abandoned `ANGELSCRIPT_TEST` / `ANGELSCRIPT_ISOLATED_TEST` wrapper family.
+| Macro | Purpose |
+|-------|---------|
+| `ASTEST_CREATE_ENGINE()` | Shared engine with reset (use in BEFORE_ALL) |
+| `ASTEST_GET_ENGINE()` | Shared engine without reset (use in TEST_METHOD) |
+| `ASTEST_CREATE_ENGINE_FULL()` | Fresh isolated full engine |
+| `ASTEST_CREATE_ENGINE_NATIVE()` | Raw asIScriptEngine* from SDK |
+| `ASTEST_RESET_ENGINE(Engine)` | Reset shared engine (use in AFTER_ALL) |
 
-Those names are not the active macro API for this repository.
+## Legacy Macros (defined in `AngelscriptTestLegacyHelpers.h`)
 
-The current authoritative macro system is:
+These are deprecated and only used by ~11 old `IMPLEMENT_SIMPLE_AUTOMATION_TEST` files:
 
-- `Plugins/Angelscript/Source/AngelscriptTest/Shared/AngelscriptTestMacros.h`
-- `Plugins/Angelscript/Source/AngelscriptTest/TESTING_GUIDE.md`
+- `ASTEST_COMPILE_RUN_INT` / `ASTEST_COMPILE_RUN_INT64` / `ASTEST_BUILD_MODULE`
 
-## Current Macro Entry Points
+They use `return false` internally and are incompatible with CQTest. Do not use in new tests.
 
-Use the current `ASTEST_*` system instead of the older `ANGELSCRIPT_*` names:
+## See Also
 
-- Engine creation: `ASTEST_CREATE_ENGINE_FULL()` / `ASTEST_CREATE_ENGINE_SHARE()` / `ASTEST_CREATE_ENGINE_SHARE_CLEAN()` / `ASTEST_CREATE_ENGINE_SHARE_FRESH()` / `ASTEST_CREATE_ENGINE_CLONE()` / `ASTEST_CREATE_ENGINE_NATIVE()`
-- Lifecycle: `ASTEST_BEGIN_FULL` / `ASTEST_END_FULL`, `ASTEST_BEGIN_SHARE` / `ASTEST_END_SHARE`, `ASTEST_BEGIN_CLONE` / `ASTEST_END_CLONE`, `ASTEST_BEGIN_NATIVE` / `ASTEST_END_NATIVE`
-- Helper macros: `ASTEST_COMPILE_RUN_INT`, `ASTEST_COMPILE_RUN_INT64`, `ASTEST_BUILD_MODULE`
-
-## Quick Example
-
-```cpp
-#include "Shared/AngelscriptTestMacros.h"
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FExampleMacroTest,
-	"Angelscript.TestModule.Validation.ExampleMacro",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FExampleMacroTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
-	ASTEST_BEGIN_FULL
-
-	int32 Result = 0;
-	ASTEST_COMPILE_RUN_INT(Engine,
-		"ASExampleMacro",
-		TEXT("int Run() { return 42; }"),
-		TEXT("int Run()"),
-		Result);
-
-	bPassed = TestEqual(TEXT("Example macro test should return the expected result"), Result, 42);
-
-	ASTEST_END_FULL
-	return bPassed;
-}
-```
-
-## Migration Guidance
-
-- Treat historical `ANGELSCRIPT_*` macro references as deprecated design artifacts.
-- Use `TESTING_GUIDE.md` for active examples and macro-selection guidance.
-- Keep the terminal `return` after `ASTEST_END_*`; treat `BEGIN` / `END` as the explicit lifecycle boundary in source.
-- Use `MACRO_MIGRATION_GUIDE.txt` only as a current redirect unless it has been updated to the same `ASTEST_*` terminology.
+- Full guide: `TESTING_GUIDE.md`
+- CQTest template: `Template/Template_CQTest.cpp`
