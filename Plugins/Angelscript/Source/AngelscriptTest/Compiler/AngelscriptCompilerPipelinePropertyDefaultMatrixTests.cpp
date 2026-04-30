@@ -2,13 +2,12 @@
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "GameFramework/Actor.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UnrealType.h"
 #include "GameplayTagContainer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace DefaultMatrixTest
@@ -30,645 +29,589 @@ namespace DefaultMatrixTest
 // Positive: FName default
 // ============================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultFNamePropertyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultFNamePropertyApplied",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultFNamePropertyTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(DefaultFNamePropertyApplied)
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::FNameModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+	using namespace AngelscriptTestSupport;
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::FNameModule,
-		TEXT("Tests/Compiler/DefaultFNameProperty.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultFNameCarrier : UObject
-{
-	UPROPERTY()
-	FName MyName;
 
-	default MyName = n"TestName";
-}
-)AS"),
-		CompileResult);
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::FNameModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	if (!TestTrue(TEXT("FName default should compile successfully"), bCompiled))
-		return false;
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultFNameCarrier"));
-	if (!TestNotNull(TEXT("FName default class should be materialized"), GeneratedClass))
-		return false;
-
-	UObject* CDO = GeneratedClass->GetDefaultObject();
-	FNameProperty* Prop = FindFProperty<FNameProperty>(GeneratedClass, TEXT("MyName"));
-	if (!TestNotNull(TEXT("CDO should exist"), CDO) || !TestNotNull(TEXT("MyName property should exist"), Prop))
-		return false;
-
-	FName Value = Prop->GetPropertyValue_InContainer(CDO);
-	TestEqual(TEXT("CDO MyName should be TestName"), Value, FName(TEXT("TestName")));
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Positive: Enum default
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultEnumPropertyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultEnumPropertyApplied",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultEnumPropertyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::FNameModule,
+			TEXT("Tests/Compiler/DefaultFNameProperty.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultFNameCarrier : UObject
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::EnumModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		UPROPERTY()
+		FName MyName;
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::EnumModule,
-		TEXT("Tests/Compiler/DefaultEnumProperty.as"),
-		TEXT(R"AS(
-enum ETestDirection
-{
-	Up,
-	Down,
-	Left,
-	Right
-}
-
-UCLASS()
-class UDefaultEnumCarrier : UObject
-{
-	UPROPERTY()
-	ETestDirection Direction;
-
-	default Direction = ETestDirection::Right;
-
-	UFUNCTION()
-	int GetDirectionValue()
-	{
-		return int(Direction);
+		default MyName = n"TestName";
 	}
-}
-)AS"),
-		CompileResult);
+	)AS"),
+			CompileResult);
 
-	if (!TestTrue(TEXT("Enum default should compile successfully"), bCompiled))
-		return false;
+		if (!TestRunner->TestTrue(TEXT("FName default should compile successfully"), bCompiled))
+			return;
 
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultEnumCarrier"));
-	if (!TestNotNull(TEXT("Enum default class should be materialized"), GeneratedClass))
-		return false;
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultFNameCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("FName default class should be materialized"), GeneratedClass))
+			return;
 
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
-	UFunction* GetFunc = GeneratedClass->FindFunctionByName(TEXT("GetDirectionValue"));
-	if (!TestNotNull(TEXT("Instance should exist"), Instance) || !TestNotNull(TEXT("GetDirectionValue should exist"), GetFunc))
-		return false;
+		UObject* CDO = GeneratedClass->GetDefaultObject();
+		FNameProperty* Prop = FindFProperty<FNameProperty>(GeneratedClass, TEXT("MyName"));
+		if (!TestRunner->TestNotNull(TEXT("CDO should exist"), CDO) || !TestRunner->TestNotNull(TEXT("MyName property should exist"), Prop))
+			return;
 
-	int32 Result = INDEX_NONE;
-	const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GetFunc, Result);
-	TestTrue(TEXT("GetDirectionValue should execute"), bExecuted);
-	TestEqual(TEXT("Direction should be Right (3)"), Result, 3);
+		FName Value = Prop->GetPropertyValue_InContainer(CDO);
+		TestRunner->TestEqual(TEXT("CDO MyName should be TestName"), Value, FName(TEXT("TestName")));
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		ASTEST_END_SHARE_CLEAN
 
-// ============================================================================
-// Positive: Float + Bool default
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultFloatBoolPropertyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultFloatAndBoolPropertyApplied",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultFloatBoolPropertyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*DefaultMatrixTest::FloatBoolModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::FloatBoolModule,
-		TEXT("Tests/Compiler/DefaultFloatBoolProperty.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultFloatBoolCarrier : UObject
-{
-	UPROPERTY()
-	float MyFloat;
-
-	UPROPERTY()
-	bool bEnabled;
-
-	default MyFloat = 3.14f;
-	default bEnabled = true;
-
-	UFUNCTION()
-	int VerifyDefaults()
-	{
-		if (MyFloat < 3.13f || MyFloat > 3.15f)
-			return 1;
-		if (!bEnabled)
-			return 2;
-		return 42;
 	}
-}
-)AS"),
-		CompileResult);
 
-	if (!TestTrue(TEXT("Float+Bool default should compile"), bCompiled))
-		return false;
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultFloatBoolCarrier"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
-
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
-	UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyDefaults"));
-	if (!TestNotNull(TEXT("Instance should exist"), Instance) || !TestNotNull(TEXT("VerifyDefaults should exist"), VerifyFunc))
-		return false;
-
-	int32 Result = INDEX_NONE;
-	const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
-	TestTrue(TEXT("VerifyDefaults should execute"), bExecuted);
-	TestEqual(TEXT("Float+Bool defaults should apply correctly"), Result, 42);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Positive: FVector default
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultFVectorPropertyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultFVectorPropertyApplied",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultFVectorPropertyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(DefaultEnumPropertyApplied)
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::VectorModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+	using namespace AngelscriptTestSupport;
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::VectorModule,
-		TEXT("Tests/Compiler/DefaultFVectorProperty.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultVectorCarrier : UObject
-{
-	UPROPERTY()
-	FVector MyVector;
 
-	default MyVector = FVector(1.0f, 2.0f, 3.0f);
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::EnumModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	UFUNCTION()
-	int VerifyVector()
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::EnumModule,
+			TEXT("Tests/Compiler/DefaultEnumProperty.as"),
+			TEXT(R"AS(
+	enum ETestDirection
 	{
-		if (MyVector.X < 0.9f || MyVector.X > 1.1f)
-			return 1;
-		if (MyVector.Y < 1.9f || MyVector.Y > 2.1f)
-			return 2;
-		if (MyVector.Z < 2.9f || MyVector.Z > 3.1f)
-			return 3;
-		return 42;
+		Up,
+		Down,
+		Left,
+		Right
 	}
-}
-)AS"),
-		CompileResult);
 
-	if (!TestTrue(TEXT("FVector default should compile"), bCompiled))
-		return false;
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultVectorCarrier"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
-
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
-	UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyVector"));
-	if (!TestNotNull(TEXT("Instance should exist"), Instance) || !TestNotNull(TEXT("VerifyVector should exist"), VerifyFunc))
-		return false;
-
-	int32 Result = INDEX_NONE;
-	const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
-	TestTrue(TEXT("VerifyVector should execute"), bExecuted);
-	TestEqual(TEXT("FVector default should apply correctly"), Result, 42);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Positive: FString default
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultFStringPropertyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultFStringPropertyApplied",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultFStringPropertyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	UCLASS()
+	class UDefaultEnumCarrier : UObject
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::StringModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		UPROPERTY()
+		ETestDirection Direction;
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::StringModule,
-		TEXT("Tests/Compiler/DefaultFStringProperty.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultStringCarrier : UObject
-{
-	UPROPERTY()
-	FString MyString;
+		default Direction = ETestDirection::Right;
 
-	default MyString = "Hello World";
-
-	UFUNCTION()
-	int VerifyString()
-	{
-		if (MyString != "Hello World")
-			return 1;
-		return 42;
+		UFUNCTION()
+		int GetDirectionValue()
+		{
+			return int(Direction);
+		}
 	}
-}
-)AS"),
-		CompileResult);
+	)AS"),
+			CompileResult);
 
-	if (!TestTrue(TEXT("FString default should compile"), bCompiled))
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Enum default should compile successfully"), bCompiled))
+			return;
 
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultStringCarrier"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultEnumCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Enum default class should be materialized"), GeneratedClass))
+			return;
 
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
-	UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyString"));
-	if (!TestNotNull(TEXT("Instance should exist"), Instance) || !TestNotNull(TEXT("VerifyString should exist"), VerifyFunc))
-		return false;
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
+		UFunction* GetFunc = GeneratedClass->FindFunctionByName(TEXT("GetDirectionValue"));
+		if (!TestRunner->TestNotNull(TEXT("Instance should exist"), Instance) || !TestRunner->TestNotNull(TEXT("GetDirectionValue should exist"), GetFunc))
+			return;
 
-	int32 Result = INDEX_NONE;
-	const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
-	TestTrue(TEXT("VerifyString should execute"), bExecuted);
-	TestEqual(TEXT("FString default should apply correctly"), Result, 42);
+		int32 Result = INDEX_NONE;
+		const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GetFunc, Result);
+		TestRunner->TestTrue(TEXT("GetDirectionValue should execute"), bExecuted);
+		TestRunner->TestEqual(TEXT("Direction should be Right (3)"), Result, 3);
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		ASTEST_END_SHARE_CLEAN
 
-// ============================================================================
-// Positive: Tags.Add on CDO with assertion
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultTagsAddExecutedTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultTagsAddExecutedOnCDO",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultTagsAddExecutedTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*DefaultMatrixTest::TagsAddModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::TagsAddModule,
-		TEXT("Tests/Compiler/DefaultTagsAddExecuted.as"),
-		TEXT(R"AS(
-UCLASS()
-class ADefaultTagsActor : AActor
-{
-	default Tags.Add(n"Alpha");
-	default Tags.Add(n"Beta");
-
-	UFUNCTION()
-	int VerifyTags()
-	{
-		if (!Tags.Contains(n"Alpha"))
-			return 1;
-		if (!Tags.Contains(n"Beta"))
-			return 2;
-		if (Tags.Num() < 2)
-			return 3;
-		return 42;
 	}
-}
-)AS"),
-		CompileResult);
 
-	if (!TestTrue(TEXT("Tags.Add default should compile"), bCompiled))
-		return false;
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("ADefaultTagsActor"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
-
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
-	UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyTags"));
-	if (!TestNotNull(TEXT("Instance should exist"), Instance) || !TestNotNull(TEXT("VerifyTags should exist"), VerifyFunc))
-		return false;
-
-	int32 Result = INDEX_NONE;
-	const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
-	TestTrue(TEXT("VerifyTags should execute"), bExecuted);
-	TestEqual(TEXT("Tags.Add should actually add tags to CDO and instances"), Result, 42);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Positive: Subobject path default
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultSubobjectPathTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultSubobjectPathApplied",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultSubobjectPathTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(DefaultFloatAndBoolPropertyApplied)
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::SubobjectModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+	using namespace AngelscriptTestSupport;
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::SubobjectModule,
-		TEXT("Tests/Compiler/DefaultSubobjectPath.as"),
-		TEXT(R"AS(
-UCLASS()
-class ADefaultSubobjectActor : AActor
-{
-	default PrimaryActorTick.bStartWithTickEnabled = true;
-}
-)AS"),
-		CompileResult);
 
-	if (!TestTrue(TEXT("Subobject path default should compile"), bCompiled))
-		return false;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::FloatBoolModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("ADefaultSubobjectActor"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
-
-	AActor* CDO = Cast<AActor>(GeneratedClass->GetDefaultObject());
-	if (!TestNotNull(TEXT("CDO should be a valid AActor"), CDO))
-		return false;
-
-	TestTrue(TEXT("PrimaryActorTick.bStartWithTickEnabled should be true via default statement"), CDO->PrimaryActorTick.bStartWithTickEnabled);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Positive: default overrides inline UPROPERTY initializer
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultOverridesPriorityTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultOverridesInlineInitializerPriority",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultOverridesPriorityTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::FloatBoolModule,
+			TEXT("Tests/Compiler/DefaultFloatBoolProperty.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultFloatBoolCarrier : UObject
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::PriorityModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		UPROPERTY()
+		float MyFloat;
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::PriorityModule,
-		TEXT("Tests/Compiler/DefaultOverridesPriority.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultPriorityCarrier : UObject
-{
-	UPROPERTY()
-	int Score = 10;
+		UPROPERTY()
+		bool bEnabled;
 
-	default Score = 20;
+		default MyFloat = 3.14f;
+		default bEnabled = true;
 
-	UFUNCTION()
-	int GetScore()
-	{
-		return Score;
+		UFUNCTION()
+		int VerifyDefaults()
+		{
+			if (MyFloat < 3.13f || MyFloat > 3.15f)
+				return 1;
+			if (!bEnabled)
+				return 2;
+			return 42;
+		}
 	}
-}
-)AS"),
-		CompileResult);
+	)AS"),
+			CompileResult);
 
-	if (!TestTrue(TEXT("Priority default should compile"), bCompiled))
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Float+Bool default should compile"), bCompiled))
+			return;
 
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultPriorityCarrier"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultFloatBoolCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
 
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
-	UFunction* GetFunc = GeneratedClass->FindFunctionByName(TEXT("GetScore"));
-	if (!TestNotNull(TEXT("Instance should exist"), Instance) || !TestNotNull(TEXT("GetScore should exist"), GetFunc))
-		return false;
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
+		UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyDefaults"));
+		if (!TestRunner->TestNotNull(TEXT("Instance should exist"), Instance) || !TestRunner->TestNotNull(TEXT("VerifyDefaults should exist"), VerifyFunc))
+			return;
 
-	int32 Result = INDEX_NONE;
-	const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GetFunc, Result);
-	TestTrue(TEXT("GetScore should execute"), bExecuted);
-	TestEqual(TEXT("default should override inline initializer (20 > 10)"), Result, 20);
+		int32 Result = INDEX_NONE;
+		const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
+		TestRunner->TestTrue(TEXT("VerifyDefaults should execute"), bExecuted);
+		TestRunner->TestEqual(TEXT("Float+Bool defaults should apply correctly"), Result, 42);
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		ASTEST_END_SHARE_CLEAN
 
-// ============================================================================
-// Negative: Non-existent property
-// ============================================================================
+	}
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultNonExistentPropertyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultNonExistentPropertyFails",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultNonExistentPropertyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(DefaultFVectorPropertyApplied)
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::NonExistentModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+	using namespace AngelscriptTestSupport;
 
-	AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::NonExistentModule,
-		TEXT("Tests/Compiler/DefaultNonExistentProperty.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultNonExistentCarrier : UObject
-{
-	default NoSuchProperty = 1;
-}
-)AS"),
-		CompileResult);
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::VectorModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	TestFalse(TEXT("Non-existent property default should fail to compile"), bCompiled);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Negative: default outside class scope
-// ============================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultOutsideClassScopeTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultOutsideClassScopeFails",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultOutsideClassScopeTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::VectorModule,
+			TEXT("Tests/Compiler/DefaultFVectorProperty.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultVectorCarrier : UObject
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::OutsideScopeModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		UPROPERTY()
+		FVector MyVector;
 
-	AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
+		default MyVector = FVector(1.0f, 2.0f, 3.0f);
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::OutsideScopeModule,
-		TEXT("Tests/Compiler/DefaultOutsideClassScope.as"),
-		TEXT(R"AS(
-int GlobalValue = 5;
-default GlobalValue = 10;
-)AS"),
-		CompileResult);
+		UFUNCTION()
+		int VerifyVector()
+		{
+			if (MyVector.X < 0.9f || MyVector.X > 1.1f)
+				return 1;
+			if (MyVector.Y < 1.9f || MyVector.Y > 2.1f)
+				return 2;
+			if (MyVector.Z < 2.9f || MyVector.Z > 3.1f)
+				return 3;
+			return 42;
+		}
+	}
+	)AS"),
+			CompileResult);
 
-	TestFalse(TEXT("default outside class scope should fail"), bCompiled);
+		if (!TestRunner->TestTrue(TEXT("FVector default should compile"), bCompiled))
+			return;
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultVectorCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
 
-// ============================================================================
-// Negative: Type mismatch
-// ============================================================================
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
+		UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyVector"));
+		if (!TestRunner->TestNotNull(TEXT("Instance should exist"), Instance) || !TestRunner->TestNotNull(TEXT("VerifyVector should exist"), VerifyFunc))
+			return;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultTypeMismatchTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DefaultTypeMismatchFails",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+		int32 Result = INDEX_NONE;
+		const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
+		TestRunner->TestTrue(TEXT("VerifyVector should execute"), bExecuted);
+		TestRunner->TestEqual(TEXT("FVector default should apply correctly"), Result, 42);
 
-bool FAngelscriptDefaultTypeMismatchTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultFStringPropertyApplied)
 	{
-		Engine.DiscardModule(*DefaultMatrixTest::TypeMismatchModule.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+	using namespace AngelscriptTestSupport;
 
-	AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		DefaultMatrixTest::TypeMismatchModule,
-		TEXT("Tests/Compiler/DefaultTypeMismatch.as"),
-		TEXT(R"AS(
-UCLASS()
-class UDefaultTypeMismatchCarrier : UObject
-{
-	UPROPERTY()
-	int MyInt;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::StringModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	default MyInt = "not an int";
-}
-)AS"),
-		CompileResult);
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::StringModule,
+			TEXT("Tests/Compiler/DefaultFStringProperty.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultStringCarrier : UObject
+	{
+		UPROPERTY()
+		FString MyString;
 
-	TestFalse(TEXT("Type mismatch default should fail to compile"), bCompiled);
+		default MyString = "Hello World";
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		UFUNCTION()
+		int VerifyString()
+		{
+			if (MyString != "Hello World")
+				return 1;
+			return 42;
+		}
+	}
+	)AS"),
+			CompileResult);
+
+		if (!TestRunner->TestTrue(TEXT("FString default should compile"), bCompiled))
+			return;
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultStringCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
+
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
+		UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyString"));
+		if (!TestRunner->TestNotNull(TEXT("Instance should exist"), Instance) || !TestRunner->TestNotNull(TEXT("VerifyString should exist"), VerifyFunc))
+			return;
+
+		int32 Result = INDEX_NONE;
+		const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
+		TestRunner->TestTrue(TEXT("VerifyString should execute"), bExecuted);
+		TestRunner->TestEqual(TEXT("FString default should apply correctly"), Result, 42);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultTagsAddExecutedOnCDO)
+	{
+	using namespace AngelscriptTestSupport;
+
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::TagsAddModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::TagsAddModule,
+			TEXT("Tests/Compiler/DefaultTagsAddExecuted.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class ADefaultTagsActor : AActor
+	{
+		default Tags.Add(n"Alpha");
+		default Tags.Add(n"Beta");
+
+		UFUNCTION()
+		int VerifyTags()
+		{
+			if (!Tags.Contains(n"Alpha"))
+				return 1;
+			if (!Tags.Contains(n"Beta"))
+				return 2;
+			if (Tags.Num() < 2)
+				return 3;
+			return 42;
+		}
+	}
+	)AS"),
+			CompileResult);
+
+		if (!TestRunner->TestTrue(TEXT("Tags.Add default should compile"), bCompiled))
+			return;
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("ADefaultTagsActor"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
+
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
+		UFunction* VerifyFunc = GeneratedClass->FindFunctionByName(TEXT("VerifyTags"));
+		if (!TestRunner->TestNotNull(TEXT("Instance should exist"), Instance) || !TestRunner->TestNotNull(TEXT("VerifyTags should exist"), VerifyFunc))
+			return;
+
+		int32 Result = INDEX_NONE;
+		const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, VerifyFunc, Result);
+		TestRunner->TestTrue(TEXT("VerifyTags should execute"), bExecuted);
+		TestRunner->TestEqual(TEXT("Tags.Add should actually add tags to CDO and instances"), Result, 42);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultSubobjectPathApplied)
+	{
+	using namespace AngelscriptTestSupport;
+
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::SubobjectModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::SubobjectModule,
+			TEXT("Tests/Compiler/DefaultSubobjectPath.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class ADefaultSubobjectActor : AActor
+	{
+		default PrimaryActorTick.bStartWithTickEnabled = true;
+	}
+	)AS"),
+			CompileResult);
+
+		if (!TestRunner->TestTrue(TEXT("Subobject path default should compile"), bCompiled))
+			return;
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("ADefaultSubobjectActor"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
+
+		AActor* CDO = Cast<AActor>(GeneratedClass->GetDefaultObject());
+		if (!TestRunner->TestNotNull(TEXT("CDO should be a valid AActor"), CDO))
+			return;
+
+		TestRunner->TestTrue(TEXT("PrimaryActorTick.bStartWithTickEnabled should be true via default statement"), CDO->PrimaryActorTick.bStartWithTickEnabled);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultOverridesInlineInitializerPriority)
+	{
+	using namespace AngelscriptTestSupport;
+
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::PriorityModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::PriorityModule,
+			TEXT("Tests/Compiler/DefaultOverridesPriority.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultPriorityCarrier : UObject
+	{
+		UPROPERTY()
+		int Score = 10;
+
+		default Score = 20;
+
+		UFUNCTION()
+		int GetScore()
+		{
+			return Score;
+		}
+	}
+	)AS"),
+			CompileResult);
+
+		if (!TestRunner->TestTrue(TEXT("Priority default should compile"), bCompiled))
+			return;
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UDefaultPriorityCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
+
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedClass);
+		UFunction* GetFunc = GeneratedClass->FindFunctionByName(TEXT("GetScore"));
+		if (!TestRunner->TestNotNull(TEXT("Instance should exist"), Instance) || !TestRunner->TestNotNull(TEXT("GetScore should exist"), GetFunc))
+			return;
+
+		int32 Result = INDEX_NONE;
+		const bool bExecuted = ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GetFunc, Result);
+		TestRunner->TestTrue(TEXT("GetScore should execute"), bExecuted);
+		TestRunner->TestEqual(TEXT("default should override inline initializer (20 > 10)"), Result, 20);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultNonExistentPropertyFails)
+	{
+	using namespace AngelscriptTestSupport;
+
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::NonExistentModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::NonExistentModule,
+			TEXT("Tests/Compiler/DefaultNonExistentProperty.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultNonExistentCarrier : UObject
+	{
+		default NoSuchProperty = 1;
+	}
+	)AS"),
+			CompileResult);
+
+		TestRunner->TestFalse(TEXT("Non-existent property default should fail to compile"), bCompiled);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultOutsideClassScopeFails)
+	{
+	using namespace AngelscriptTestSupport;
+
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::OutsideScopeModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::OutsideScopeModule,
+			TEXT("Tests/Compiler/DefaultOutsideClassScope.as"),
+			TEXT(R"AS(
+	int GlobalValue = 5;
+	default GlobalValue = 10;
+	)AS"),
+			CompileResult);
+
+		TestRunner->TestFalse(TEXT("default outside class scope should fail"), bCompiled);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+	TEST_METHOD(DefaultTypeMismatchFails)
+	{
+	using namespace AngelscriptTestSupport;
+
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*DefaultMatrixTest::TypeMismatchModule.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			DefaultMatrixTest::TypeMismatchModule,
+			TEXT("Tests/Compiler/DefaultTypeMismatch.as"),
+			TEXT(R"AS(
+	UCLASS()
+	class UDefaultTypeMismatchCarrier : UObject
+	{
+		UPROPERTY()
+		int MyInt;
+
+		default MyInt = "not an int";
+	}
+	)AS"),
+			CompileResult);
+
+		TestRunner->TestFalse(TEXT("Type mismatch default should fail to compile"), bCompiled);
+
+		ASTEST_END_SHARE_CLEAN
+
+	}
+
+};
 
 #endif

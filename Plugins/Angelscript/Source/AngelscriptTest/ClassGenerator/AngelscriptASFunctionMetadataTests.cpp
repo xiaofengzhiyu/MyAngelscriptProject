@@ -1,8 +1,8 @@
-﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UnrealType.h"
 
@@ -64,29 +64,23 @@ namespace AngelscriptTest_ClassGenerator_AngelscriptASFunctionMetadataTests_Priv
 	}
 }
 
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASFunctionNetValidateCachesValidateFunctionTest,
-	"Angelscript.TestModule.ClassGenerator.ASFunction.NetValidateCachesValidateFunction",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionMetadataTests,
+	"Angelscript.TestModule.ClassGenerator.ASFunction",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASFunctionNetValidateCachesValidateFunctionTest::RunTest(const FString& Parameters)
 {
-	using namespace AngelscriptTest_ClassGenerator_AngelscriptASFunctionMetadataTests_Private;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(NetValidateCachesValidateFunction)
 	{
-		Engine.DiscardModule(*NetValidateModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace AngelscriptTest_ClassGenerator_AngelscriptASFunctionMetadataTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*NetValidateModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		NetValidateModuleName,
-		NetValidateFilename,
-		TEXT(R"AS(
+		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, NetValidateModuleName, NetValidateFilename,
+			TEXT(R"AS(
 UCLASS()
 class AASFunctionNetValidateCache : AActor
 {
@@ -102,60 +96,47 @@ class AASFunctionNetValidateCache : AActor
 	}
 }
 )AS"),
-		TEXT("AASFunctionNetValidateCache"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
-	}
+			TEXT("AASFunctionNetValidateCache"));
+		if (ScriptClass == nullptr) { return; }
 
-	UFunction* ServerFunction = FindGeneratedFunction(ScriptClass, TEXT("Server_SetValue"));
-	UFunction* ValidateFunction = FindGeneratedFunction(ScriptClass, TEXT("Server_SetValue_Validate"));
-	UASFunction* GeneratedServerFunction = Cast<UASFunction>(ServerFunction);
-	if (!TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should generate the server RPC"), ServerFunction)
-		|| !TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should generate the _Validate companion function"), ValidateFunction)
-		|| !TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should expose the server RPC as UASFunction"), GeneratedServerFunction))
-	{
-		return false;
-	}
+		UFunction* ServerFunction = FindGeneratedFunction(ScriptClass, TEXT("Server_SetValue"));
+		UFunction* ValidateFunction = FindGeneratedFunction(ScriptClass, TEXT("Server_SetValue_Validate"));
+		UASFunction* GeneratedServerFunction = Cast<UASFunction>(ServerFunction);
+		if (!TestRunner->TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should generate the server RPC"), ServerFunction)
+			|| !TestRunner->TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should generate the _Validate companion function"), ValidateFunction)
+			|| !TestRunner->TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should expose the server RPC as UASFunction"), GeneratedServerFunction))
+		{ return; }
 
-	TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should mark the server RPC as net"), ServerFunction->HasAnyFunctionFlags(FUNC_Net));
-	TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should mark the server RPC as requiring validation"), ServerFunction->HasAnyFunctionFlags(FUNC_NetValidate));
+		TestRunner->TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should mark the server RPC as net"), ServerFunction->HasAnyFunctionFlags(FUNC_Net));
+		TestRunner->TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should mark the server RPC as requiring validation"), ServerFunction->HasAnyFunctionFlags(FUNC_NetValidate));
 
-	UFunction* CachedValidateFunction = GeneratedServerFunction->GetRuntimeValidateFunction();
-	if (!TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should cache the _Validate function on the generated RPC"), CachedValidateFunction))
-	{
-		return false;
-	}
+		UFunction* CachedValidateFunction = GeneratedServerFunction->GetRuntimeValidateFunction();
+		if (!TestRunner->TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should cache the _Validate function on the generated RPC"), CachedValidateFunction))
+		{ return; }
 
-	if (!TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should return the reflected _Validate function"), CachedValidateFunction == ValidateFunction)
-		|| !TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should return the same cached pointer on repeated lookups"), GeneratedServerFunction->GetRuntimeValidateFunction() == CachedValidateFunction))
-	{
-		return false;
-	}
+		if (!TestRunner->TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should return the reflected _Validate function"), CachedValidateFunction == ValidateFunction)
+			|| !TestRunner->TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should return the same cached pointer on repeated lookups"), GeneratedServerFunction->GetRuntimeValidateFunction() == CachedValidateFunction))
+		{ return; }
 
-	FProperty* ReturnProperty = nullptr;
-	for (TFieldIterator<FProperty> It(ValidateFunction); It; ++It)
-	{
-		if (It->HasAnyPropertyFlags(CPF_ReturnParm))
+		FProperty* ReturnProperty = nullptr;
+		for (TFieldIterator<FProperty> It(ValidateFunction); It; ++It)
 		{
-			ReturnProperty = *It;
-			break;
+			if (It->HasAnyPropertyFlags(CPF_ReturnParm))
+			{
+				ReturnProperty = *It;
+				break;
+			}
 		}
-	}
 
-	if (!TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should expose a return property on the _Validate function"), ReturnProperty)
-		|| !TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should keep the _Validate return type as bool"), ReturnProperty->IsA<FBoolProperty>()))
-	{
-		return false;
-	}
+		if (!TestRunner->TestNotNull(TEXT("ASFunction.NetValidateCachesValidateFunction should expose a return property on the _Validate function"), ReturnProperty)
+			|| !TestRunner->TestTrue(TEXT("ASFunction.NetValidateCachesValidateFunction should keep the _Validate return type as bool"), ReturnProperty->IsA<FBoolProperty>()))
+		{ return; }
 
-	if (!ExpectMatchingParameterSignature(*this, *ServerFunction, *ValidateFunction))
-	{
-		return false;
-	}
+		if (!ExpectMatchingParameterSignature(*TestRunner, *ServerFunction, *ValidateFunction))
+		{ return; }
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

@@ -1,7 +1,8 @@
 #include "AngelscriptEngine.h"
 #include "Shared/AngelscriptTestUtilities.h"
 #include "ClassGenerator/AngelscriptClassGenerator.h"
-#include "Misc/AutomationTest.h"
+
+#include "CQTest.h"
 
 #include "StartAngelscriptHeaders.h"
 #include "source/as_module.h"
@@ -10,6 +11,7 @@
 
 // Test Layer: Runtime Integration
 #if WITH_DEV_AUTOMATION_TESTS
+using namespace AngelscriptTestSupport;
 
 namespace AngelscriptTest_ClassGenerator_ClassGeneratorTests_Private
 {
@@ -24,38 +26,36 @@ namespace AngelscriptTest_ClassGenerator_ClassGeneratorTests_Private
 	}
 }
 
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptClassGeneratorEmptyModuleSetupTest,
-	"Angelscript.TestModule.ClassGenerator.EmptyModuleSetup",
+TEST_CLASS_WITH_FLAGS(FAngelscriptClassGeneratorTests,
+	"Angelscript.TestModule.ClassGenerator",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptClassGeneratorEmptyModuleSetupTest::RunTest(const FString& Parameters)
 {
-	using namespace AngelscriptTest_ClassGenerator_ClassGeneratorTests_Private;
-	FAngelscriptEngine* Engine = GetEngineForClassGeneratorTests(this);
-	if (!TestNotNull(TEXT("ClassGenerator test should have an initialized engine"), Engine))
+	TEST_METHOD(EmptyModuleSetup)
 	{
-		return false;
+		using namespace AngelscriptTest_ClassGenerator_ClassGeneratorTests_Private;
+		FAngelscriptEngine* Engine = GetEngineForClassGeneratorTests(TestRunner);
+		if (!TestRunner->TestNotNull(TEXT("ClassGenerator test should have an initialized engine"), Engine))
+		{
+			return;
+		}
+		FAngelscriptEngineScope EngineScope(*Engine);
+
+		TSharedRef<FAngelscriptModuleDesc> Module = MakeShared<FAngelscriptModuleDesc>();
+		Module->ModuleName = TEXT("Tests.ClassGenerator.EmptyModule");
+		Module->ScriptModule = static_cast<asCModule*>(Engine->GetScriptEngine()->GetModule("Tests.ClassGenerator.EmptyModule", asGM_ALWAYS_CREATE));
+		if (!TestRunner->TestNotNull(TEXT("ClassGenerator scaffold should create a backing script module"), Module->ScriptModule))
+		{
+			return;
+		}
+
+		FAngelscriptClassGenerator Generator;
+		Generator.AddModule(Module);
+
+		const FAngelscriptClassGenerator::EReloadRequirement ReloadRequirement = Generator.Setup();
+		TestRunner->TestEqual(TEXT("An empty module should default to soft reload requirements"), ReloadRequirement, FAngelscriptClassGenerator::EReloadRequirement::SoftReload);
+		TestRunner->TestFalse(TEXT("An empty module should not request a suggested full reload"), Generator.WantsFullReload(Module));
+		TestRunner->TestFalse(TEXT("An empty module should not require a full reload"), Generator.NeedsFullReload(Module));
 	}
-	FAngelscriptEngineScope EngineScope(*Engine);
-
-	TSharedRef<FAngelscriptModuleDesc> Module = MakeShared<FAngelscriptModuleDesc>();
-	Module->ModuleName = TEXT("Tests.ClassGenerator.EmptyModule");
-	Module->ScriptModule = static_cast<asCModule*>(Engine->GetScriptEngine()->GetModule("Tests.ClassGenerator.EmptyModule", asGM_ALWAYS_CREATE));
-	if (!TestNotNull(TEXT("ClassGenerator scaffold should create a backing script module"), Module->ScriptModule))
-	{
-		return false;
-	}
-
-	FAngelscriptClassGenerator Generator;
-	Generator.AddModule(Module);
-
-	const FAngelscriptClassGenerator::EReloadRequirement ReloadRequirement = Generator.Setup();
-	TestEqual(TEXT("An empty module should default to soft reload requirements"), ReloadRequirement, FAngelscriptClassGenerator::EReloadRequirement::SoftReload);
-	TestFalse(TEXT("An empty module should not request a suggested full reload"), Generator.WantsFullReload(Module));
-	TestFalse(TEXT("An empty module should not require a full reload"), Generator.NeedsFullReload(Module));
-	return ReloadRequirement == FAngelscriptClassGenerator::EReloadRequirement::SoftReload;
-}
+};
 
 #endif

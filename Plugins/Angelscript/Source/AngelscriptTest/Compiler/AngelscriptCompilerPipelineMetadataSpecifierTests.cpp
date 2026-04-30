@@ -5,14 +5,13 @@
 #include "Preprocessor/AngelscriptPreprocessor.h"
 
 #include "HAL/FileManager.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/Class.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineMetadataSpecifierTest
@@ -106,236 +105,239 @@ namespace CompilerPipelineMetadataSpecifierTest
 
 using namespace CompilerPipelineMetadataSpecifierTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerMacroMetadataStringsWithClosingParenTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.MacroMetadataStringsWithClosingParen",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineMetadataSpecifierTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerMacroMetadataStringsWithClosingParenTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString ScriptSource = TEXT(R"AS(
-UCLASS(meta=(DisplayName="Do (Test)", ToolTip="Class accepts ) text"))
-class UCompilerMetadataParenCarrier : UObject
-{
-	UFUNCTION(meta=(DisplayName="Run ) Now", ToolTip="Accepts ) in text"))
-	int GetClosingParenText()
+	TEST_METHOD(MacroMetadataStringsWithClosingParen)
 	{
-		return 7;
-	}
-}
+	using namespace AngelscriptTestSupport;
 
-UENUM(meta=(ToolTip="Enum ) ToolTip"))
-enum class ECompilerMetadataParenState : uint8
-{
-	Alpha UMETA(DisplayName="Alpha ) Value", ToolTip="Alpha ) ToolTip"),
-	Beta
-}
-)AS");
 
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	const FString AbsoluteScriptPath = CompilerPipelineMetadataSpecifierTest::WriteFixture(
-		CompilerPipelineMetadataSpecifierTest::RelativeScriptPath,
-		ScriptSource);
-	ON_SCOPE_EXIT
+		const FString ScriptSource = TEXT(R"AS(
+	UCLASS(meta=(DisplayName="Do (Test)", ToolTip="Class accepts ) text"))
+	class UCompilerMetadataParenCarrier : UObject
 	{
-		Engine.DiscardModule(*CompilerPipelineMetadataSpecifierTest::ModuleName.ToString());
-		IFileManager::Get().Delete(*AbsoluteScriptPath, false, true);
-	};
-
-	Engine.ResetDiagnostics();
-
-	FAngelscriptPreprocessor Preprocessor;
-	Preprocessor.AddFile(CompilerPipelineMetadataSpecifierTest::RelativeScriptPath, AbsoluteScriptPath);
-
-	const bool bPreprocessSucceeded = Preprocessor.Preprocess();
-	const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
-
-	int32 PreprocessErrorCount = 0;
-	const TArray<FString> PreprocessMessages = CompilerPipelineMetadataSpecifierTest::CollectDiagnosticMessages(
-		Engine,
-		AbsoluteScriptPath,
-		PreprocessErrorCount);
-
-	bPassed &= TestTrue(
-		TEXT("Metadata specifier test case should preprocess successfully"),
-		bPreprocessSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Metadata specifier test case should not emit preprocessing errors"),
-		PreprocessErrorCount,
-		0);
-	bPassed &= TestEqual(
-		TEXT("Metadata specifier test case should keep preprocessing diagnostics empty"),
-		PreprocessMessages.Num(),
-		0);
-	bPassed &= TestEqual(
-		TEXT("Metadata specifier test case should produce exactly one module descriptor"),
-		Modules.Num(),
-		1);
-	if (!bPreprocessSucceeded || Modules.Num() != 1)
-	{
-		return false;
-	}
-
-	const TSharedRef<FAngelscriptModuleDesc> ModuleDesc = Modules[0];
-	bPassed &= TestEqual(
-		TEXT("Metadata specifier test case should preserve the expected module name"),
-		ModuleDesc->ModuleName,
-		CompilerPipelineMetadataSpecifierTest::ModuleName.ToString());
-
-	const TSharedPtr<FAngelscriptClassDesc> ClassDesc = ModuleDesc->GetClass(CompilerPipelineMetadataSpecifierTest::ClassName);
-	if (!TestTrue(TEXT("Metadata specifier test case should parse the annotated class descriptor"), ClassDesc.IsValid()))
-	{
-		return false;
-	}
-
-	const TSharedPtr<FAngelscriptFunctionDesc> FunctionDesc = ClassDesc->GetMethod(CompilerPipelineMetadataSpecifierTest::FunctionName);
-	if (!TestTrue(TEXT("Metadata specifier test case should parse the annotated function descriptor"), FunctionDesc.IsValid()))
-	{
-		return false;
-	}
-
-	const TSharedPtr<FAngelscriptEnumDesc> EnumDesc = ModuleDesc->GetEnum(CompilerPipelineMetadataSpecifierTest::EnumName);
-	if (!TestTrue(TEXT("Metadata specifier test case should parse the annotated enum descriptor"), EnumDesc.IsValid()))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the class DisplayName metadata that contains balanced parentheses"),
-		CompilerPipelineMetadataSpecifierTest::GetClassMeta(ClassDesc, TEXT("DisplayName")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedClassDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the class ToolTip metadata that contains a closing parenthesis"),
-		CompilerPipelineMetadataSpecifierTest::GetClassMeta(ClassDesc, TEXT("ToolTip")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedClassToolTip);
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the function DisplayName metadata that contains a closing parenthesis"),
-		CompilerPipelineMetadataSpecifierTest::GetFunctionMeta(FunctionDesc, TEXT("DisplayName")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedFunctionDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the function ToolTip metadata that contains a closing parenthesis"),
-		CompilerPipelineMetadataSpecifierTest::GetFunctionMeta(FunctionDesc, TEXT("ToolTip")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedFunctionToolTip);
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the enum ToolTip metadata that contains a closing parenthesis"),
-		CompilerPipelineMetadataSpecifierTest::GetEnumMeta(EnumDesc, TEXT("ToolTip"), INDEX_NONE),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumToolTip);
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the enum value DisplayName metadata that contains a closing parenthesis"),
-		CompilerPipelineMetadataSpecifierTest::GetEnumMeta(EnumDesc, TEXT("DisplayName"), 0),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Preprocessor should preserve the enum value ToolTip metadata that contains a closing parenthesis"),
-		CompilerPipelineMetadataSpecifierTest::GetEnumMeta(EnumDesc, TEXT("ToolTip"), 0),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueToolTip);
-
-	Engine.ResetDiagnostics();
-
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineMetadataSpecifierTest::ModuleName,
-		CompilerPipelineMetadataSpecifierTest::RelativeScriptPath,
-		ScriptSource,
-		true,
-		Summary,
-		true);
-
-	bPassed &= TestTrue(
-		TEXT("Metadata specifier test case should compile through the normal preprocessor pipeline"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Metadata specifier test case should report that it used the preprocessor"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Metadata specifier test case should mark compile succeeded in the summary"),
-		Summary.bCompileSucceeded);
-	if (Summary.Diagnostics.Num() > 0)
-	{
-		TArray<FString> DiagnosticMessages;
-		for (const FAngelscriptCompileTraceDiagnosticSummary& Diagnostic : Summary.Diagnostics)
+		UFUNCTION(meta=(DisplayName="Run ) Now", ToolTip="Accepts ) in text"))
+		int GetClosingParenText()
 		{
-			DiagnosticMessages.Add(FString::Printf(
-				TEXT("[%s] %s"),
-				Diagnostic.bIsError ? TEXT("Error") : TEXT("Warning"),
-				*Diagnostic.Message));
+			return 7;
+		}
+	}
+
+	UENUM(meta=(ToolTip="Enum ) ToolTip"))
+	enum class ECompilerMetadataParenState : uint8
+	{
+		Alpha UMETA(DisplayName="Alpha ) Value", ToolTip="Alpha ) ToolTip"),
+		Beta
+	}
+	)AS");
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		const FString AbsoluteScriptPath = CompilerPipelineMetadataSpecifierTest::WriteFixture(
+			CompilerPipelineMetadataSpecifierTest::RelativeScriptPath,
+			ScriptSource);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineMetadataSpecifierTest::ModuleName.ToString());
+			IFileManager::Get().Delete(*AbsoluteScriptPath, false, true);
+		};
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptPreprocessor Preprocessor;
+		Preprocessor.AddFile(CompilerPipelineMetadataSpecifierTest::RelativeScriptPath, AbsoluteScriptPath);
+
+		const bool bPreprocessSucceeded = Preprocessor.Preprocess();
+		const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
+
+		int32 PreprocessErrorCount = 0;
+		const TArray<FString> PreprocessMessages = CompilerPipelineMetadataSpecifierTest::CollectDiagnosticMessages(
+			Engine,
+			AbsoluteScriptPath,
+			PreprocessErrorCount);
+
+		TestRunner->TestTrue(
+			TEXT("Metadata specifier test case should preprocess successfully"),
+			bPreprocessSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Metadata specifier test case should not emit preprocessing errors"),
+			PreprocessErrorCount,
+			0);
+		TestRunner->TestEqual(
+			TEXT("Metadata specifier test case should keep preprocessing diagnostics empty"),
+			PreprocessMessages.Num(),
+			0);
+		TestRunner->TestEqual(
+			TEXT("Metadata specifier test case should produce exactly one module descriptor"),
+			Modules.Num(),
+			1);
+		if (!bPreprocessSucceeded || Modules.Num() != 1)
+		{
+			return;
 		}
 
-		AddInfo(FString::Printf(
-			TEXT("Compile diagnostics: %s"),
-			*FString::Join(DiagnosticMessages, TEXT(" | "))));
-	}
-	bPassed &= TestEqual(
-		TEXT("Metadata specifier test case should keep compile diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-	if (!bCompiled)
-	{
-		return false;
+		const TSharedRef<FAngelscriptModuleDesc> ModuleDesc = Modules[0];
+		TestRunner->TestEqual(
+			TEXT("Metadata specifier test case should preserve the expected module name"),
+			ModuleDesc->ModuleName,
+			CompilerPipelineMetadataSpecifierTest::ModuleName.ToString());
+
+		const TSharedPtr<FAngelscriptClassDesc> ClassDesc = ModuleDesc->GetClass(CompilerPipelineMetadataSpecifierTest::ClassName);
+		if (!TestRunner->TestTrue(TEXT("Metadata specifier test case should parse the annotated class descriptor"), ClassDesc.IsValid()))
+		{
+			return;
+		}
+
+		const TSharedPtr<FAngelscriptFunctionDesc> FunctionDesc = ClassDesc->GetMethod(CompilerPipelineMetadataSpecifierTest::FunctionName);
+		if (!TestRunner->TestTrue(TEXT("Metadata specifier test case should parse the annotated function descriptor"), FunctionDesc.IsValid()))
+		{
+			return;
+		}
+
+		const TSharedPtr<FAngelscriptEnumDesc> EnumDesc = ModuleDesc->GetEnum(CompilerPipelineMetadataSpecifierTest::EnumName);
+		if (!TestRunner->TestTrue(TEXT("Metadata specifier test case should parse the annotated enum descriptor"), EnumDesc.IsValid()))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the class DisplayName metadata that contains balanced parentheses"),
+			CompilerPipelineMetadataSpecifierTest::GetClassMeta(ClassDesc, TEXT("DisplayName")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedClassDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the class ToolTip metadata that contains a closing parenthesis"),
+			CompilerPipelineMetadataSpecifierTest::GetClassMeta(ClassDesc, TEXT("ToolTip")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedClassToolTip);
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the function DisplayName metadata that contains a closing parenthesis"),
+			CompilerPipelineMetadataSpecifierTest::GetFunctionMeta(FunctionDesc, TEXT("DisplayName")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedFunctionDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the function ToolTip metadata that contains a closing parenthesis"),
+			CompilerPipelineMetadataSpecifierTest::GetFunctionMeta(FunctionDesc, TEXT("ToolTip")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedFunctionToolTip);
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the enum ToolTip metadata that contains a closing parenthesis"),
+			CompilerPipelineMetadataSpecifierTest::GetEnumMeta(EnumDesc, TEXT("ToolTip"), INDEX_NONE),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumToolTip);
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the enum value DisplayName metadata that contains a closing parenthesis"),
+			CompilerPipelineMetadataSpecifierTest::GetEnumMeta(EnumDesc, TEXT("DisplayName"), 0),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Preprocessor should preserve the enum value ToolTip metadata that contains a closing parenthesis"),
+			CompilerPipelineMetadataSpecifierTest::GetEnumMeta(EnumDesc, TEXT("ToolTip"), 0),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueToolTip);
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineMetadataSpecifierTest::ModuleName,
+			CompilerPipelineMetadataSpecifierTest::RelativeScriptPath,
+			ScriptSource,
+			true,
+			Summary,
+			true);
+
+		TestRunner->TestTrue(
+			TEXT("Metadata specifier test case should compile through the normal preprocessor pipeline"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Metadata specifier test case should report that it used the preprocessor"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Metadata specifier test case should mark compile succeeded in the summary"),
+			Summary.bCompileSucceeded);
+		if (Summary.Diagnostics.Num() > 0)
+		{
+			TArray<FString> DiagnosticMessages;
+			for (const FAngelscriptCompileTraceDiagnosticSummary& Diagnostic : Summary.Diagnostics)
+			{
+				DiagnosticMessages.Add(FString::Printf(
+					TEXT("[%s] %s"),
+					Diagnostic.bIsError ? TEXT("Error") : TEXT("Warning"),
+					*Diagnostic.Message));
+			}
+
+			TestRunner->AddInfo(FString::Printf(
+				TEXT("Compile diagnostics: %s"),
+				*FString::Join(DiagnosticMessages, TEXT(" | "))));
+		}
+		TestRunner->TestEqual(
+			TEXT("Metadata specifier test case should keep compile diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+		if (!bCompiled)
+		{
+			return;
+		}
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelineMetadataSpecifierTest::ClassName);
+		if (!TestRunner->TestNotNull(TEXT("Metadata specifier test case should materialize the generated class"), GeneratedClass))
+		{
+			return;
+		}
+
+		UFunction* GeneratedFunction = FindGeneratedFunction(GeneratedClass, *CompilerPipelineMetadataSpecifierTest::FunctionName);
+		if (!TestRunner->TestNotNull(TEXT("Metadata specifier test case should materialize the generated function"), GeneratedFunction))
+		{
+			return;
+		}
+
+		const TSharedPtr<FAngelscriptEnumDesc> GeneratedEnumDesc = Engine.GetEnum(CompilerPipelineMetadataSpecifierTest::EnumName);
+		if (!TestRunner->TestTrue(TEXT("Metadata specifier test case should register the generated enum descriptor"), GeneratedEnumDesc.IsValid()))
+		{
+			return;
+		}
+		if (!TestRunner->TestNotNull(TEXT("Metadata specifier test case should materialize the generated UEnum"), GeneratedEnumDesc->Enum))
+		{
+			return;
+		}
+
+		UEnum* GeneratedEnum = GeneratedEnumDesc->Enum;
+		TestRunner->TestEqual(
+			TEXT("Generated class should preserve DisplayName metadata with balanced parentheses"),
+			GeneratedClass->GetMetaData(TEXT("DisplayName")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedClassDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Generated class should preserve ToolTip metadata with a closing parenthesis"),
+			GeneratedClass->GetMetaData(TEXT("ToolTip")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedClassToolTip);
+		TestRunner->TestEqual(
+			TEXT("Generated function should preserve DisplayName metadata with a closing parenthesis"),
+			GeneratedFunction->GetMetaData(TEXT("DisplayName")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedFunctionDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Generated function should preserve ToolTip metadata with a closing parenthesis"),
+			GeneratedFunction->GetMetaData(TEXT("ToolTip")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedFunctionToolTip);
+		TestRunner->TestEqual(
+			TEXT("Generated enum should preserve ToolTip metadata with a closing parenthesis"),
+			GeneratedEnum->GetMetaData(TEXT("ToolTip")),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumToolTip);
+		TestRunner->TestEqual(
+			TEXT("Generated enum value should preserve DisplayName metadata with a closing parenthesis"),
+			GeneratedEnum->GetMetaData(TEXT("DisplayName"), 0),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Generated enum value should preserve ToolTip metadata with a closing parenthesis"),
+			GeneratedEnum->GetMetaData(TEXT("ToolTip"), 0),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueToolTip);
+		TestRunner->TestEqual(
+			TEXT("Generated enum display text should preserve the full DisplayName metadata"),
+			GeneratedEnum->GetDisplayNameTextByIndex(0).ToString(),
+			CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueDisplayName);
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelineMetadataSpecifierTest::ClassName);
-	if (!TestNotNull(TEXT("Metadata specifier test case should materialize the generated class"), GeneratedClass))
-	{
-		return false;
-	}
-
-	UFunction* GeneratedFunction = FindGeneratedFunction(GeneratedClass, *CompilerPipelineMetadataSpecifierTest::FunctionName);
-	if (!TestNotNull(TEXT("Metadata specifier test case should materialize the generated function"), GeneratedFunction))
-	{
-		return false;
-	}
-
-	const TSharedPtr<FAngelscriptEnumDesc> GeneratedEnumDesc = Engine.GetEnum(CompilerPipelineMetadataSpecifierTest::EnumName);
-	if (!TestTrue(TEXT("Metadata specifier test case should register the generated enum descriptor"), GeneratedEnumDesc.IsValid()))
-	{
-		return false;
-	}
-	if (!TestNotNull(TEXT("Metadata specifier test case should materialize the generated UEnum"), GeneratedEnumDesc->Enum))
-	{
-		return false;
-	}
-
-	UEnum* GeneratedEnum = GeneratedEnumDesc->Enum;
-	bPassed &= TestEqual(
-		TEXT("Generated class should preserve DisplayName metadata with balanced parentheses"),
-		GeneratedClass->GetMetaData(TEXT("DisplayName")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedClassDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Generated class should preserve ToolTip metadata with a closing parenthesis"),
-		GeneratedClass->GetMetaData(TEXT("ToolTip")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedClassToolTip);
-	bPassed &= TestEqual(
-		TEXT("Generated function should preserve DisplayName metadata with a closing parenthesis"),
-		GeneratedFunction->GetMetaData(TEXT("DisplayName")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedFunctionDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Generated function should preserve ToolTip metadata with a closing parenthesis"),
-		GeneratedFunction->GetMetaData(TEXT("ToolTip")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedFunctionToolTip);
-	bPassed &= TestEqual(
-		TEXT("Generated enum should preserve ToolTip metadata with a closing parenthesis"),
-		GeneratedEnum->GetMetaData(TEXT("ToolTip")),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumToolTip);
-	bPassed &= TestEqual(
-		TEXT("Generated enum value should preserve DisplayName metadata with a closing parenthesis"),
-		GeneratedEnum->GetMetaData(TEXT("DisplayName"), 0),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Generated enum value should preserve ToolTip metadata with a closing parenthesis"),
-		GeneratedEnum->GetMetaData(TEXT("ToolTip"), 0),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueToolTip);
-	bPassed &= TestEqual(
-		TEXT("Generated enum display text should preserve the full DisplayName metadata"),
-		GeneratedEnum->GetDisplayNameTextByIndex(0).ToString(),
-		CompilerPipelineMetadataSpecifierTest::ExpectedEnumValueDisplayName);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

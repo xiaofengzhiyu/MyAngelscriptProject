@@ -3,12 +3,11 @@
 
 #include "Core/AngelscriptEngine.h"
 #include "Core/AngelscriptType.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineDelegateMetadataTest
@@ -189,77 +188,79 @@ namespace CompilerPipelineDelegateMetadataTest
 
 using namespace CompilerPipelineDelegateMetadataTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerDelegateSignatureMetadataRoundTripTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DelegateSignatureMetadataRoundTrip",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineDelegateTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerDelegateSignatureMetadataRoundTripTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString ScriptSource = FString::Printf(TEXT(R"AS(
-delegate void %s(int Value);
-event void %s(UClass TypeValue, FString Label);
-
-UCLASS()
-class UCompilerDelegateMetadataCarrier : UObject
-{
-}
-)AS"), *CompilerPipelineDelegateMetadataTest::SingleDelegateName, *CompilerPipelineDelegateMetadataTest::MultiDelegateName);
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(DelegateSignatureMetadataRoundTrip)
 	{
-		Engine.DiscardModule(*CompilerPipelineDelegateMetadataTest::ModuleName.ToString());
-	};
+	using namespace AngelscriptTestSupport;
 
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineDelegateMetadataTest::ModuleName,
-		CompilerPipelineDelegateMetadataTest::ScriptFilename,
-		ScriptSource,
-		true,
-		Summary);
 
-	bPassed &= TestTrue(TEXT("Delegate signature metadata round-trip input should compile"), bCompiled);
-	bPassed &= TestTrue(TEXT("Delegate signature metadata round-trip input should go through the preprocessor"), Summary.bUsedPreprocessor);
-	bPassed &= TestEqual(TEXT("Delegate signature metadata round-trip input should finish with a fully handled compile result"), Summary.CompileResult, ECompileResult::FullyHandled);
-	bPassed &= TestEqual(TEXT("Delegate signature metadata round-trip input should not emit diagnostics"), Summary.Diagnostics.Num(), 0);
-	if (!bCompiled)
+		const FString ScriptSource = FString::Printf(TEXT(R"AS(
+	delegate void %s(int Value);
+	event void %s(UClass TypeValue, FString Label);
+
+	UCLASS()
+	class UCompilerDelegateMetadataCarrier : UObject
 	{
-		return false;
+	}
+	)AS"), *CompilerPipelineDelegateMetadataTest::SingleDelegateName, *CompilerPipelineDelegateMetadataTest::MultiDelegateName);
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineDelegateMetadataTest::ModuleName.ToString());
+		};
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineDelegateMetadataTest::ModuleName,
+			CompilerPipelineDelegateMetadataTest::ScriptFilename,
+			ScriptSource,
+			true,
+			Summary);
+
+		TestRunner->TestTrue(TEXT("Delegate signature metadata round-trip input should compile"), bCompiled);
+		TestRunner->TestTrue(TEXT("Delegate signature metadata round-trip input should go through the preprocessor"), Summary.bUsedPreprocessor);
+		TestRunner->TestEqual(TEXT("Delegate signature metadata round-trip input should finish with a fully handled compile result"), Summary.CompileResult, ECompileResult::FullyHandled);
+		TestRunner->TestEqual(TEXT("Delegate signature metadata round-trip input should not emit diagnostics"), Summary.Diagnostics.Num(), 0);
+		if (!bCompiled)
+		{
+			return;
+		}
+
+		const TSharedPtr<FAngelscriptDelegateDesc> SingleDelegate = Engine.GetDelegate(CompilerPipelineDelegateMetadataTest::SingleDelegateName);
+		const TSharedPtr<FAngelscriptDelegateDesc> MultiDelegate = Engine.GetDelegate(CompilerPipelineDelegateMetadataTest::MultiDelegateName);
+
+		const TArray<CompilerPipelineDelegateMetadataTest::FExpectedArgument> SingleArguments = {
+			{ TEXT("Value"), TEXT("const int"), CompilerPipelineDelegateMetadataTest::EExpectedPropertyKind::Int, nullptr }
+		};
+		const TArray<CompilerPipelineDelegateMetadataTest::FExpectedArgument> MultiArguments = {
+			{ TEXT("TypeValue"), TEXT("UClass"), CompilerPipelineDelegateMetadataTest::EExpectedPropertyKind::Class, UObject::StaticClass() },
+			{ TEXT("Label"), TEXT("const FString&"), CompilerPipelineDelegateMetadataTest::EExpectedPropertyKind::String, nullptr }
+		};
+
+		CompilerPipelineDelegateMetadataTest::VerifyDelegateMetadata(
+			*TestRunner,
+			TEXT("Single-cast delegate signature metadata round-trip"),
+			SingleDelegate,
+			false,
+			SingleArguments);
+		CompilerPipelineDelegateMetadataTest::VerifyDelegateMetadata(
+			*TestRunner,
+			TEXT("Multicast delegate signature metadata round-trip"),
+			MultiDelegate,
+			true,
+			MultiArguments);
+
+		ASTEST_END_SHARE_CLEAN
 	}
 
-	const TSharedPtr<FAngelscriptDelegateDesc> SingleDelegate = Engine.GetDelegate(CompilerPipelineDelegateMetadataTest::SingleDelegateName);
-	const TSharedPtr<FAngelscriptDelegateDesc> MultiDelegate = Engine.GetDelegate(CompilerPipelineDelegateMetadataTest::MultiDelegateName);
-
-	const TArray<CompilerPipelineDelegateMetadataTest::FExpectedArgument> SingleArguments = {
-		{ TEXT("Value"), TEXT("const int"), CompilerPipelineDelegateMetadataTest::EExpectedPropertyKind::Int, nullptr }
-	};
-	const TArray<CompilerPipelineDelegateMetadataTest::FExpectedArgument> MultiArguments = {
-		{ TEXT("TypeValue"), TEXT("UClass"), CompilerPipelineDelegateMetadataTest::EExpectedPropertyKind::Class, UObject::StaticClass() },
-		{ TEXT("Label"), TEXT("const FString&"), CompilerPipelineDelegateMetadataTest::EExpectedPropertyKind::String, nullptr }
-	};
-
-	bPassed &= CompilerPipelineDelegateMetadataTest::VerifyDelegateMetadata(
-		*this,
-		TEXT("Single-cast delegate signature metadata round-trip"),
-		SingleDelegate,
-		false,
-		SingleArguments);
-	bPassed &= CompilerPipelineDelegateMetadataTest::VerifyDelegateMetadata(
-		*this,
-		TEXT("Multicast delegate signature metadata round-trip"),
-		MultiDelegate,
-		true,
-		MultiArguments);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

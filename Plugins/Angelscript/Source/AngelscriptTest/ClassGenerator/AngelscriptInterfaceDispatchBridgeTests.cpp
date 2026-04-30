@@ -4,10 +4,10 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/AngelscriptClassGenerator.h"
 
 #include "Components/ActorTestSpawner.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -64,32 +64,30 @@ namespace InterfaceDispatchBridgeTests
 	}
 }
 
-using namespace InterfaceDispatchBridgeTests;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCallInterfaceMethodDispatchesToImplementingUFunctionTest,
-	"Angelscript.TestModule.ClassGenerator.Interface.CallInterfaceMethodDispatchesToImplementingUFunction",
+TEST_CLASS_WITH_FLAGS(FAngelscriptInterfaceDispatchBridgeTests,
+	"Angelscript.TestModule.ClassGenerator.Interface",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCallInterfaceMethodDispatchesToImplementingUFunctionTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	InterfaceDispatchBridgeTests::EnsureFixturesBound();
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(CallInterfaceMethodDispatchesToImplementingUFunction)
 	{
-		Engine.DiscardModule(*InterfaceDispatchBridgeTests::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace InterfaceDispatchBridgeTests;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		InterfaceDispatchBridgeTests::ModuleName,
-		InterfaceDispatchBridgeTests::ScriptFilename,
-		TEXT(R"AS(
+		InterfaceDispatchBridgeTests::EnsureFixturesBound();
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*InterfaceDispatchBridgeTests::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		UClass* ScriptClass = CompileScriptModule(
+			*TestRunner,
+			Engine,
+			InterfaceDispatchBridgeTests::ModuleName,
+			InterfaceDispatchBridgeTests::ScriptFilename,
+			TEXT(R"AS(
 UCLASS()
 class AInterfaceDispatchBridgeCarrier : AActor, UAngelscriptNativeParentInterface
 {
@@ -138,52 +136,52 @@ class AInterfaceDispatchBridgeCarrier : AActor, UAngelscriptNativeParentInterfac
 	}
 }
 )AS"),
-		InterfaceDispatchBridgeTests::GeneratedClassName);
-	if (ScriptClass == nullptr)
-	{
-		return false;
+			InterfaceDispatchBridgeTests::GeneratedClassName);
+		if (ScriptClass == nullptr)
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("Production bridge test case should generate a class that implements the native parent interface"),
+			ScriptClass->ImplementsInterface(UAngelscriptNativeParentInterface::StaticClass()));
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+
+		AActor* Actor = SpawnScriptActor(*TestRunner, Spawner, ScriptClass);
+		if (Actor == nullptr)
+		{
+			return;
+		}
+
+		BeginPlayActor(Engine, *Actor);
+
+		int32 ScriptObservedValue = INDEX_NONE;
+		int32 ScriptAdjustedValue = INDEX_NONE;
+		FName ScriptObservedMarker = NAME_None;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, Actor, TEXT("ScriptObservedValue"), ScriptObservedValue)
+			|| !ReadPropertyValue<FIntProperty>(*TestRunner, Actor, TEXT("ScriptAdjustedValue"), ScriptAdjustedValue)
+			|| !ReadPropertyValue<FNameProperty>(*TestRunner, Actor, TEXT("ScriptObservedMarker"), ScriptObservedMarker))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Production bridge should dispatch GetNativeValue through the implementing UFunction"),
+			ScriptObservedValue,
+			55);
+		TestRunner->TestEqual(
+			TEXT("Production bridge should round-trip ref parameters through the implementing UFunction"),
+			ScriptAdjustedValue,
+			15);
+		TestRunner->TestEqual(
+			TEXT("Production bridge should route void calls with payload arguments through the implementing UFunction"),
+			ScriptObservedMarker,
+			FName(TEXT("BridgeHit")));
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	TestTrue(
-		TEXT("Production bridge test case should generate a class that implements the native parent interface"),
-		ScriptClass->ImplementsInterface(UAngelscriptNativeParentInterface::StaticClass()));
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-
-	AActor* Actor = SpawnScriptActor(*this, Spawner, ScriptClass);
-	if (Actor == nullptr)
-	{
-		return false;
-	}
-
-	BeginPlayActor(Engine, *Actor);
-
-	int32 ScriptObservedValue = INDEX_NONE;
-	int32 ScriptAdjustedValue = INDEX_NONE;
-	FName ScriptObservedMarker = NAME_None;
-	if (!ReadPropertyValue<FIntProperty>(*this, Actor, TEXT("ScriptObservedValue"), ScriptObservedValue)
-		|| !ReadPropertyValue<FIntProperty>(*this, Actor, TEXT("ScriptAdjustedValue"), ScriptAdjustedValue)
-		|| !ReadPropertyValue<FNameProperty>(*this, Actor, TEXT("ScriptObservedMarker"), ScriptObservedMarker))
-	{
-		return false;
-	}
-
-	TestEqual(
-		TEXT("Production bridge should dispatch GetNativeValue through the implementing UFunction"),
-		ScriptObservedValue,
-		55);
-	TestEqual(
-		TEXT("Production bridge should round-trip ref parameters through the implementing UFunction"),
-		ScriptAdjustedValue,
-		15);
-	TestEqual(
-		TEXT("Production bridge should route void calls with payload arguments through the implementing UFunction"),
-		ScriptObservedMarker,
-		FName(TEXT("BridgeHit")));
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+};
 
 #endif

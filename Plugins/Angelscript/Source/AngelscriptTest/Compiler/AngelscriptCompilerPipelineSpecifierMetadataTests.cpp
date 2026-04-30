@@ -1,13 +1,12 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/Class.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineSpecifierMetadataTest
@@ -46,160 +45,163 @@ namespace CompilerPipelineSpecifierMetadataTest
 
 using namespace CompilerPipelineSpecifierMetadataTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerSpecifierStringMetadataRoundTripTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.SpecifierStringMetadataRoundTrip",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineSpecifierMetadataTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerSpecifierStringMetadataRoundTripTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString TestScriptSource = TEXT(R"AS(
-UCLASS(meta=(DisplayName="Alpha, Beta", ToolTip="He said \"Hi\""))
-class USpecifierCarrier : UObject
-{
-	UPROPERTY(meta=(DisplayName="Count, Total", ToolTip="Quoted \"Value\""))
-	int Count;
+	TEST_METHOD(SpecifierStringMetadataRoundTrip)
+	{
+	using namespace AngelscriptTestSupport;
 
-	UFUNCTION(meta=(DisplayName="Call, Verify", ToolTip="Escaped \"quote\""))
-	int Compute()
+
+		const FString TestScriptSource = TEXT(R"AS(
+	UCLASS(meta=(DisplayName="Alpha, Beta", ToolTip="He said \"Hi\""))
+	class USpecifierCarrier : UObject
+	{
+		UPROPERTY(meta=(DisplayName="Count, Total", ToolTip="Quoted \"Value\""))
+		int Count;
+
+		UFUNCTION(meta=(DisplayName="Call, Verify", ToolTip="Escaped \"quote\""))
+		int Compute()
+		{
+			return 7;
+		}
+	}
+
+	int Entry()
 	{
 		return 7;
 	}
-}
+	)AS");
 
-int Entry()
-{
-	return 7;
-}
-)AS");
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineSpecifierMetadataTest::ModuleName.ToString());
+		};
 
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*CompilerPipelineSpecifierMetadataTest::ModuleName.ToString());
-	};
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineSpecifierMetadataTest::ModuleName,
+			CompilerPipelineSpecifierMetadataTest::RelativeScriptPath,
+			TestScriptSource,
+			true,
+			Summary,
+			true);
 
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineSpecifierMetadataTest::ModuleName,
-		CompilerPipelineSpecifierMetadataTest::RelativeScriptPath,
-		TestScriptSource,
-		true,
-		Summary,
-		true);
+		if (Summary.Diagnostics.Num() > 0)
+		{
+			TestRunner->AddInfo(FString::Printf(
+				TEXT("Specifier metadata diagnostics: %s"),
+				*CompilerPipelineSpecifierMetadataTest::JoinDiagnostics(Summary.Diagnostics)));
+		}
 
-	if (Summary.Diagnostics.Num() > 0)
-	{
-		AddInfo(FString::Printf(
-			TEXT("Specifier metadata diagnostics: %s"),
-			*CompilerPipelineSpecifierMetadataTest::JoinDiagnostics(Summary.Diagnostics)));
+		TestRunner->TestTrue(
+			TEXT("Specifier string metadata round-trip should compile successfully"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Specifier string metadata round-trip should report preprocessor usage"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Specifier string metadata round-trip should mark compile succeeded in the summary"),
+			Summary.bCompileSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Specifier string metadata round-trip should report FullyHandled"),
+			Summary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Specifier string metadata round-trip should produce exactly one module descriptor"),
+			Summary.ModuleDescCount,
+			1);
+		TestRunner->TestEqual(
+			TEXT("Specifier string metadata round-trip should compile exactly one module"),
+			Summary.CompiledModuleCount,
+			1);
+		TestRunner->TestEqual(
+			TEXT("Specifier string metadata round-trip should keep diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+		TestRunner->TestEqual(
+			TEXT("Specifier string metadata round-trip should record exactly one module name"),
+			Summary.ModuleNames.Num(),
+			1);
+		if (Summary.ModuleNames.Num() > 0)
+		{
+			TestRunner->TestEqual(
+				TEXT("Specifier string metadata round-trip should normalize the module name from the relative script path"),
+				Summary.ModuleNames[0],
+				CompilerPipelineSpecifierMetadataTest::ModuleName.ToString());
+		}
+		if (!bCompiled)
+		{
+			return;
+		}
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelineSpecifierMetadataTest::ClassName);
+		if (!TestRunner->TestNotNull(TEXT("Specifier string metadata round-trip should materialize the generated class"), GeneratedClass))
+		{
+			return;
+		}
+
+		FProperty* CountProperty = FindFProperty<FProperty>(GeneratedClass, *CompilerPipelineSpecifierMetadataTest::PropertyName);
+		UFunction* ComputeFunction = FindGeneratedFunction(GeneratedClass, *CompilerPipelineSpecifierMetadataTest::FunctionName);
+		if (!TestRunner->TestNotNull(TEXT("Specifier string metadata round-trip should materialize the generated property"), CountProperty)
+			|| !TestRunner->TestNotNull(TEXT("Specifier string metadata round-trip should materialize the generated function"), ComputeFunction))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Generated class should preserve DisplayName metadata with embedded comma"),
+			GeneratedClass->GetMetaData(TEXT("DisplayName")),
+			CompilerPipelineSpecifierMetadataTest::ExpectedClassDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Generated class should preserve ToolTip metadata with embedded quotes"),
+			GeneratedClass->GetMetaData(TEXT("ToolTip")),
+			CompilerPipelineSpecifierMetadataTest::ExpectedClassToolTip);
+		TestRunner->TestEqual(
+			TEXT("Generated property should preserve DisplayName metadata with embedded comma"),
+			CountProperty->GetMetaData(TEXT("DisplayName")),
+			CompilerPipelineSpecifierMetadataTest::ExpectedPropertyDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Generated property should preserve ToolTip metadata with embedded quotes"),
+			CountProperty->GetMetaData(TEXT("ToolTip")),
+			CompilerPipelineSpecifierMetadataTest::ExpectedPropertyToolTip);
+		TestRunner->TestEqual(
+			TEXT("Generated function should preserve DisplayName metadata with embedded comma"),
+			ComputeFunction->GetMetaData(TEXT("DisplayName")),
+			CompilerPipelineSpecifierMetadataTest::ExpectedFunctionDisplayName);
+		TestRunner->TestEqual(
+			TEXT("Generated function should preserve ToolTip metadata with embedded quotes"),
+			ComputeFunction->GetMetaData(TEXT("ToolTip")),
+			CompilerPipelineSpecifierMetadataTest::ExpectedFunctionToolTip);
+
+		int32 EntryResult = 0;
+		const bool bExecuted = ExecuteIntFunction(
+			&Engine,
+			CompilerPipelineSpecifierMetadataTest::RelativeScriptPath,
+			CompilerPipelineSpecifierMetadataTest::ModuleName,
+			CompilerPipelineSpecifierMetadataTest::EntryFunctionDeclaration,
+			EntryResult);
+		TestRunner->TestTrue(
+			TEXT("Specifier string metadata round-trip should execute the compiled entry function"),
+			bExecuted);
+		if (bExecuted)
+		{
+			TestRunner->TestEqual(
+				TEXT("Specifier string metadata round-trip should preserve execution after metadata parsing"),
+				EntryResult,
+				CompilerPipelineSpecifierMetadataTest::ExpectedEntryValue);
+		}
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	bPassed &= TestTrue(
-		TEXT("Specifier string metadata round-trip should compile successfully"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Specifier string metadata round-trip should report preprocessor usage"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Specifier string metadata round-trip should mark compile succeeded in the summary"),
-		Summary.bCompileSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Specifier string metadata round-trip should report FullyHandled"),
-		Summary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Specifier string metadata round-trip should produce exactly one module descriptor"),
-		Summary.ModuleDescCount,
-		1);
-	bPassed &= TestEqual(
-		TEXT("Specifier string metadata round-trip should compile exactly one module"),
-		Summary.CompiledModuleCount,
-		1);
-	bPassed &= TestEqual(
-		TEXT("Specifier string metadata round-trip should keep diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-	bPassed &= TestEqual(
-		TEXT("Specifier string metadata round-trip should record exactly one module name"),
-		Summary.ModuleNames.Num(),
-		1);
-	if (Summary.ModuleNames.Num() > 0)
-	{
-		bPassed &= TestEqual(
-			TEXT("Specifier string metadata round-trip should normalize the module name from the relative script path"),
-			Summary.ModuleNames[0],
-			CompilerPipelineSpecifierMetadataTest::ModuleName.ToString());
-	}
-	if (!bCompiled)
-	{
-		return false;
-	}
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelineSpecifierMetadataTest::ClassName);
-	if (!TestNotNull(TEXT("Specifier string metadata round-trip should materialize the generated class"), GeneratedClass))
-	{
-		return false;
-	}
-
-	FProperty* CountProperty = FindFProperty<FProperty>(GeneratedClass, *CompilerPipelineSpecifierMetadataTest::PropertyName);
-	UFunction* ComputeFunction = FindGeneratedFunction(GeneratedClass, *CompilerPipelineSpecifierMetadataTest::FunctionName);
-	if (!TestNotNull(TEXT("Specifier string metadata round-trip should materialize the generated property"), CountProperty)
-		|| !TestNotNull(TEXT("Specifier string metadata round-trip should materialize the generated function"), ComputeFunction))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Generated class should preserve DisplayName metadata with embedded comma"),
-		GeneratedClass->GetMetaData(TEXT("DisplayName")),
-		CompilerPipelineSpecifierMetadataTest::ExpectedClassDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Generated class should preserve ToolTip metadata with embedded quotes"),
-		GeneratedClass->GetMetaData(TEXT("ToolTip")),
-		CompilerPipelineSpecifierMetadataTest::ExpectedClassToolTip);
-	bPassed &= TestEqual(
-		TEXT("Generated property should preserve DisplayName metadata with embedded comma"),
-		CountProperty->GetMetaData(TEXT("DisplayName")),
-		CompilerPipelineSpecifierMetadataTest::ExpectedPropertyDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Generated property should preserve ToolTip metadata with embedded quotes"),
-		CountProperty->GetMetaData(TEXT("ToolTip")),
-		CompilerPipelineSpecifierMetadataTest::ExpectedPropertyToolTip);
-	bPassed &= TestEqual(
-		TEXT("Generated function should preserve DisplayName metadata with embedded comma"),
-		ComputeFunction->GetMetaData(TEXT("DisplayName")),
-		CompilerPipelineSpecifierMetadataTest::ExpectedFunctionDisplayName);
-	bPassed &= TestEqual(
-		TEXT("Generated function should preserve ToolTip metadata with embedded quotes"),
-		ComputeFunction->GetMetaData(TEXT("ToolTip")),
-		CompilerPipelineSpecifierMetadataTest::ExpectedFunctionToolTip);
-
-	int32 EntryResult = 0;
-	const bool bExecuted = ExecuteIntFunction(
-		&Engine,
-		CompilerPipelineSpecifierMetadataTest::RelativeScriptPath,
-		CompilerPipelineSpecifierMetadataTest::ModuleName,
-		CompilerPipelineSpecifierMetadataTest::EntryFunctionDeclaration,
-		EntryResult);
-	bPassed &= TestTrue(
-		TEXT("Specifier string metadata round-trip should execute the compiled entry function"),
-		bExecuted);
-	if (bExecuted)
-	{
-		bPassed &= TestEqual(
-			TEXT("Specifier string metadata round-trip should preserve execution after metadata parsing"),
-			EntryResult,
-			CompilerPipelineSpecifierMetadataTest::ExpectedEntryValue);
-	}
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

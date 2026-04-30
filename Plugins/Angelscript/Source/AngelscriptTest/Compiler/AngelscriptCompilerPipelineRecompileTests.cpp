@@ -2,14 +2,13 @@
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Core/AngelscriptEngine.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/Class.h"
 #include "UObject/UObjectGlobals.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineRecompileTest
@@ -143,141 +142,144 @@ int Entry()
 
 using namespace CompilerPipelineRecompileTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerSuccessfulRecompileReplacesStaleOutputsTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.SuccessfulRecompileReplacesStaleOutputs",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineRecompileTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerSuccessfulRecompileReplacesStaleOutputsTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(SuccessfulRecompileReplacesStaleOutputs)
 	{
-		Engine.DiscardModule(*CompilerPipelineRecompileTest::ModuleName.ToString());
-	};
+	using namespace AngelscriptTestSupport;
 
-	Engine.ResetDiagnostics();
 
-	FAngelscriptCompileTraceSummary InitialSummary;
-	const bool bInitialCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineRecompileTest::ModuleName,
-		CompilerPipelineRecompileTest::ScriptFilename,
-		CompilerPipelineRecompileTest::MakeScriptSource(7),
-		true,
-		InitialSummary);
-	bPassed &= TestTrue(
-		TEXT("Successful recompile test case should compile the initial annotated module"),
-		bInitialCompiled);
-	bPassed &= TestEqual(
-		TEXT("Successful recompile test case should report FullyHandled for the initial compile"),
-		InitialSummary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Successful recompile test case should emit no diagnostics for the initial compile"),
-		InitialSummary.Diagnostics.Num(),
-		0);
-	if (!bInitialCompiled)
-	{
-		return false;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineRecompileTest::ModuleName.ToString());
+		};
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptCompileTraceSummary InitialSummary;
+		const bool bInitialCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineRecompileTest::ModuleName,
+			CompilerPipelineRecompileTest::ScriptFilename,
+			CompilerPipelineRecompileTest::MakeScriptSource(7),
+			true,
+			InitialSummary);
+		TestRunner->TestTrue(
+			TEXT("Successful recompile test case should compile the initial annotated module"),
+			bInitialCompiled);
+		TestRunner->TestEqual(
+			TEXT("Successful recompile test case should report FullyHandled for the initial compile"),
+			InitialSummary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Successful recompile test case should emit no diagnostics for the initial compile"),
+			InitialSummary.Diagnostics.Num(),
+			0);
+		if (!bInitialCompiled)
+		{
+			return;
+		}
+
+		TSharedPtr<FAngelscriptModuleDesc> InitialModuleDesc = Engine.GetModuleByFilenameOrModuleName(
+			CompilerPipelineRecompileTest::ScriptFilename,
+			CompilerPipelineRecompileTest::ModuleName.ToString());
+		if (!TestRunner->TestNotNull(TEXT("Successful recompile test case should publish the initial module descriptor"), InitialModuleDesc.Get()))
+		{
+			return;
+		}
+
+		UClass* InitialClass = FindGeneratedClass(&Engine, CompilerPipelineRecompileTest::GeneratedClassName);
+		UFunction* InitialFunction = InitialClass != nullptr
+			? FindGeneratedFunction(InitialClass, CompilerPipelineRecompileTest::GeneratedFunctionName)
+			: nullptr;
+		if (!CompilerPipelineRecompileTest::ExecuteEntryAndExpect(*TestRunner, Engine, 7)
+			|| !CompilerPipelineRecompileTest::ExecuteGeneratedValueAndExpect(*TestRunner, Engine, InitialClass, InitialFunction, 7))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Successful recompile test case should keep exactly one active module after the initial compile"),
+			CompilerPipelineRecompileTest::CountActiveModulesByName(Engine, CompilerPipelineRecompileTest::ModuleName.ToString()),
+			1);
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptCompileTraceSummary RecompiledSummary;
+		const bool bRecompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineRecompileTest::ModuleName,
+			CompilerPipelineRecompileTest::ScriptFilename,
+			CompilerPipelineRecompileTest::MakeScriptSource(42),
+			true,
+			RecompiledSummary);
+		TestRunner->TestTrue(
+			TEXT("Successful recompile test case should compile the updated annotated module"),
+			bRecompiled);
+		TestRunner->TestEqual(
+			TEXT("Successful recompile test case should report FullyHandled for the updated compile"),
+			RecompiledSummary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Successful recompile test case should emit no diagnostics for the updated compile"),
+			RecompiledSummary.Diagnostics.Num(),
+			0);
+		if (!bRecompiled)
+		{
+			return;
+		}
+
+		TSharedPtr<FAngelscriptModuleDesc> RecompiledModuleDesc = Engine.GetModuleByFilenameOrModuleName(
+			CompilerPipelineRecompileTest::ScriptFilename,
+			CompilerPipelineRecompileTest::ModuleName.ToString());
+		if (!TestRunner->TestNotNull(TEXT("Successful recompile test case should publish the recompiled module descriptor"), RecompiledModuleDesc.Get()))
+		{
+			return;
+		}
+
+		UClass* RecompiledClass = FindGeneratedClass(&Engine, CompilerPipelineRecompileTest::GeneratedClassName);
+		UFunction* RecompiledFunction = RecompiledClass != nullptr
+			? FindGeneratedFunction(RecompiledClass, CompilerPipelineRecompileTest::GeneratedFunctionName)
+			: nullptr;
+		if (!CompilerPipelineRecompileTest::ExecuteEntryAndExpect(*TestRunner, Engine, 42)
+			|| !CompilerPipelineRecompileTest::ExecuteGeneratedValueAndExpect(*TestRunner, Engine, RecompiledClass, RecompiledFunction, 42))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Successful recompile test case should keep exactly one active module after the updated compile"),
+			CompilerPipelineRecompileTest::CountActiveModulesByName(Engine, CompilerPipelineRecompileTest::ModuleName.ToString()),
+			1);
+		TestRunner->TestNotEqual(
+			TEXT("Successful recompile test case should replace the active module descriptor after the updated compile"),
+			RecompiledModuleDesc.Get(),
+			InitialModuleDesc.Get());
+		TestRunner->TestTrue(
+			TEXT("Successful recompile test case should replace the underlying script module after the updated compile"),
+			RecompiledModuleDesc->ScriptModule != InitialModuleDesc->ScriptModule);
+
+		if (RecompiledClass == InitialClass && RecompiledFunction == InitialFunction)
+		{
+			CompilerPipelineRecompileTest::ExecuteGeneratedValueAndExpect(
+				*TestRunner,
+				Engine,
+				InitialClass,
+				InitialFunction,
+				42);
+		}
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	TSharedPtr<FAngelscriptModuleDesc> InitialModuleDesc = Engine.GetModuleByFilenameOrModuleName(
-		CompilerPipelineRecompileTest::ScriptFilename,
-		CompilerPipelineRecompileTest::ModuleName.ToString());
-	if (!TestNotNull(TEXT("Successful recompile test case should publish the initial module descriptor"), InitialModuleDesc.Get()))
-	{
-		return false;
-	}
-
-	UClass* InitialClass = FindGeneratedClass(&Engine, CompilerPipelineRecompileTest::GeneratedClassName);
-	UFunction* InitialFunction = InitialClass != nullptr
-		? FindGeneratedFunction(InitialClass, CompilerPipelineRecompileTest::GeneratedFunctionName)
-		: nullptr;
-	if (!CompilerPipelineRecompileTest::ExecuteEntryAndExpect(*this, Engine, 7)
-		|| !CompilerPipelineRecompileTest::ExecuteGeneratedValueAndExpect(*this, Engine, InitialClass, InitialFunction, 7))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Successful recompile test case should keep exactly one active module after the initial compile"),
-		CompilerPipelineRecompileTest::CountActiveModulesByName(Engine, CompilerPipelineRecompileTest::ModuleName.ToString()),
-		1);
-
-	Engine.ResetDiagnostics();
-
-	FAngelscriptCompileTraceSummary RecompiledSummary;
-	const bool bRecompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineRecompileTest::ModuleName,
-		CompilerPipelineRecompileTest::ScriptFilename,
-		CompilerPipelineRecompileTest::MakeScriptSource(42),
-		true,
-		RecompiledSummary);
-	bPassed &= TestTrue(
-		TEXT("Successful recompile test case should compile the updated annotated module"),
-		bRecompiled);
-	bPassed &= TestEqual(
-		TEXT("Successful recompile test case should report FullyHandled for the updated compile"),
-		RecompiledSummary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Successful recompile test case should emit no diagnostics for the updated compile"),
-		RecompiledSummary.Diagnostics.Num(),
-		0);
-	if (!bRecompiled)
-	{
-		return false;
-	}
-
-	TSharedPtr<FAngelscriptModuleDesc> RecompiledModuleDesc = Engine.GetModuleByFilenameOrModuleName(
-		CompilerPipelineRecompileTest::ScriptFilename,
-		CompilerPipelineRecompileTest::ModuleName.ToString());
-	if (!TestNotNull(TEXT("Successful recompile test case should publish the recompiled module descriptor"), RecompiledModuleDesc.Get()))
-	{
-		return false;
-	}
-
-	UClass* RecompiledClass = FindGeneratedClass(&Engine, CompilerPipelineRecompileTest::GeneratedClassName);
-	UFunction* RecompiledFunction = RecompiledClass != nullptr
-		? FindGeneratedFunction(RecompiledClass, CompilerPipelineRecompileTest::GeneratedFunctionName)
-		: nullptr;
-	if (!CompilerPipelineRecompileTest::ExecuteEntryAndExpect(*this, Engine, 42)
-		|| !CompilerPipelineRecompileTest::ExecuteGeneratedValueAndExpect(*this, Engine, RecompiledClass, RecompiledFunction, 42))
-	{
-		return false;
-	}
-
-	bPassed &= TestEqual(
-		TEXT("Successful recompile test case should keep exactly one active module after the updated compile"),
-		CompilerPipelineRecompileTest::CountActiveModulesByName(Engine, CompilerPipelineRecompileTest::ModuleName.ToString()),
-		1);
-	bPassed &= TestNotEqual(
-		TEXT("Successful recompile test case should replace the active module descriptor after the updated compile"),
-		RecompiledModuleDesc.Get(),
-		InitialModuleDesc.Get());
-	bPassed &= TestTrue(
-		TEXT("Successful recompile test case should replace the underlying script module after the updated compile"),
-		RecompiledModuleDesc->ScriptModule != InitialModuleDesc->ScriptModule);
-
-	if (RecompiledClass == InitialClass && RecompiledFunction == InitialFunction)
-	{
-		bPassed &= CompilerPipelineRecompileTest::ExecuteGeneratedValueAndExpect(
-			*this,
-			Engine,
-			InitialClass,
-			InitialFunction,
-			42);
-	}
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

@@ -1,8 +1,8 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/UObjectGlobals.h"
@@ -150,123 +150,118 @@ class UObjectConstructionCarrier : UObject
 	}
 }
 
-using namespace ASClassObjectConstructionTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASClassStaticObjectConstructorAppliesScriptConstructorAndDefaultsOnceTest,
-	"Angelscript.TestModule.ClassGenerator.ASClass.StaticObjectConstructorAppliesScriptConstructorAndDefaultsOnce",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASClassObjectConstructionTests,
+	"Angelscript.TestModule.ClassGenerator.ASClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASClassStaticObjectConstructorAppliesScriptConstructorAndDefaultsOnceTest::RunTest(const FString& Parameters)
 {
-	bool bVerified = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(StaticObjectConstructorAppliesScriptConstructorAndDefaultsOnce)
 	{
-		Engine.DiscardModule(*ASClassObjectConstructionTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-		CollectGarbage(RF_NoFlags, true);
-	};
+		using namespace ASClassObjectConstructionTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	UASClass* GeneratedASClass = ASClassObjectConstructionTest::CompileObjectConstructionCarrier(*this, Engine);
-	if (GeneratedASClass == nullptr)
-	{
-		return false;
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ASClassObjectConstructionTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+			CollectGarbage(RF_NoFlags, true);
+		};
+
+		UASClass* GeneratedASClass = ASClassObjectConstructionTest::CompileObjectConstructionCarrier(*TestRunner, Engine);
+		if (GeneratedASClass == nullptr)
+		{
+			return;
+		}
+
+		UObject* DefaultObject = GeneratedASClass->GetDefaultObject();
+		if (!TestRunner->TestNotNull(
+				TEXT("ASClass object-construction test case should expose a generated class default object"),
+				DefaultObject))
+		{
+			return;
+		}
+
+		ASClassObjectConstructionTest::FObjectConstructionSnapshot DefaultSnapshot;
+		if (!ASClassObjectConstructionTest::ReadConstructionSnapshot(*TestRunner, DefaultObject, DefaultSnapshot))
+		{
+			return;
+		}
+
+		UObject* FirstInstance = NewObject<UObject>(GetTransientPackage(), GeneratedASClass, TEXT("ObjectConstructionCarrierA"));
+		UObject* SecondInstance = NewObject<UObject>(GetTransientPackage(), GeneratedASClass, TEXT("ObjectConstructionCarrierB"));
+		if (!TestRunner->TestNotNull(
+				TEXT("ASClass object-construction test case should create the first generated UObject instance"),
+				FirstInstance)
+			|| !TestRunner->TestNotNull(
+				TEXT("ASClass object-construction test case should create the second generated UObject instance"),
+				SecondInstance))
+		{
+			return;
+		}
+
+		FirstInstance->AddToRoot();
+		SecondInstance->AddToRoot();
+
+		TWeakObjectPtr<UObject> WeakFirstInstance = FirstInstance;
+		TWeakObjectPtr<UObject> WeakSecondInstance = SecondInstance;
+		ON_SCOPE_EXIT
+		{
+			ASClassObjectConstructionTest::ReleaseObject(WeakSecondInstance);
+			ASClassObjectConstructionTest::ReleaseObject(WeakFirstInstance);
+		};
+
+		ASClassObjectConstructionTest::FObjectConstructionSnapshot FirstSnapshot;
+		ASClassObjectConstructionTest::FObjectConstructionSnapshot SecondSnapshot;
+		if (!ASClassObjectConstructionTest::ReadConstructionSnapshot(*TestRunner, FirstInstance, FirstSnapshot)
+			|| !ASClassObjectConstructionTest::ReadConstructionSnapshot(*TestRunner, SecondInstance, SecondSnapshot))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("ASClass object-construction test case should compile a plain UObject-generated class"),
+			GeneratedASClass->IsChildOf(UObject::StaticClass()));
+		TestRunner->TestFalse(
+			TEXT("ASClass object-construction test case should keep the generated class out of the actor hierarchy"),
+			GeneratedASClass->IsChildOf(AActor::StaticClass()));
+		TestRunner->TestTrue(
+			TEXT("ASClass object-construction test case should create distinct runtime instances"),
+			FirstInstance != SecondInstance);
+		TestRunner->TestTrue(
+			TEXT("ASClass object-construction test case should keep runtime instances distinct from the class default object"),
+			FirstInstance != DefaultObject && SecondInstance != DefaultObject);
+
+		ASClassObjectConstructionTest::VerifySnapshot(
+			*TestRunner,
+			TEXT("ASClass object-construction test case class default object"),
+			DefaultSnapshot,
+			ASClassObjectConstructionTest::ExpectedCtorCount);
+		ASClassObjectConstructionTest::VerifySnapshot(
+			*TestRunner,
+			TEXT("ASClass object-construction test case first instance"),
+			FirstSnapshot,
+			ASClassObjectConstructionTest::ExpectedCtorCount);
+		ASClassObjectConstructionTest::VerifySnapshot(
+			*TestRunner,
+			TEXT("ASClass object-construction test case second instance"),
+			SecondSnapshot,
+			ASClassObjectConstructionTest::ExpectedCtorCount);
+
+		TestRunner->TestEqual(
+			TEXT("ASClass object-construction test case should keep the second instance constructor count isolated from the first instance"),
+			SecondSnapshot.CtorCount,
+			ASClassObjectConstructionTest::ExpectedCtorCount);
+		TestRunner->TestEqual(
+			TEXT("ASClass object-construction test case should keep both runtime instances on the same scripted integer default"),
+			FirstSnapshot.DefaultValue,
+			SecondSnapshot.DefaultValue);
+		TestRunner->TestEqual(
+			TEXT("ASClass object-construction test case should keep both runtime instances on the same scripted string default"),
+			FirstSnapshot.DefaultLabel,
+			SecondSnapshot.DefaultLabel);
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	UObject* DefaultObject = GeneratedASClass->GetDefaultObject();
-	if (!TestNotNull(
-			TEXT("ASClass object-construction test case should expose a generated class default object"),
-			DefaultObject))
-	{
-		return false;
-	}
-
-	ASClassObjectConstructionTest::FObjectConstructionSnapshot DefaultSnapshot;
-	if (!ASClassObjectConstructionTest::ReadConstructionSnapshot(*this, DefaultObject, DefaultSnapshot))
-	{
-		return false;
-	}
-
-	UObject* FirstInstance = NewObject<UObject>(GetTransientPackage(), GeneratedASClass, TEXT("ObjectConstructionCarrierA"));
-	UObject* SecondInstance = NewObject<UObject>(GetTransientPackage(), GeneratedASClass, TEXT("ObjectConstructionCarrierB"));
-	if (!TestNotNull(
-			TEXT("ASClass object-construction test case should create the first generated UObject instance"),
-			FirstInstance)
-		|| !TestNotNull(
-			TEXT("ASClass object-construction test case should create the second generated UObject instance"),
-			SecondInstance))
-	{
-		return false;
-	}
-
-	FirstInstance->AddToRoot();
-	SecondInstance->AddToRoot();
-
-	TWeakObjectPtr<UObject> WeakFirstInstance = FirstInstance;
-	TWeakObjectPtr<UObject> WeakSecondInstance = SecondInstance;
-	ON_SCOPE_EXIT
-	{
-		ASClassObjectConstructionTest::ReleaseObject(WeakSecondInstance);
-		ASClassObjectConstructionTest::ReleaseObject(WeakFirstInstance);
-	};
-
-	ASClassObjectConstructionTest::FObjectConstructionSnapshot FirstSnapshot;
-	ASClassObjectConstructionTest::FObjectConstructionSnapshot SecondSnapshot;
-	if (!ASClassObjectConstructionTest::ReadConstructionSnapshot(*this, FirstInstance, FirstSnapshot)
-		|| !ASClassObjectConstructionTest::ReadConstructionSnapshot(*this, SecondInstance, SecondSnapshot))
-	{
-		return false;
-	}
-
-	TestTrue(
-		TEXT("ASClass object-construction test case should compile a plain UObject-generated class"),
-		GeneratedASClass->IsChildOf(UObject::StaticClass()));
-	TestFalse(
-		TEXT("ASClass object-construction test case should keep the generated class out of the actor hierarchy"),
-		GeneratedASClass->IsChildOf(AActor::StaticClass()));
-	TestTrue(
-		TEXT("ASClass object-construction test case should create distinct runtime instances"),
-		FirstInstance != SecondInstance);
-	TestTrue(
-		TEXT("ASClass object-construction test case should keep runtime instances distinct from the class default object"),
-		FirstInstance != DefaultObject && SecondInstance != DefaultObject);
-
-	const bool bDefaultObjectVerified = ASClassObjectConstructionTest::VerifySnapshot(
-		*this,
-		TEXT("ASClass object-construction test case class default object"),
-		DefaultSnapshot,
-		ASClassObjectConstructionTest::ExpectedCtorCount);
-	const bool bFirstInstanceVerified = ASClassObjectConstructionTest::VerifySnapshot(
-		*this,
-		TEXT("ASClass object-construction test case first instance"),
-		FirstSnapshot,
-		ASClassObjectConstructionTest::ExpectedCtorCount);
-	const bool bSecondInstanceVerified = ASClassObjectConstructionTest::VerifySnapshot(
-		*this,
-		TEXT("ASClass object-construction test case second instance"),
-		SecondSnapshot,
-		ASClassObjectConstructionTest::ExpectedCtorCount);
-
-	TestEqual(
-		TEXT("ASClass object-construction test case should keep the second instance constructor count isolated from the first instance"),
-		SecondSnapshot.CtorCount,
-		ASClassObjectConstructionTest::ExpectedCtorCount);
-	TestEqual(
-		TEXT("ASClass object-construction test case should keep both runtime instances on the same scripted integer default"),
-		FirstSnapshot.DefaultValue,
-		SecondSnapshot.DefaultValue);
-	TestEqual(
-		TEXT("ASClass object-construction test case should keep both runtime instances on the same scripted string default"),
-		FirstSnapshot.DefaultLabel,
-		SecondSnapshot.DefaultLabel);
-
-	bVerified = bDefaultObjectVerified && bFirstInstanceVerified && bSecondInstanceVerified;
-
-	ASTEST_END_SHARE_CLEAN
-	return bVerified;
-}
+};
 
 #endif

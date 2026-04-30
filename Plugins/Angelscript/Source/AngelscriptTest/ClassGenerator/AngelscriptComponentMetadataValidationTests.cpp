@@ -1,7 +1,7 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -83,146 +83,75 @@ class ADerivedOverrideMissing : ABaseOverrideMissing
 	}
 }
 
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptComponentInvalidAttachParentFailsClosedTest,
-	"Angelscript.TestModule.ClassGenerator.Component.InvalidAttachParentFailsClosed",
+TEST_CLASS_WITH_FLAGS(FAngelscriptComponentMetadataValidationTests,
+	"Angelscript.TestModule.ClassGenerator.Component",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptComponentInvalidAttachParentFailsClosedTest::RunTest(const FString& Parameters)
 {
-	using namespace AngelscriptTest_ClassGenerator_AngelscriptComponentMetadataValidationTests_Private;
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(InvalidAttachParentFailsClosed)
 	{
-		Engine.DiscardModule(*ComponentMetadataValidationModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace AngelscriptTest_ClassGenerator_AngelscriptComponentMetadataValidationTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ComponentMetadataValidationModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		ComponentMetadataValidationModuleName,
-		ComponentMetadataValidationFilename,
-		BuildInvalidAttachParentScript(),
-		true,
-		Summary,
-		true);
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine, ECompileType::FullReload, ComponentMetadataValidationModuleName, ComponentMetadataValidationFilename,
+			BuildInvalidAttachParentScript(), true, Summary, true);
 
-	const FAngelscriptCompileTraceDiagnosticSummary* MissingParentDiagnostic =
-		FindErrorDiagnosticContaining(Summary.Diagnostics, InvalidAttachParentDiagnosticFragment);
-	const TSharedPtr<FAngelscriptModuleDesc> FailedModuleRecord =
-		Engine.GetModuleByModuleName(ComponentMetadataValidationModuleName.ToString());
+		const FAngelscriptCompileTraceDiagnosticSummary* MissingParentDiagnostic =
+			FindErrorDiagnosticContaining(Summary.Diagnostics, InvalidAttachParentDiagnosticFragment);
+		const TSharedPtr<FAngelscriptModuleDesc> FailedModuleRecord =
+			Engine.GetModuleByModuleName(ComponentMetadataValidationModuleName.ToString());
 
-	const bool bCompileFailed = TestFalse(
-		TEXT("Invalid attach-parent metadata should fail compilation instead of silently succeeding"),
-		bCompiled);
-	const bool bReportedErrorResult = TestEqual(
-		TEXT("Invalid attach-parent metadata should surface an error compile result"),
-		Summary.CompileResult,
-		ECompileResult::Error);
-	const bool bUsedPreprocessor = TestTrue(
-		TEXT("Invalid attach-parent metadata should compile through the annotated preprocessor path"),
-		Summary.bUsedPreprocessor);
-	const bool bCapturedDiagnostics = TestTrue(
-		TEXT("Invalid attach-parent metadata should emit at least one diagnostic"),
-		Summary.Diagnostics.Num() > 0);
-	const bool bReportedMissingParentDiagnostic = TestNotNull(
-		TEXT("Invalid attach-parent metadata should report the missing attach-parent diagnostic"),
-		MissingParentDiagnostic);
-	const bool bNoGeneratedClass = TestNull(
-		TEXT("Invalid attach-parent metadata should not publish the generated actor class after failure"),
-		FindGeneratedClass(&Engine, InvalidAttachParentClassName));
-	const bool bNoModuleRecord = TestTrue(
-		TEXT("Invalid attach-parent metadata should not publish a module record after failure"),
-		!FailedModuleRecord.IsValid());
+		TestRunner->TestFalse(TEXT("Invalid attach-parent metadata should fail compilation instead of silently succeeding"), bCompiled);
+		TestRunner->TestEqual(TEXT("Invalid attach-parent metadata should surface an error compile result"), Summary.CompileResult, ECompileResult::Error);
+		TestRunner->TestTrue(TEXT("Invalid attach-parent metadata should compile through the annotated preprocessor path"), Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(TEXT("Invalid attach-parent metadata should emit at least one diagnostic"), Summary.Diagnostics.Num() > 0);
+		TestRunner->TestNotNull(TEXT("Invalid attach-parent metadata should report the missing attach-parent diagnostic"), MissingParentDiagnostic);
+		TestRunner->TestNull(TEXT("Invalid attach-parent metadata should not publish the generated actor class after failure"), FindGeneratedClass(&Engine, InvalidAttachParentClassName));
+		TestRunner->TestTrue(TEXT("Invalid attach-parent metadata should not publish a module record after failure"), !FailedModuleRecord.IsValid());
 
-	bPassed = bCompileFailed
-		&& bReportedErrorResult
-		&& bUsedPreprocessor
-		&& bCapturedDiagnostics
-		&& bReportedMissingParentDiagnostic
-		&& bNoGeneratedClass
-		&& bNoModuleRecord;
+		ASTEST_END_SHARE_CLEAN
+	}
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptComponentMissingOverrideTargetFailsClosedTest,
-	"Angelscript.TestModule.ClassGenerator.Component.MissingOverrideTargetFailsClosed",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptComponentMissingOverrideTargetFailsClosedTest::RunTest(const FString& Parameters)
-{
-	using namespace AngelscriptTest_ClassGenerator_AngelscriptComponentMetadataValidationTests_Private;
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(MissingOverrideTargetFailsClosed)
 	{
-		Engine.DiscardModule(*MissingOverrideTargetModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace AngelscriptTest_ClassGenerator_AngelscriptComponentMetadataValidationTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*MissingOverrideTargetModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		MissingOverrideTargetModuleName,
-		MissingOverrideTargetFilename,
-		BuildMissingOverrideTargetScript(),
-		true,
-		Summary,
-		true);
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine, ECompileType::FullReload, MissingOverrideTargetModuleName, MissingOverrideTargetFilename,
+			BuildMissingOverrideTargetScript(), true, Summary, true);
 
-	const FAngelscriptCompileTraceDiagnosticSummary* MissingOverrideTargetDiagnostic =
-		FindErrorDiagnosticContaining(Summary.Diagnostics, MissingOverrideTargetDiagnosticFragment);
-	const TSharedPtr<FAngelscriptModuleDesc> FailedModuleRecord =
-		Engine.GetModuleByModuleName(MissingOverrideTargetModuleName.ToString());
+		const FAngelscriptCompileTraceDiagnosticSummary* MissingOverrideTargetDiagnostic =
+			FindErrorDiagnosticContaining(Summary.Diagnostics, MissingOverrideTargetDiagnosticFragment);
+		const TSharedPtr<FAngelscriptModuleDesc> FailedModuleRecord =
+			Engine.GetModuleByModuleName(MissingOverrideTargetModuleName.ToString());
 
-	const bool bCompileFailed = TestFalse(
-		TEXT("Missing override-target metadata should fail compilation instead of silently succeeding"),
-		bCompiled);
-	const bool bReportedErrorResult = TestEqual(
-		TEXT("Missing override-target metadata should surface an error compile result"),
-		Summary.CompileResult,
-		ECompileResult::Error);
-	const bool bUsedPreprocessor = TestTrue(
-		TEXT("Missing override-target metadata should compile through the annotated preprocessor path"),
-		Summary.bUsedPreprocessor);
-	const bool bCapturedDiagnostics = TestTrue(
-		TEXT("Missing override-target metadata should emit at least one diagnostic"),
-		Summary.Diagnostics.Num() > 0);
-	const bool bReportedMissingOverrideDiagnostic = TestNotNull(
-		TEXT("Missing override-target metadata should report the missing base-component diagnostic"),
-		MissingOverrideTargetDiagnostic);
-	const bool bNoGeneratedDerivedClass = TestNull(
-		TEXT("Missing override-target metadata should not publish the derived actor class after failure"),
-		FindGeneratedClass(&Engine, MissingOverrideTargetDerivedClassName));
-	const bool bNoModuleRecord = TestTrue(
-		TEXT("Missing override-target metadata should not publish a live module record after failure"),
-		!FailedModuleRecord.IsValid());
-	const bool bNoSilentSuccess = TestTrue(
-		TEXT("Missing override-target metadata should not silently publish the broken derived class"),
-		FindGeneratedClass(&Engine, MissingOverrideTargetBaseClassName) == nullptr
-			|| FindGeneratedClass(&Engine, MissingOverrideTargetDerivedClassName) == nullptr);
+		TestRunner->TestFalse(TEXT("Missing override-target metadata should fail compilation instead of silently succeeding"), bCompiled);
+		TestRunner->TestEqual(TEXT("Missing override-target metadata should surface an error compile result"), Summary.CompileResult, ECompileResult::Error);
+		TestRunner->TestTrue(TEXT("Missing override-target metadata should compile through the annotated preprocessor path"), Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(TEXT("Missing override-target metadata should emit at least one diagnostic"), Summary.Diagnostics.Num() > 0);
+		TestRunner->TestNotNull(TEXT("Missing override-target metadata should report the missing base-component diagnostic"), MissingOverrideTargetDiagnostic);
+		TestRunner->TestNull(TEXT("Missing override-target metadata should not publish the derived actor class after failure"), FindGeneratedClass(&Engine, MissingOverrideTargetDerivedClassName));
+		TestRunner->TestTrue(TEXT("Missing override-target metadata should not publish a live module record after failure"), !FailedModuleRecord.IsValid());
+		TestRunner->TestTrue(TEXT("Missing override-target metadata should not silently publish the broken derived class"),
+			FindGeneratedClass(&Engine, MissingOverrideTargetBaseClassName) == nullptr || FindGeneratedClass(&Engine, MissingOverrideTargetDerivedClassName) == nullptr);
 
-	bPassed = bCompileFailed
-		&& bReportedErrorResult
-		&& bUsedPreprocessor
-		&& bCapturedDiagnostics
-		&& bReportedMissingOverrideDiagnostic
-		&& bNoGeneratedDerivedClass
-		&& bNoModuleRecord
-		&& bNoSilentSuccess;
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

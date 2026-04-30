@@ -2,8 +2,8 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/UObjectGlobals.h"
@@ -105,82 +105,79 @@ class UConstructionContextCarrier : UObject
 	}
 }
 
-using namespace ASClassConstructionContextTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASClassGetConstructingASObjectReportsCurrentScriptInstanceTest,
-	"Angelscript.TestModule.ClassGenerator.ASClass.GetConstructingASObjectReportsCurrentScriptInstance",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASClassConstructionContextTests,
+	"Angelscript.TestModule.ClassGenerator.ASClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASClassGetConstructingASObjectReportsCurrentScriptInstanceTest::RunTest(const FString& Parameters)
 {
-	bool bVerified = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ASClassConstructionContextTest::ResetProbeState();
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(GetConstructingASObjectReportsCurrentScriptInstance)
 	{
+		using namespace ASClassConstructionContextTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 		ASClassConstructionContextTest::ResetProbeState();
-		Engine.DiscardModule(*ASClassConstructionContextTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-		CollectGarbage(RF_NoFlags, true);
-	};
 
-	if (!ASClassConstructionContextTest::VerifyProbeBaseline(*this))
-	{
-		return false;
-	}
-
-	if (!TestNull(
-			TEXT("Construction-context test case should not expose a constructing object before compiling or instantiating"),
-			UASClass::GetConstructingASObject()))
-	{
-		return false;
-	}
-
-	UASClass* GeneratedASClass = ASClassConstructionContextTest::CompileConstructionContextCarrier(*this, Engine);
-	if (GeneratedASClass == nullptr)
-	{
-		return false;
-	}
-
-	ASClassConstructionContextTest::ResetProbeState();
-	if (!ASClassConstructionContextTest::VerifyProbeBaseline(*this))
-	{
-		return false;
-	}
-
-	if (!TestNull(
-			TEXT("Construction-context test case should clear any compile-time CDO capture before the runtime instantiation step"),
-			UASClass::GetConstructingASObject()))
-	{
-		return false;
-	}
-
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedASClass, TEXT("ConstructionContextCarrier"));
-	if (Instance == nullptr)
-	{
-		return false;
-	}
-
-	Instance->AddToRoot();
-	TWeakObjectPtr<UObject> WeakInstance = Instance;
-	ON_SCOPE_EXIT
-	{
-		if (WeakInstance.IsValid())
+		ON_SCOPE_EXIT
 		{
-			WeakInstance->RemoveFromRoot();
-			WeakInstance->MarkAsGarbage();
+			ASClassConstructionContextTest::ResetProbeState();
+			Engine.DiscardModule(*ASClassConstructionContextTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+			CollectGarbage(RF_NoFlags, true);
+		};
+
+		if (!ASClassConstructionContextTest::VerifyProbeBaseline(*TestRunner))
+		{
+			return;
 		}
-	};
 
-	bVerified = ASClassConstructionContextTest::VerifyPostConstructionState(
-		*this,
-		Instance);
+		if (!TestRunner->TestNull(
+				TEXT("Construction-context test case should not expose a constructing object before compiling or instantiating"),
+				UASClass::GetConstructingASObject()))
+		{
+			return;
+		}
 
-	ASTEST_END_SHARE_CLEAN
-	return bVerified;
-}
+		UASClass* GeneratedASClass = ASClassConstructionContextTest::CompileConstructionContextCarrier(*TestRunner, Engine);
+		if (GeneratedASClass == nullptr)
+		{
+			return;
+		}
+
+		ASClassConstructionContextTest::ResetProbeState();
+		if (!ASClassConstructionContextTest::VerifyProbeBaseline(*TestRunner))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestNull(
+				TEXT("Construction-context test case should clear any compile-time CDO capture before the runtime instantiation step"),
+				UASClass::GetConstructingASObject()))
+		{
+			return;
+		}
+
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), GeneratedASClass, TEXT("ConstructionContextCarrier"));
+		if (Instance == nullptr)
+		{
+			return;
+		}
+
+		Instance->AddToRoot();
+		TWeakObjectPtr<UObject> WeakInstance = Instance;
+		ON_SCOPE_EXIT
+		{
+			if (WeakInstance.IsValid())
+			{
+				WeakInstance->RemoveFromRoot();
+				WeakInstance->MarkAsGarbage();
+			}
+		};
+
+		ASClassConstructionContextTest::VerifyPostConstructionState(
+			*TestRunner,
+			Instance);
+
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

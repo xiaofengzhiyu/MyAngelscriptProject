@@ -1,13 +1,12 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/CoreNetTypes.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelinePropertyReplicationConditionTest
@@ -40,129 +39,132 @@ namespace CompilerPipelinePropertyReplicationConditionTest
 
 using namespace CompilerPipelinePropertyReplicationConditionTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerPropertyReplicationConditionRoundTripTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.PropertyReplicationConditionRoundTrip",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyReplicationConditionTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerPropertyReplicationConditionRoundTripTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString TestScriptSource = TEXT(R"AS(
-UCLASS()
-class APropertyReplicationConditionCarrier : AActor
-{
-	UPROPERTY(Replicated, ReplicationCondition=OwnerOnly)
-	int OwnerOnlyValue = 11;
-
-	UPROPERTY(Replicated, ReplicationCondition=SkipReplay)
-	int SkipReplayValue = 31;
-}
-
-int Entry()
-{
-	return 42;
-}
-)AS");
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(PropertyReplicationConditionRoundTrip)
 	{
-		Engine.DiscardModule(*CompilerPipelinePropertyReplicationConditionTest::ModuleName.ToString());
-	};
+	using namespace AngelscriptTestSupport;
 
-	Engine.ResetDiagnostics();
 
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelinePropertyReplicationConditionTest::ModuleName,
-		CompilerPipelinePropertyReplicationConditionTest::RelativeScriptPath,
-		TestScriptSource,
-		true,
-		Summary,
-		true);
-
-	if (Summary.Diagnostics.Num() > 0)
+		const FString TestScriptSource = TEXT(R"AS(
+	UCLASS()
+	class APropertyReplicationConditionCarrier : AActor
 	{
-		AddInfo(FString::Printf(
-			TEXT("Compile diagnostics: %s"),
-			*CompilerPipelinePropertyReplicationConditionTest::JoinDiagnostics(Summary.Diagnostics)));
+		UPROPERTY(Replicated, ReplicationCondition=OwnerOnly)
+		int OwnerOnlyValue = 11;
+
+		UPROPERTY(Replicated, ReplicationCondition=SkipReplay)
+		int SkipReplayValue = 31;
 	}
 
-	bPassed &= TestTrue(
-		TEXT("Property replication-condition round-trip should compile through the normal preprocessor pipeline"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Property replication-condition round-trip should record preprocessor usage in the compile summary"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Property replication-condition round-trip should mark compile succeeded in the summary"),
-		Summary.bCompileSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Property replication-condition round-trip should stay on the full-reload handled path"),
-		Summary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Property replication-condition round-trip should keep compile diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-	if (!bCompiled || !Summary.bCompileSucceeded)
+	int Entry()
 	{
-		return false;
+		return 42;
+	}
+	)AS");
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelinePropertyReplicationConditionTest::ModuleName.ToString());
+		};
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelinePropertyReplicationConditionTest::ModuleName,
+			CompilerPipelinePropertyReplicationConditionTest::RelativeScriptPath,
+			TestScriptSource,
+			true,
+			Summary,
+			true);
+
+		if (Summary.Diagnostics.Num() > 0)
+		{
+			TestRunner->AddInfo(FString::Printf(
+				TEXT("Compile diagnostics: %s"),
+				*CompilerPipelinePropertyReplicationConditionTest::JoinDiagnostics(Summary.Diagnostics)));
+		}
+
+		TestRunner->TestTrue(
+			TEXT("Property replication-condition round-trip should compile through the normal preprocessor pipeline"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Property replication-condition round-trip should record preprocessor usage in the compile summary"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Property replication-condition round-trip should mark compile succeeded in the summary"),
+			Summary.bCompileSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Property replication-condition round-trip should stay on the full-reload handled path"),
+			Summary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Property replication-condition round-trip should keep compile diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+		if (!bCompiled || !Summary.bCompileSucceeded)
+		{
+			return;
+		}
+
+		int32 EntryResult = 0;
+		const bool bExecuted = ExecuteIntFunction(
+			&Engine,
+			CompilerPipelinePropertyReplicationConditionTest::RelativeScriptPath,
+			CompilerPipelinePropertyReplicationConditionTest::ModuleName,
+			CompilerPipelinePropertyReplicationConditionTest::EntryFunctionDeclaration,
+			EntryResult);
+		TestRunner->TestTrue(
+			TEXT("Property replication-condition round-trip should execute the compiled entry function"),
+			bExecuted);
+		if (bExecuted)
+		{
+			TestRunner->TestEqual(
+				TEXT("Property replication-condition round-trip should preserve module execution after metadata propagation"),
+				EntryResult,
+				CompilerPipelinePropertyReplicationConditionTest::ExpectedEntryValue);
+		}
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelinePropertyReplicationConditionTest::ClassName);
+		if (!TestRunner->TestNotNull(TEXT("Property replication-condition round-trip should materialize the generated class"), GeneratedClass))
+		{
+			return;
+		}
+
+		FIntProperty* OwnerOnlyProperty = FindFProperty<FIntProperty>(GeneratedClass, *CompilerPipelinePropertyReplicationConditionTest::OwnerOnlyPropertyName);
+		FIntProperty* SkipReplayProperty = FindFProperty<FIntProperty>(GeneratedClass, *CompilerPipelinePropertyReplicationConditionTest::SkipReplayPropertyName);
+		if (!TestRunner->TestNotNull(TEXT("Property replication-condition round-trip should materialize the OwnerOnly property"), OwnerOnlyProperty)
+			|| !TestRunner->TestNotNull(TEXT("Property replication-condition round-trip should materialize the SkipReplay property"), SkipReplayProperty))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("OwnerOnly property should carry CPF_Net"),
+			OwnerOnlyProperty->HasAnyPropertyFlags(CPF_Net));
+		TestRunner->TestTrue(
+			TEXT("SkipReplay property should carry CPF_Net"),
+			SkipReplayProperty->HasAnyPropertyFlags(CPF_Net));
+		TestRunner->TestEqual(
+			TEXT("OwnerOnly property should preserve COND_OwnerOnly"),
+			OwnerOnlyProperty->GetBlueprintReplicationCondition(),
+			COND_OwnerOnly);
+		TestRunner->TestEqual(
+			TEXT("SkipReplay property should preserve COND_SkipReplay"),
+			SkipReplayProperty->GetBlueprintReplicationCondition(),
+			COND_SkipReplay);
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	int32 EntryResult = 0;
-	const bool bExecuted = ExecuteIntFunction(
-		&Engine,
-		CompilerPipelinePropertyReplicationConditionTest::RelativeScriptPath,
-		CompilerPipelinePropertyReplicationConditionTest::ModuleName,
-		CompilerPipelinePropertyReplicationConditionTest::EntryFunctionDeclaration,
-		EntryResult);
-	bPassed &= TestTrue(
-		TEXT("Property replication-condition round-trip should execute the compiled entry function"),
-		bExecuted);
-	if (bExecuted)
-	{
-		bPassed &= TestEqual(
-			TEXT("Property replication-condition round-trip should preserve module execution after metadata propagation"),
-			EntryResult,
-			CompilerPipelinePropertyReplicationConditionTest::ExpectedEntryValue);
-	}
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelinePropertyReplicationConditionTest::ClassName);
-	if (!TestNotNull(TEXT("Property replication-condition round-trip should materialize the generated class"), GeneratedClass))
-	{
-		return false;
-	}
-
-	FIntProperty* OwnerOnlyProperty = FindFProperty<FIntProperty>(GeneratedClass, *CompilerPipelinePropertyReplicationConditionTest::OwnerOnlyPropertyName);
-	FIntProperty* SkipReplayProperty = FindFProperty<FIntProperty>(GeneratedClass, *CompilerPipelinePropertyReplicationConditionTest::SkipReplayPropertyName);
-	if (!TestNotNull(TEXT("Property replication-condition round-trip should materialize the OwnerOnly property"), OwnerOnlyProperty)
-		|| !TestNotNull(TEXT("Property replication-condition round-trip should materialize the SkipReplay property"), SkipReplayProperty))
-	{
-		return false;
-	}
-
-	bPassed &= TestTrue(
-		TEXT("OwnerOnly property should carry CPF_Net"),
-		OwnerOnlyProperty->HasAnyPropertyFlags(CPF_Net));
-	bPassed &= TestTrue(
-		TEXT("SkipReplay property should carry CPF_Net"),
-		SkipReplayProperty->HasAnyPropertyFlags(CPF_Net));
-	bPassed &= TestEqual(
-		TEXT("OwnerOnly property should preserve COND_OwnerOnly"),
-		OwnerOnlyProperty->GetBlueprintReplicationCondition(),
-		COND_OwnerOnly);
-	bPassed &= TestEqual(
-		TEXT("SkipReplay property should preserve COND_SkipReplay"),
-		SkipReplayProperty->GetBlueprintReplicationCondition(),
-		COND_SkipReplay);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

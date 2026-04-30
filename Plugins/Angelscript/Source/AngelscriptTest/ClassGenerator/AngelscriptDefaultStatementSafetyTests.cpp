@@ -1,8 +1,8 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "Core/AngelscriptEngine.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -57,31 +57,24 @@ namespace AngelscriptTest_ClassGenerator_DefaultStatementSafetyTests_Private
 	}
 }
 
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultStatementUnsafeDuringConstructionRejectsDefaultAndConstructorTest,
-	"Angelscript.TestModule.ClassGenerator.DefaultStatementSafety.UnsafeDuringConstructionRejectsDefaultAndConstructor",
+TEST_CLASS_WITH_FLAGS(FAngelscriptDefaultStatementSafetyTests,
+	"Angelscript.TestModule.ClassGenerator.DefaultStatementSafety",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDefaultStatementDefaultsOnlyAccessTest,
-	"Angelscript.TestModule.ClassGenerator.DefaultStatementSafety.DefaultsOnlyAccess",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDefaultStatementUnsafeDuringConstructionRejectsDefaultAndConstructorTest::RunTest(const FString& Parameters)
 {
-	using namespace AngelscriptTest_ClassGenerator_DefaultStatementSafetyTests_Private;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(UnsafeDuringConstructionRejectsDefaultAndConstructor)
 	{
-		Engine.DiscardModule(TEXT("ASUnsafeDefault"));
-		Engine.DiscardModule(TEXT("ASUnsafeConstructor"));
-		Engine.DiscardModule(TEXT("ASUnsafeOrdinary"));
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace AngelscriptTest_ClassGenerator_DefaultStatementSafetyTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(TEXT("ASUnsafeDefault"));
+			Engine.DiscardModule(TEXT("ASUnsafeConstructor"));
+			Engine.DiscardModule(TEXT("ASUnsafeOrdinary"));
+			ResetSharedCloneEngine(Engine);
+		};
 
-	const FString UnsafeDefaultScript = TEXT(R"AS(
+		const FString UnsafeDefaultScript = TEXT(R"AS(
 UCLASS()
 class UUnsafeDefaultTarget : UObject
 {
@@ -97,14 +90,12 @@ class UUnsafeDefaultTarget : UObject
 }
 )AS");
 
-	FAngelscriptCompileTraceSummary UnsafeDefaultSummary;
-	if (!CompileSafetyScript(*this, Engine, TEXT("ASUnsafeDefault"), TEXT("UUnsafeDefaultTarget"), UnsafeDefaultScript, false, UnsafeDefaultSummary))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Unsafe default call should report unsafe construction diagnostics"), SummaryContainsDiagnosticMessage(UnsafeDefaultSummary, TEXT("unsafe during construction")));
+		FAngelscriptCompileTraceSummary UnsafeDefaultSummary;
+		if (!CompileSafetyScript(*TestRunner, Engine, TEXT("ASUnsafeDefault"), TEXT("UUnsafeDefaultTarget"), UnsafeDefaultScript, false, UnsafeDefaultSummary))
+		{ return; }
+		TestRunner->TestTrue(TEXT("Unsafe default call should report unsafe construction diagnostics"), SummaryContainsDiagnosticMessage(UnsafeDefaultSummary, TEXT("unsafe during construction")));
 
-	const FString UnsafeConstructorScript = TEXT(R"AS(
+		const FString UnsafeConstructorScript = TEXT(R"AS(
 class UnsafeConstructorCarrier
 {
 	int Value = 0;
@@ -127,14 +118,12 @@ int Entry()
 }
 )AS");
 
-	FAngelscriptCompileTraceSummary UnsafeConstructorSummary;
-	if (!CompileSafetyScript(*this, Engine, TEXT("ASUnsafeConstructor"), TEXT("UnsafeConstructorCarrier"), UnsafeConstructorScript, false, UnsafeConstructorSummary))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Unsafe constructor call should report unsafe construction diagnostics"), SummaryContainsDiagnosticMessage(UnsafeConstructorSummary, TEXT("unsafe during construction")));
+		FAngelscriptCompileTraceSummary UnsafeConstructorSummary;
+		if (!CompileSafetyScript(*TestRunner, Engine, TEXT("ASUnsafeConstructor"), TEXT("UnsafeConstructorCarrier"), UnsafeConstructorScript, false, UnsafeConstructorSummary))
+		{ return; }
+		TestRunner->TestTrue(TEXT("Unsafe constructor call should report unsafe construction diagnostics"), SummaryContainsDiagnosticMessage(UnsafeConstructorSummary, TEXT("unsafe during construction")));
 
-	const FString UnsafeOrdinaryScript = TEXT(R"AS(
+		const FString UnsafeOrdinaryScript = TEXT(R"AS(
 UCLASS()
 class UUnsafeOrdinaryTarget : UObject
 {
@@ -154,29 +143,26 @@ class UUnsafeOrdinaryTarget : UObject
 }
 )AS");
 
-	FAngelscriptCompileTraceSummary UnsafeOrdinarySummary;
-	if (!CompileSafetyScript(*this, Engine, TEXT("ASUnsafeOrdinary"), TEXT("UUnsafeOrdinaryTarget"), UnsafeOrdinaryScript, true, UnsafeOrdinarySummary))
-	{
-		return false;
+		FAngelscriptCompileTraceSummary UnsafeOrdinarySummary;
+		if (!CompileSafetyScript(*TestRunner, Engine, TEXT("ASUnsafeOrdinary"), TEXT("UUnsafeOrdinaryTarget"), UnsafeOrdinaryScript, true, UnsafeOrdinarySummary))
+		{ return; }
+
+		ASTEST_END_SHARE_CLEAN
 	}
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-bool FAngelscriptDefaultStatementDefaultsOnlyAccessTest::RunTest(const FString& Parameters)
-{
-	using namespace AngelscriptTest_ClassGenerator_DefaultStatementSafetyTests_Private;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(DefaultsOnlyAccess)
 	{
-		Engine.DiscardModule(TEXT("ASDefaultsOnlyOk"));
-		Engine.DiscardModule(TEXT("ASDefaultsOnlyReject"));
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace AngelscriptTest_ClassGenerator_DefaultStatementSafetyTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(TEXT("ASDefaultsOnlyOk"));
+			Engine.DiscardModule(TEXT("ASDefaultsOnlyReject"));
+			ResetSharedCloneEngine(Engine);
+		};
 
-	const FString DefaultsOnlyOkScript = TEXT(R"AS(
+		const FString DefaultsOnlyOkScript = TEXT(R"AS(
 UCLASS()
 class UDefaultsOnlyOkTarget : UObject
 {
@@ -193,13 +179,11 @@ class UDefaultsOnlyOkTarget : UObject
 }
 )AS");
 
-	FAngelscriptCompileTraceSummary DefaultsOnlyOkSummary;
-	if (!CompileSafetyScript(*this, Engine, TEXT("ASDefaultsOnlyOk"), TEXT("UDefaultsOnlyOkTarget"), DefaultsOnlyOkScript, true, DefaultsOnlyOkSummary))
-	{
-		return false;
-	}
+		FAngelscriptCompileTraceSummary DefaultsOnlyOkSummary;
+		if (!CompileSafetyScript(*TestRunner, Engine, TEXT("ASDefaultsOnlyOk"), TEXT("UDefaultsOnlyOkTarget"), DefaultsOnlyOkScript, true, DefaultsOnlyOkSummary))
+		{ return; }
 
-	const FString DefaultsOnlyRejectScript = TEXT(R"AS(
+		const FString DefaultsOnlyRejectScript = TEXT(R"AS(
 UCLASS()
 class UDefaultsOnlyRejectTarget : UObject
 {
@@ -220,15 +204,13 @@ class UDefaultsOnlyRejectTarget : UObject
 }
 )AS");
 
-	FAngelscriptCompileTraceSummary DefaultsOnlyRejectSummary;
-	if (!CompileSafetyScript(*this, Engine, TEXT("ASDefaultsOnlyReject"), TEXT("UDefaultsOnlyRejectTarget"), DefaultsOnlyRejectScript, false, DefaultsOnlyRejectSummary))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Defaults-only ordinary call should report an access diagnostic"), SummaryContainsDiagnosticMessage(DefaultsOnlyRejectSummary, TEXT("only accessible from default statements")));
+		FAngelscriptCompileTraceSummary DefaultsOnlyRejectSummary;
+		if (!CompileSafetyScript(*TestRunner, Engine, TEXT("ASDefaultsOnlyReject"), TEXT("UDefaultsOnlyRejectTarget"), DefaultsOnlyRejectScript, false, DefaultsOnlyRejectSummary))
+		{ return; }
+		TestRunner->TestTrue(TEXT("Defaults-only ordinary call should report an access diagnostic"), SummaryContainsDiagnosticMessage(DefaultsOnlyRejectSummary, TEXT("only accessible from default statements")));
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

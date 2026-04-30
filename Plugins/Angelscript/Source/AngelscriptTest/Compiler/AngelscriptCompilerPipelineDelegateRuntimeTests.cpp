@@ -2,11 +2,10 @@
 #include "Shared/AngelscriptTestMacros.h"
 
 #include "Containers/StringConv.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineDelegateRuntimeTest
@@ -75,212 +74,212 @@ namespace CompilerPipelineDelegateRuntimeTest
 
 using namespace CompilerPipelineDelegateRuntimeTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerDelegateExecuteReportsUnboundRuntimeErrorTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DelegateExecuteReportsUnboundRuntimeError",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineDelegateRuntimeTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerDelegateExecuteIfBoundReturnsDefaultValueTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DelegateExecuteIfBoundReturnsDefaultValue",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerDelegateExecuteReportsUnboundRuntimeErrorTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString ScriptSource = TEXT(R"AS(
-delegate int FRuntimeValueDelegate();
-
-int Entry()
-{
-	FRuntimeValueDelegate Delegate;
-	return Delegate.Execute();
-}
-)AS");
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(DelegateExecuteReportsUnboundRuntimeError)
 	{
-		Engine.DiscardModule(*CompilerPipelineDelegateRuntimeTest::ModuleName.ToString());
-	};
+	using namespace AngelscriptTestSupport;
 
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineDelegateRuntimeTest::ModuleName,
-		CompilerPipelineDelegateRuntimeTest::ScriptFilename,
-		ScriptSource,
-		true,
-		Summary);
 
-	bPassed &= TestTrue(
-		TEXT("Delegate execute runtime error test case should compile successfully"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Delegate execute runtime error test case should run through the preprocessor pipeline"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Delegate execute runtime error test case should report compile success before execution"),
-		Summary.bCompileSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should finish with FullyHandled"),
-		Summary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should keep compile diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-	if (!bCompiled)
+		const FString ScriptSource = TEXT(R"AS(
+	delegate int FRuntimeValueDelegate();
+
+	int Entry()
 	{
-		return false;
+		FRuntimeValueDelegate Delegate;
+		return Delegate.Execute();
+	}
+	)AS");
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineDelegateRuntimeTest::ModuleName.ToString());
+		};
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineDelegateRuntimeTest::ModuleName,
+			CompilerPipelineDelegateRuntimeTest::ScriptFilename,
+			ScriptSource,
+			true,
+			Summary);
+
+		TestRunner->TestTrue(
+			TEXT("Delegate execute runtime error test case should compile successfully"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Delegate execute runtime error test case should run through the preprocessor pipeline"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Delegate execute runtime error test case should report compile success before execution"),
+			Summary.bCompileSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should finish with FullyHandled"),
+			Summary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should keep compile diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+		if (!bCompiled)
+		{
+			return;
+		}
+
+		asIScriptModule* Module = CompilerPipelineDelegateRuntimeTest::GetCompiledModule(*TestRunner, Engine);
+		if (Module == nullptr)
+		{
+			return;
+		}
+
+		TestRunner->AddExpectedError(TEXT("Executing unbound delegate."), EAutomationExpectedErrorFlags::Contains, 1);
+		TestRunner->AddExpectedError(*CompilerPipelineDelegateRuntimeTest::ModuleName.ToString(), EAutomationExpectedErrorFlags::Contains, 0);
+		TestRunner->AddExpectedError(TEXT("int FRuntimeValueDelegate::Execute() const | Line 11"), EAutomationExpectedErrorFlags::Contains, 1, false);
+		TestRunner->AddExpectedError(TEXT("int Entry() | Line 7"), EAutomationExpectedErrorFlags::Contains, 1, false);
+
+		CompilerPipelineDelegateRuntimeTest::FExecutionExceptionResult ExecutionResult;
+		const bool bExecuted = CompilerPipelineDelegateRuntimeTest::ExecuteEntryAndCaptureException(
+			*TestRunner,
+			Engine,
+			*Module,
+			ExecutionResult);
+		TestRunner->TestTrue(
+			TEXT("Delegate execute runtime error test case should reach the manual execution path"),
+			bExecuted);
+		if (!bExecuted)
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should prepare the entry function successfully"),
+			ExecutionResult.PrepareResult,
+			static_cast<int32>(asSUCCESS));
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should fail during execution with a script exception"),
+			ExecutionResult.ExecuteResult,
+			static_cast<int32>(asEXECUTION_EXCEPTION));
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should report the generated unbound delegate message"),
+			ExecutionResult.ExceptionString,
+			FString(CompilerPipelineDelegateRuntimeTest::ExpectedExceptionString));
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should report the generated delegate Execute wrapper line"),
+			ExecutionResult.ExceptionLine,
+			CompilerPipelineDelegateRuntimeTest::ExpectedExceptionLine);
+		TestRunner->TestEqual(
+			TEXT("Delegate execute runtime error test case should attribute the exception to the generated delegate Execute wrapper"),
+			ExecutionResult.ExceptionFunctionDeclaration,
+			FString(CompilerPipelineDelegateRuntimeTest::ExpectedExceptionFunctionDeclaration));
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	asIScriptModule* Module = CompilerPipelineDelegateRuntimeTest::GetCompiledModule(*this, Engine);
-	if (Module == nullptr)
+	TEST_METHOD(DelegateExecuteIfBoundReturnsDefaultValue)
 	{
-		return false;
+	using namespace AngelscriptTestSupport;
+
+
+		const FString ScriptSource = TEXT(R"AS(
+	delegate int FRuntimeValueDelegate();
+	delegate bool FRuntimeBoolDelegate();
+
+	int Entry()
+	{
+		FRuntimeValueDelegate Delegate;
+		return Delegate.ExecuteIfBound();
 	}
 
-	AddExpectedError(TEXT("Executing unbound delegate."), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(*CompilerPipelineDelegateRuntimeTest::ModuleName.ToString(), EAutomationExpectedErrorFlags::Contains, 0);
-	AddExpectedError(TEXT("int FRuntimeValueDelegate::Execute() const | Line 11"), EAutomationExpectedErrorFlags::Contains, 1, false);
-	AddExpectedError(TEXT("int Entry() | Line 7"), EAutomationExpectedErrorFlags::Contains, 1, false);
-
-	CompilerPipelineDelegateRuntimeTest::FExecutionExceptionResult ExecutionResult;
-	const bool bExecuted = CompilerPipelineDelegateRuntimeTest::ExecuteEntryAndCaptureException(
-		*this,
-		Engine,
-		*Module,
-		ExecutionResult);
-	bPassed &= TestTrue(
-		TEXT("Delegate execute runtime error test case should reach the manual execution path"),
-		bExecuted);
-	if (!bExecuted)
+	int EntryBool()
 	{
-		return false;
+		FRuntimeBoolDelegate Delegate;
+		return Delegate.ExecuteIfBound() ? 1 : 0;
+	}
+	)AS");
+
+		const FName LocalModuleName(TEXT("Tests.Compiler.DelegateExecuteIfBoundReturnsDefaultValue"));
+		const FString LocalScriptFilename(TEXT("Tests/Compiler/DelegateExecuteIfBoundReturnsDefaultValue.as"));
+
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*LocalModuleName.ToString());
+		};
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			LocalModuleName,
+			LocalScriptFilename,
+			ScriptSource,
+			true,
+			Summary);
+
+		TestRunner->TestTrue(
+			TEXT("Delegate ExecuteIfBound default-value test case should compile successfully"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Delegate ExecuteIfBound default-value test case should run through the preprocessor pipeline"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Delegate ExecuteIfBound default-value test case should report compile success before execution"),
+			Summary.bCompileSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Delegate ExecuteIfBound default-value test case should finish with FullyHandled"),
+			Summary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Delegate ExecuteIfBound default-value test case should keep compile diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+		if (!bCompiled)
+		{
+			return;
+		}
+
+		const auto ModuleNameUtf8 = StringCast<ANSICHAR>(*LocalModuleName.ToString());
+		asIScriptModule* Module = Engine.GetScriptEngine()->GetModule(ModuleNameUtf8.Get(), asGM_ONLY_IF_EXISTS);
+		if (!TestRunner->TestNotNull(TEXT("Delegate ExecuteIfBound default-value test case should publish a script module"), Module))
+		{
+			return;
+		}
+
+		asIScriptFunction* EntryFunction = GetFunctionByDecl(*TestRunner, *Module, TEXT("int Entry()"));
+		asIScriptFunction* EntryBoolFunction = GetFunctionByDecl(*TestRunner, *Module, TEXT("int EntryBool()"));
+		if (EntryFunction == nullptr || EntryBoolFunction == nullptr)
+		{
+			return;
+		}
+
+		int32 IntResult = MIN_int32;
+		int32 BoolResult = MIN_int32;
+		ExecuteIntFunction(*TestRunner, Engine, *EntryFunction, IntResult);
+		ExecuteIntFunction(*TestRunner, Engine, *EntryBoolFunction, BoolResult);
+
+		TestRunner->TestEqual(
+			TEXT("Delegate ExecuteIfBound default-value test case should return 0 for unbound int delegates"),
+			IntResult,
+			0);
+		TestRunner->TestEqual(
+			TEXT("Delegate ExecuteIfBound default-value test case should return 0 for unbound bool delegates"),
+			BoolResult,
+			0);
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should prepare the entry function successfully"),
-		ExecutionResult.PrepareResult,
-		static_cast<int32>(asSUCCESS));
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should fail during execution with a script exception"),
-		ExecutionResult.ExecuteResult,
-		static_cast<int32>(asEXECUTION_EXCEPTION));
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should report the generated unbound delegate message"),
-		ExecutionResult.ExceptionString,
-		FString(CompilerPipelineDelegateRuntimeTest::ExpectedExceptionString));
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should report the generated delegate Execute wrapper line"),
-		ExecutionResult.ExceptionLine,
-		CompilerPipelineDelegateRuntimeTest::ExpectedExceptionLine);
-	bPassed &= TestEqual(
-		TEXT("Delegate execute runtime error test case should attribute the exception to the generated delegate Execute wrapper"),
-		ExecutionResult.ExceptionFunctionDeclaration,
-		FString(CompilerPipelineDelegateRuntimeTest::ExpectedExceptionFunctionDeclaration));
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptCompilerDelegateExecuteIfBoundReturnsDefaultValueTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	const FString ScriptSource = TEXT(R"AS(
-delegate int FRuntimeValueDelegate();
-delegate bool FRuntimeBoolDelegate();
-
-int Entry()
-{
-	FRuntimeValueDelegate Delegate;
-	return Delegate.ExecuteIfBound();
-}
-
-int EntryBool()
-{
-	FRuntimeBoolDelegate Delegate;
-	return Delegate.ExecuteIfBound() ? 1 : 0;
-}
-)AS");
-
-	const FName LocalModuleName(TEXT("Tests.Compiler.DelegateExecuteIfBoundReturnsDefaultValue"));
-	const FString LocalScriptFilename(TEXT("Tests/Compiler/DelegateExecuteIfBoundReturnsDefaultValue.as"));
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*LocalModuleName.ToString());
-	};
-
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		LocalModuleName,
-		LocalScriptFilename,
-		ScriptSource,
-		true,
-		Summary);
-
-	bPassed &= TestTrue(
-		TEXT("Delegate ExecuteIfBound default-value test case should compile successfully"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Delegate ExecuteIfBound default-value test case should run through the preprocessor pipeline"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Delegate ExecuteIfBound default-value test case should report compile success before execution"),
-		Summary.bCompileSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Delegate ExecuteIfBound default-value test case should finish with FullyHandled"),
-		Summary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Delegate ExecuteIfBound default-value test case should keep compile diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-	if (!bCompiled)
-	{
-		return false;
-	}
-
-	const auto ModuleNameUtf8 = StringCast<ANSICHAR>(*LocalModuleName.ToString());
-	asIScriptModule* Module = Engine.GetScriptEngine()->GetModule(ModuleNameUtf8.Get(), asGM_ONLY_IF_EXISTS);
-	if (!TestNotNull(TEXT("Delegate ExecuteIfBound default-value test case should publish a script module"), Module))
-	{
-		return false;
-	}
-
-	asIScriptFunction* EntryFunction = GetFunctionByDecl(*this, *Module, TEXT("int Entry()"));
-	asIScriptFunction* EntryBoolFunction = GetFunctionByDecl(*this, *Module, TEXT("int EntryBool()"));
-	if (EntryFunction == nullptr || EntryBoolFunction == nullptr)
-	{
-		return false;
-	}
-
-	int32 IntResult = MIN_int32;
-	int32 BoolResult = MIN_int32;
-	bPassed &= ExecuteIntFunction(*this, Engine, *EntryFunction, IntResult);
-	bPassed &= ExecuteIntFunction(*this, Engine, *EntryBoolFunction, BoolResult);
-
-	bPassed &= TestEqual(
-		TEXT("Delegate ExecuteIfBound default-value test case should return 0 for unbound int delegates"),
-		IntResult,
-		0);
-	bPassed &= TestEqual(
-		TEXT("Delegate ExecuteIfBound default-value test case should return 0 for unbound bool delegates"),
-		BoolResult,
-		0);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

@@ -2,500 +2,444 @@
 #include "Shared/AngelscriptTestUtilities.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "UObject/Class.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+using namespace AngelscriptTestSupport;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerDelegateEnumClassCompileTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DelegateEnumClassCompile",
+TEST_CLASS_WITH_FLAGS(FAngelscriptCompilerPipelineEndToEndTest,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerDelegateEnumClassCompileTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerDelegateEnumClassCompile"),
-		TEXT("CompilerDelegateEnumClassCompile.as"),
-		TEXT(R"(
-UENUM(BlueprintType)
-enum class ECompilerTransferState : uint16
-{
-	Alpha,
-	Beta = 4,
-	Gamma
-}
-
-delegate void FCompilerTransferDelegate(int Value);
-event void FCompilerTransferEvent(UClass TypeValue, FString Label);
-
-UCLASS(Abstract, BlueprintType)
-class UCompilerTransferObject : UObject
-{
-	UPROPERTY()
-	int Score;
-
-	UFUNCTION()
-	int GetScore()
+	TEST_METHOD(DelegateEnumClassCompile)
 	{
-		return Score;
-	}
-}
-)"));
-
-	if (!TestTrue(TEXT("Fallback compiler validation should compile delegate/enum/class transfer input"), bCompiled))
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerDelegateEnumClassCompile"),
+			TEXT("CompilerDelegateEnumClassCompile.as"),
+			TEXT(R"(
+	UENUM(BlueprintType)
+	enum class ECompilerTransferState : uint16
 	{
-		return false;
+		Alpha,
+		Beta = 4,
+		Gamma
 	}
 
-	const TSharedPtr<FAngelscriptDelegateDesc> SimpleDelegate = Engine.GetDelegate(TEXT("FCompilerTransferDelegate"));
-	const TSharedPtr<FAngelscriptDelegateDesc> MultiDelegate = Engine.GetDelegate(TEXT("FCompilerTransferEvent"));
-	if (!TestTrue(TEXT("Simple delegate metadata should be registered after compile"), SimpleDelegate.IsValid()))
+	delegate void FCompilerTransferDelegate(int Value);
+	event void FCompilerTransferEvent(UClass TypeValue, FString Label);
+
+	UCLASS(Abstract, BlueprintType)
+	class UCompilerTransferObject : UObject
 	{
-		return false;
+		UPROPERTY()
+		int Score;
+
+		UFUNCTION()
+		int GetScore()
+		{
+			return Score;
+		}
 	}
-	if (!TestTrue(TEXT("Multicast delegate metadata should be registered after compile"), MultiDelegate.IsValid()))
-	{
-		return false;
-	}
+	)"));
 
-	TestFalse(TEXT("Simple delegate should remain single-cast"), SimpleDelegate->bIsMulticast);
-	TestTrue(TEXT("Event delegate should remain multicast"), MultiDelegate->bIsMulticast);
+		if (!TestRunner->TestTrue(TEXT("Fallback compiler validation should compile delegate/enum/class transfer input"), bCompiled))
+		{
+			return;
+		}
 
-	UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerTransferObject"));
-	if (!TestNotNull(TEXT("Generated class should exist for delegate/enum/class transfer input"), GeneratedClass))
-	{
-		return false;
-	}
+		const TSharedPtr<FAngelscriptDelegateDesc> SimpleDelegate = Engine.GetDelegate(TEXT("FCompilerTransferDelegate"));
+		const TSharedPtr<FAngelscriptDelegateDesc> MultiDelegate = Engine.GetDelegate(TEXT("FCompilerTransferEvent"));
+		if (!TestRunner->TestTrue(TEXT("Simple delegate metadata should be registered after compile"), SimpleDelegate.IsValid()))
+		{
+			return;
+		}
+		if (!TestRunner->TestTrue(TEXT("Multicast delegate metadata should be registered after compile"), MultiDelegate.IsValid()))
+		{
+			return;
+		}
 
-	TestTrue(TEXT("Generated class should preserve abstract flag"), GeneratedClass->HasAnyClassFlags(CLASS_Abstract));
-	TestNotNull(TEXT("Generated Score property should exist"), FindFProperty<FProperty>(GeneratedClass, TEXT("Score")));
-	TestNotNull(TEXT("Generated GetScore function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("GetScore")));
-ASTEST_END_SHARE
+		TestRunner->TestFalse(TEXT("Simple delegate should remain single-cast"), SimpleDelegate->bIsMulticast);
+		TestRunner->TestTrue(TEXT("Event delegate should remain multicast"), MultiDelegate->bIsMulticast);
 
-	return true;
-}
+		UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerTransferObject"));
+		if (!TestRunner->TestNotNull(TEXT("Generated class should exist for delegate/enum/class transfer input"), GeneratedClass))
+		{
+			return;
+		}
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerFunctionDefaultsAndClassLikeCompileTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.FunctionDefaultsAndClassLikeCompile",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerFunctionDefaultsAndClassLikeCompileTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerFunctionDefaultsAndClassLikeCompile"),
-		TEXT("CompilerFunctionDefaultsAndClassLikeCompile.as"),
-		TEXT(R"(
-int SumWithDefault(int Value = 21, int Extra = 21)
-{
-	return Value + Extra;
-}
-
-int Entry()
-{
-	return SumWithDefault();
-}
-
-UCLASS()
-class UCompilerFunctionCarrier : UObject
-{
-
-	UFUNCTION()
-	UClass EchoPlainClass(UClass Value)
-	{
-		return Value;
+		TestRunner->TestTrue(TEXT("Generated class should preserve abstract flag"), GeneratedClass->HasAnyClassFlags(CLASS_Abstract));
+		TestRunner->TestNotNull(TEXT("Generated Score property should exist"), FindFProperty<FProperty>(GeneratedClass, TEXT("Score")));
+		TestRunner->TestNotNull(TEXT("Generated GetScore function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("GetScore")));
+	ASTEST_END_SHARE
 	}
 
-	UFUNCTION()
-	TSubclassOf<AActor> EchoActorClass(TSubclassOf<AActor> Value)
+	TEST_METHOD(FunctionDefaultsAndClassLikeCompile)
 	{
-		return Value;
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerFunctionDefaultsAndClassLikeCompile"),
+			TEXT("CompilerFunctionDefaultsAndClassLikeCompile.as"),
+			TEXT(R"(
+	int SumWithDefault(int Value = 21, int Extra = 21)
+	{
+		return Value + Extra;
 	}
 
-	UFUNCTION()
-	TSoftClassPtr<AActor> EchoSoftActorClass(TSoftClassPtr<AActor> Value)
+	int Entry()
 	{
-		return Value;
-	}
-}
-)"));
-
-	if (!TestTrue(TEXT("Fallback compiler validation should compile function defaults and class-like signatures"), bCompiled))
-	{
-		return false;
+		return SumWithDefault();
 	}
 
-	int32 Result = 0;
-	const bool bExecuted = AngelscriptTestSupport::ExecuteIntFunction(&Engine, TEXT("CompilerFunctionDefaultsAndClassLikeCompile"), TEXT("int Entry()"), Result);
-	if (!TestTrue(TEXT("Function default validation should execute compiled entry point"), bExecuted))
+	UCLASS()
+	class UCompilerFunctionCarrier : UObject
 	{
-		return false;
+
+		UFUNCTION()
+		UClass EchoPlainClass(UClass Value)
+		{
+			return Value;
+		}
+
+		UFUNCTION()
+		TSubclassOf<AActor> EchoActorClass(TSubclassOf<AActor> Value)
+		{
+			return Value;
+		}
+
+		UFUNCTION()
+		TSoftClassPtr<AActor> EchoSoftActorClass(TSoftClassPtr<AActor> Value)
+		{
+			return Value;
+		}
+	}
+	)"));
+
+		if (!TestRunner->TestTrue(TEXT("Fallback compiler validation should compile function defaults and class-like signatures"), bCompiled))
+		{
+			return;
+		}
+
+		int32 Result = 0;
+		const bool bExecuted = AngelscriptTestSupport::ExecuteIntFunction(&Engine, TEXT("CompilerFunctionDefaultsAndClassLikeCompile"), TEXT("int Entry()"), Result);
+		if (!TestRunner->TestTrue(TEXT("Function default validation should execute compiled entry point"), bExecuted))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Function default values should be honored at runtime"), Result, 42);
+
+		UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerFunctionCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Generated class should exist for class-like signature input"), GeneratedClass))
+		{
+			return;
+		}
+
+		TestRunner->TestNotNull(TEXT("EchoPlainClass function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoPlainClass")));
+		TestRunner->TestNotNull(TEXT("EchoActorClass function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoActorClass")));
+		TestRunner->TestNotNull(TEXT("EchoSoftActorClass function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoSoftActorClass")));
+	ASTEST_END_SHARE
 	}
 
-	TestEqual(TEXT("Function default values should be honored at runtime"), Result, 42);
-
-	UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerFunctionCarrier"));
-	if (!TestNotNull(TEXT("Generated class should exist for class-like signature input"), GeneratedClass))
+	TEST_METHOD(PropertyDefaultsCompile)
 	{
-		return false;
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerPropertyDefaultsCompile"),
+			TEXT("CompilerPropertyDefaultsCompile.as"),
+			TEXT(R"(
+	UCLASS()
+	class UCompilerDefaultsCarrier : UObject
+	{
+		UPROPERTY()
+		int Score = 7;
+
+		UPROPERTY()
+		TArray<FName> Tags;
+
+		default Score = 21;
+		default Tags.Add(n"Alpha");
+	}
+	)"));
+
+		if (!TestRunner->TestTrue(TEXT("Fallback compiler validation should compile property default input"), bCompiled))
+		{
+			return;
+		}
+
+		UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerDefaultsCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Generated class should exist for property default input"), GeneratedClass))
+		{
+			return;
+		}
+
+		UObject* DefaultObject = GeneratedClass->GetDefaultObject();
+		if (!TestRunner->TestNotNull(TEXT("Generated class default object should exist"), DefaultObject))
+		{
+			return;
+		}
+
+		FIntProperty* ScoreProperty = FindFProperty<FIntProperty>(GeneratedClass, TEXT("Score"));
+		if (!TestRunner->TestNotNull(TEXT("Generated Score property should exist"), ScoreProperty))
+		{
+			return;
+		}
+
+		const int32 ScoreValue = ScoreProperty->GetPropertyValue_InContainer(DefaultObject);
+		TestRunner->TestEqual(TEXT("Generated default object should materialize overridden int default"), ScoreValue, 21);
+	ASTEST_END_SHARE
 	}
 
-	TestNotNull(TEXT("EchoPlainClass function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoPlainClass")));
-	TestNotNull(TEXT("EchoActorClass function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoActorClass")));
-	TestNotNull(TEXT("EchoSoftActorClass function should exist"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoSoftActorClass")));
-bPassed = Result == 42;
-ASTEST_END_SHARE
-
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerPropertyDefaultsCompileTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.PropertyDefaultsCompile",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerPropertyDefaultsCompileTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerPropertyDefaultsCompile"),
-		TEXT("CompilerPropertyDefaultsCompile.as"),
-		TEXT(R"(
-UCLASS()
-class UCompilerDefaultsCarrier : UObject
-{
-	UPROPERTY()
-	int Score = 7;
-
-	UPROPERTY()
-	TArray<FName> Tags;
-
-	default Score = 21;
-	default Tags.Add(n"Alpha");
-}
-)"));
-
-	if (!TestTrue(TEXT("Fallback compiler validation should compile property default input"), bCompiled))
+	TEST_METHOD(GeneratedClassConsistency)
 	{
-		return false;
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerGeneratedClassConsistency"),
+			TEXT("CompilerGeneratedClassConsistency.as"),
+			TEXT(R"(
+	UCLASS(Abstract, BlueprintType)
+	class UCompilerConsistencyCarrier : UObject
+	{
+		UPROPERTY()
+		int Score;
+
+		UFUNCTION()
+		int GetScore()
+		{
+			return Score;
+		}
+	}
+	)"));
+
+		if (!TestRunner->TestTrue(TEXT("Generated class consistency input should compile"), bCompiled))
+		{
+			return;
+		}
+
+		UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerConsistencyCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Generated consistency class should exist"), GeneratedClass))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("Generated consistency class should preserve abstract flag"), GeneratedClass->HasAnyClassFlags(CLASS_Abstract));
+		TestRunner->TestNotNull(TEXT("Generated consistency class should expose Score property"), FindFProperty<FProperty>(GeneratedClass, TEXT("Score")));
+		TestRunner->TestNotNull(TEXT("Generated consistency class should expose GetScore function"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("GetScore")));
+	ASTEST_END_SHARE
 	}
 
-	UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerDefaultsCarrier"));
-	if (!TestNotNull(TEXT("Generated class should exist for property default input"), GeneratedClass))
+	TEST_METHOD(ModuleFunctionInspection)
 	{
-		return false;
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		asIScriptModule* Module = AngelscriptTestSupport::BuildModule(
+			*TestRunner,
+			Engine,
+			"CompilerModuleFunctionInspection",
+			TEXT(R"(
+	int SumWithDefault(int Value = 21, int Extra = 21)
+	{
+		return Value + Extra;
 	}
 
-	UObject* DefaultObject = GeneratedClass->GetDefaultObject();
-	if (!TestNotNull(TEXT("Generated class default object should exist"), DefaultObject))
+	int Entry()
 	{
-		return false;
+		return SumWithDefault();
+	}
+	)"));
+		if (!TestRunner->TestNotNull(TEXT("Fallback compiler inspection module should build"), Module))
+		{
+			return;
+		}
+
+		asIScriptFunction* SumWithDefault = AngelscriptTestSupport::GetFunctionByDecl(*TestRunner, *Module, TEXT("int SumWithDefault(int, int)"));
+		if (!TestRunner->TestNotNull(TEXT("Compiled module should expose SumWithDefault"), SumWithDefault))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Compiled module should expose exactly two parameters for SumWithDefault"), static_cast<int32>(SumWithDefault->GetParamCount()), 2);
+
+		int32 Result = 0;
+		if (!TestRunner->TestTrue(TEXT("Compiled inspection module entry should execute"), AngelscriptTestSupport::ExecuteIntFunction(&Engine, TEXT("CompilerModuleFunctionInspection"), TEXT("int Entry()"), Result)))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Compiled inspection module should preserve executable default values"), Result, 42);
+	ASTEST_END_SHARE
 	}
 
-	FIntProperty* ScoreProperty = FindFProperty<FIntProperty>(GeneratedClass, TEXT("Score"));
-	if (!TestNotNull(TEXT("Generated Score property should exist"), ScoreProperty))
+	TEST_METHOD(EnumAvailability)
 	{
-		return false;
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerEnumAvailability"),
+			TEXT("CompilerEnumAvailability.as"),
+			TEXT(R"(
+	UENUM(BlueprintType)
+	enum class ECompilerAvailabilityState : uint16
+	{
+		Alpha,
+		Beta = 4,
+		Gamma
+	}
+	)"));
+
+		if (!TestRunner->TestTrue(TEXT("Enum availability input should compile"), bCompiled))
+		{
+			return;
+		}
+
+		const TSharedPtr<FAngelscriptEnumDesc> EnumDesc = Engine.GetEnum(TEXT("ECompilerAvailabilityState"));
+		if (!TestRunner->TestTrue(TEXT("Compiled enum metadata should be registered"), EnumDesc.IsValid()))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Compiled enum should have 3 declared values"), EnumDesc->ValueNames.Num(), 3);
+		TestRunner->TestEqual(TEXT("Beta should have explicit value 4"), static_cast<int32>(EnumDesc->EnumValues[1]), 4);
+	ASTEST_END_SHARE
 	}
 
-	const int32 ScoreValue = ScoreProperty->GetPropertyValue_InContainer(DefaultObject);
-	TestEqual(TEXT("Generated default object should materialize overridden int default"), ScoreValue, 21);
-bPassed = ScoreValue == 21;
-ASTEST_END_SHARE
-
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerGeneratedClassConsistencyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.GeneratedClassConsistency",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerGeneratedClassConsistencyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerGeneratedClassConsistency"),
-		TEXT("CompilerGeneratedClassConsistency.as"),
-		TEXT(R"(
-UCLASS(Abstract, BlueprintType)
-class UCompilerConsistencyCarrier : UObject
-{
-	UPROPERTY()
-	int Score;
-
-	UFUNCTION()
-	int GetScore()
+	TEST_METHOD(DelegateSignatureConsistency)
 	{
-		return Score;
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerDelegateSignatureConsistency"),
+			TEXT("CompilerDelegateSignatureConsistency.as"),
+			TEXT(R"(
+	delegate void FCompilerSingleCastSignature(int Value);
+	event void FCompilerMultiCastSignature(UClass TypeValue, FString Label);
+
+	UCLASS()
+	class UCompilerDelegateCarrier : UObject
+	{
 	}
-}
-)"));
+	)"));
 
-	if (!TestTrue(TEXT("Generated class consistency input should compile"), bCompiled))
-	{
-		return false;
-	}
+		if (!TestRunner->TestTrue(TEXT("Delegate signature consistency input should compile"), bCompiled))
+		{
+			return;
+		}
 
-	UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerConsistencyCarrier"));
-	if (!TestNotNull(TEXT("Generated consistency class should exist"), GeneratedClass))
-	{
-		return false;
+		const TSharedPtr<FAngelscriptDelegateDesc> SingleCast = Engine.GetDelegate(TEXT("FCompilerSingleCastSignature"));
+		const TSharedPtr<FAngelscriptDelegateDesc> MultiCast = Engine.GetDelegate(TEXT("FCompilerMultiCastSignature"));
+		if (!TestRunner->TestTrue(TEXT("Single-cast delegate metadata should exist"), SingleCast.IsValid()))
+		{
+			return;
+		}
+		if (!TestRunner->TestTrue(TEXT("Multicast delegate metadata should exist"), MultiCast.IsValid()))
+		{
+			return;
+		}
+
+		TestRunner->TestFalse(TEXT("Single-cast delegate should not be marked multicast"), SingleCast->bIsMulticast);
+		TestRunner->TestTrue(TEXT("Multicast delegate should be marked multicast"), MultiCast->bIsMulticast);
+		TestRunner->TestNotNull(TEXT("Single-cast delegate should materialize a UDelegateFunction"), SingleCast->Function);
+		TestRunner->TestNotNull(TEXT("Multicast delegate should materialize a UDelegateFunction"), MultiCast->Function);
+	ASTEST_END_SHARE
 	}
 
-	TestTrue(TEXT("Generated consistency class should preserve abstract flag"), GeneratedClass->HasAnyClassFlags(CLASS_Abstract));
-	TestNotNull(TEXT("Generated consistency class should expose Score property"), FindFProperty<FProperty>(GeneratedClass, TEXT("Score")));
-	TestNotNull(TEXT("Generated consistency class should expose GetScore function"), AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("GetScore")));
-ASTEST_END_SHARE
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerModuleFunctionInspectionTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.ModuleFunctionInspection",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerModuleFunctionInspectionTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	asIScriptModule* Module = AngelscriptTestSupport::BuildModule(
-		*this,
-		Engine,
-		"CompilerModuleFunctionInspection",
-		TEXT(R"(
-int SumWithDefault(int Value = 21, int Extra = 21)
-{
-	return Value + Extra;
-}
-
-int Entry()
-{
-	return SumWithDefault();
-}
-)"));
-	if (!TestNotNull(TEXT("Fallback compiler inspection module should build"), Module))
+	TEST_METHOD(ClassLikeReflectionShape)
 	{
-		return false;
-	}
-
-	asIScriptFunction* SumWithDefault = AngelscriptTestSupport::GetFunctionByDecl(*this, *Module, TEXT("int SumWithDefault(int, int)"));
-	if (!TestNotNull(TEXT("Compiled module should expose SumWithDefault"), SumWithDefault))
+		FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
+	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+	ASTEST_BEGIN_SHARE
+		const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
+			&Engine,
+			TEXT("CompilerClassLikeReflectionShape"),
+			TEXT("CompilerClassLikeReflectionShape.as"),
+			TEXT(R"(
+	UCLASS()
+	class UCompilerClassLikeShapeCarrier : UObject
 	{
-		return false;
+		UFUNCTION()
+		UClass EchoPlainClass(UClass Value)
+		{
+			return Value;
+		}
+
+		UFUNCTION()
+		TSubclassOf<AActor> EchoActorClass(TSubclassOf<AActor> Value)
+		{
+			return Value;
+		}
+
+		UFUNCTION()
+		TSoftClassPtr<AActor> EchoSoftActorClass(TSoftClassPtr<AActor> Value)
+		{
+			return Value;
+		}
 	}
+	)"));
 
-	TestEqual(TEXT("Compiled module should expose exactly two parameters for SumWithDefault"), static_cast<int32>(SumWithDefault->GetParamCount()), 2);
+		if (!TestRunner->TestTrue(TEXT("Class-like reflection shape input should compile"), bCompiled))
+		{
+			return;
+		}
 
-	int32 Result = 0;
-	if (!TestTrue(TEXT("Compiled inspection module entry should execute"), AngelscriptTestSupport::ExecuteIntFunction(&Engine, TEXT("CompilerModuleFunctionInspection"), TEXT("int Entry()"), Result)))
-	{
-		return false;
+		UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerClassLikeShapeCarrier"));
+		if (!TestRunner->TestNotNull(TEXT("Generated class should exist for class-like reflection shape input"), GeneratedClass))
+		{
+			return;
+		}
+
+		UFunction* EchoPlainClass = AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoPlainClass"));
+		UFunction* EchoActorClass = AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoActorClass"));
+		UFunction* EchoSoftActorClass = AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoSoftActorClass"));
+		if (!TestRunner->TestNotNull(TEXT("EchoPlainClass should exist"), EchoPlainClass) ||
+			!TestRunner->TestNotNull(TEXT("EchoActorClass should exist"), EchoActorClass) ||
+			!TestRunner->TestNotNull(TEXT("EchoSoftActorClass should exist"), EchoSoftActorClass))
+		{
+			return;
+		}
+
+		TestRunner->TestNotNull(TEXT("Plain class return should materialize as FClassProperty"), CastField<FClassProperty>(EchoPlainClass->GetReturnProperty()));
+		TestRunner->TestNotNull(TEXT("Plain class parameter should materialize as FClassProperty"), CastField<FClassProperty>(FindFProperty<FProperty>(EchoPlainClass, TEXT("Value"))));
+
+		FClassProperty* ActorReturnProperty = CastField<FClassProperty>(EchoActorClass->GetReturnProperty());
+		FClassProperty* ActorParamProperty = CastField<FClassProperty>(FindFProperty<FProperty>(EchoActorClass, TEXT("Value")));
+		if (!TestRunner->TestNotNull(TEXT("Subclass return should materialize as FClassProperty"), ActorReturnProperty) ||
+			!TestRunner->TestNotNull(TEXT("Subclass parameter should materialize as FClassProperty"), ActorParamProperty))
+		{
+			return;
+		}
+		TestRunner->TestTrue(TEXT("Subclass return MetaClass should be AActor"), ActorReturnProperty->MetaClass == AActor::StaticClass());
+		TestRunner->TestTrue(TEXT("Subclass parameter MetaClass should be AActor"), ActorParamProperty->MetaClass == AActor::StaticClass());
+
+		FSoftClassProperty* SoftReturnProperty = CastField<FSoftClassProperty>(EchoSoftActorClass->GetReturnProperty());
+		FSoftClassProperty* SoftParamProperty = CastField<FSoftClassProperty>(FindFProperty<FProperty>(EchoSoftActorClass, TEXT("Value")));
+		if (!TestRunner->TestNotNull(TEXT("Soft class return should materialize as FSoftClassProperty"), SoftReturnProperty) ||
+			!TestRunner->TestNotNull(TEXT("Soft class parameter should materialize as FSoftClassProperty"), SoftParamProperty))
+		{
+			return;
+		}
+		TestRunner->TestTrue(TEXT("Soft class return MetaClass should be AActor"), SoftReturnProperty->MetaClass == AActor::StaticClass());
+		TestRunner->TestTrue(TEXT("Soft class parameter MetaClass should be AActor"), SoftParamProperty->MetaClass == AActor::StaticClass());
+	ASTEST_END_SHARE
 	}
-
-	TestEqual(TEXT("Compiled inspection module should preserve executable default values"), Result, 42);
-bPassed = Result == 42;
-ASTEST_END_SHARE
-
-	return bPassed;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerEnumAvailabilityTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.EnumAvailability",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerEnumAvailabilityTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerEnumAvailability"),
-		TEXT("CompilerEnumAvailability.as"),
-		TEXT(R"(
-UENUM(BlueprintType)
-enum class ECompilerAvailabilityState : uint16
-{
-	Alpha,
-	Beta = 4,
-	Gamma
-}
-)"));
-
-	if (!TestTrue(TEXT("Enum availability input should compile"), bCompiled))
-	{
-		return false;
-	}
-
-	const TSharedPtr<FAngelscriptEnumDesc> EnumDesc = Engine.GetEnum(TEXT("ECompilerAvailabilityState"));
-	if (!TestTrue(TEXT("Compiled enum metadata should be registered"), EnumDesc.IsValid()))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Compiled enum should have 3 declared values"), EnumDesc->ValueNames.Num(), 3);
-	TestEqual(TEXT("Beta should have explicit value 4"), static_cast<int32>(EnumDesc->EnumValues[1]), 4);
-ASTEST_END_SHARE
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerDelegateSignatureConsistencyTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.DelegateSignatureConsistency",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerDelegateSignatureConsistencyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerDelegateSignatureConsistency"),
-		TEXT("CompilerDelegateSignatureConsistency.as"),
-		TEXT(R"(
-delegate void FCompilerSingleCastSignature(int Value);
-event void FCompilerMultiCastSignature(UClass TypeValue, FString Label);
-
-UCLASS()
-class UCompilerDelegateCarrier : UObject
-{
-}
-)"));
-
-	if (!TestTrue(TEXT("Delegate signature consistency input should compile"), bCompiled))
-	{
-		return false;
-	}
-
-	const TSharedPtr<FAngelscriptDelegateDesc> SingleCast = Engine.GetDelegate(TEXT("FCompilerSingleCastSignature"));
-	const TSharedPtr<FAngelscriptDelegateDesc> MultiCast = Engine.GetDelegate(TEXT("FCompilerMultiCastSignature"));
-	if (!TestTrue(TEXT("Single-cast delegate metadata should exist"), SingleCast.IsValid()))
-	{
-		return false;
-	}
-	if (!TestTrue(TEXT("Multicast delegate metadata should exist"), MultiCast.IsValid()))
-	{
-		return false;
-	}
-
-	TestFalse(TEXT("Single-cast delegate should not be marked multicast"), SingleCast->bIsMulticast);
-	TestTrue(TEXT("Multicast delegate should be marked multicast"), MultiCast->bIsMulticast);
-	TestNotNull(TEXT("Single-cast delegate should materialize a UDelegateFunction"), SingleCast->Function);
-	TestNotNull(TEXT("Multicast delegate should materialize a UDelegateFunction"), MultiCast->Function);
-ASTEST_END_SHARE
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerClassLikeReflectionShapeTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.ClassLikeReflectionShape",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerClassLikeReflectionShapeTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& EngineOwner = ASTEST_CREATE_ENGINE_SHARE();
-FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
-ASTEST_BEGIN_SHARE
-	const bool bCompiled = AngelscriptTestSupport::CompileAnnotatedModuleFromMemory(
-		&Engine,
-		TEXT("CompilerClassLikeReflectionShape"),
-		TEXT("CompilerClassLikeReflectionShape.as"),
-		TEXT(R"(
-UCLASS()
-class UCompilerClassLikeShapeCarrier : UObject
-{
-	UFUNCTION()
-	UClass EchoPlainClass(UClass Value)
-	{
-		return Value;
-	}
-
-	UFUNCTION()
-	TSubclassOf<AActor> EchoActorClass(TSubclassOf<AActor> Value)
-	{
-		return Value;
-	}
-
-	UFUNCTION()
-	TSoftClassPtr<AActor> EchoSoftActorClass(TSoftClassPtr<AActor> Value)
-	{
-		return Value;
-	}
-}
-)"));
-
-	if (!TestTrue(TEXT("Class-like reflection shape input should compile"), bCompiled))
-	{
-		return false;
-	}
-
-	UClass* GeneratedClass = AngelscriptTestSupport::FindGeneratedClass(&Engine, TEXT("UCompilerClassLikeShapeCarrier"));
-	if (!TestNotNull(TEXT("Generated class should exist for class-like reflection shape input"), GeneratedClass))
-	{
-		return false;
-	}
-
-	UFunction* EchoPlainClass = AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoPlainClass"));
-	UFunction* EchoActorClass = AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoActorClass"));
-	UFunction* EchoSoftActorClass = AngelscriptTestSupport::FindGeneratedFunction(GeneratedClass, TEXT("EchoSoftActorClass"));
-	if (!TestNotNull(TEXT("EchoPlainClass should exist"), EchoPlainClass) ||
-		!TestNotNull(TEXT("EchoActorClass should exist"), EchoActorClass) ||
-		!TestNotNull(TEXT("EchoSoftActorClass should exist"), EchoSoftActorClass))
-	{
-		return false;
-	}
-
-	TestNotNull(TEXT("Plain class return should materialize as FClassProperty"), CastField<FClassProperty>(EchoPlainClass->GetReturnProperty()));
-	TestNotNull(TEXT("Plain class parameter should materialize as FClassProperty"), CastField<FClassProperty>(FindFProperty<FProperty>(EchoPlainClass, TEXT("Value"))));
-
-	FClassProperty* ActorReturnProperty = CastField<FClassProperty>(EchoActorClass->GetReturnProperty());
-	FClassProperty* ActorParamProperty = CastField<FClassProperty>(FindFProperty<FProperty>(EchoActorClass, TEXT("Value")));
-	if (!TestNotNull(TEXT("Subclass return should materialize as FClassProperty"), ActorReturnProperty) ||
-		!TestNotNull(TEXT("Subclass parameter should materialize as FClassProperty"), ActorParamProperty))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Subclass return MetaClass should be AActor"), ActorReturnProperty->MetaClass == AActor::StaticClass());
-	TestTrue(TEXT("Subclass parameter MetaClass should be AActor"), ActorParamProperty->MetaClass == AActor::StaticClass());
-
-	FSoftClassProperty* SoftReturnProperty = CastField<FSoftClassProperty>(EchoSoftActorClass->GetReturnProperty());
-	FSoftClassProperty* SoftParamProperty = CastField<FSoftClassProperty>(FindFProperty<FProperty>(EchoSoftActorClass, TEXT("Value")));
-	if (!TestNotNull(TEXT("Soft class return should materialize as FSoftClassProperty"), SoftReturnProperty) ||
-		!TestNotNull(TEXT("Soft class parameter should materialize as FSoftClassProperty"), SoftParamProperty))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Soft class return MetaClass should be AActor"), SoftReturnProperty->MetaClass == AActor::StaticClass());
-	TestTrue(TEXT("Soft class parameter MetaClass should be AActor"), SoftParamProperty->MetaClass == AActor::StaticClass());
-ASTEST_END_SHARE
-
-	return true;
-}
+};
 
 #endif

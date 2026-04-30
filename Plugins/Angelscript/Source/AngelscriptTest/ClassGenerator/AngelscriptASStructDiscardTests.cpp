@@ -1,9 +1,9 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASStruct.h"
 #include "HAL/FileManager.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UObjectGlobals.h"
@@ -31,26 +31,23 @@ namespace ASStructDiscardTest
 	}
 }
 
-using namespace ASStructDiscardTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASStructDiscardModuleClearsScriptTypeAndNativeOpsTest,
-	"Angelscript.TestModule.ClassGenerator.ASStruct.DiscardModuleClearsScriptTypeAndNativeOps",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASStructDiscardTests,
+	"Angelscript.TestModule.ClassGenerator.ASStruct",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASStructDiscardModuleClearsScriptTypeAndNativeOpsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(DiscardModuleClearsScriptTypeAndNativeOps)
 	{
-		Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
-		IFileManager::Get().Delete(*ASStructDiscardTest::GetScriptAbsoluteFilename(), false, true, true);
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace ASStructDiscardTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
+			IFileManager::Get().Delete(*ASStructDiscardTest::GetScriptAbsoluteFilename(), false, true, true);
+			ResetSharedCloneEngine(Engine);
+		};
 
-	const FString ScriptSource = TEXT(R"AS(
+		const FString ScriptSource = TEXT(R"AS(
 USTRUCT()
 struct FDiscardableStruct
 {
@@ -74,50 +71,50 @@ struct FDiscardableStruct
 };
 )AS");
 
-	if (!TestTrue(
-			TEXT("ASStruct discard test should compile the struct module"),
-			CompileAnnotatedModuleFromMemory(&Engine, ASStructDiscardTest::ModuleName, ASStructDiscardTest::ScriptFilename, ScriptSource)))
-	{
-		return false;
+		if (!TestRunner->TestTrue(
+				TEXT("ASStruct discard test should compile the struct module"),
+				CompileAnnotatedModuleFromMemory(&Engine, ASStructDiscardTest::ModuleName, ASStructDiscardTest::ScriptFilename, ScriptSource)))
+		{
+			return;
+		}
+
+		UASStruct* Struct = ASStructDiscardTest::FindStruct();
+		if (!TestRunner->TestNotNull(TEXT("ASStruct discard test should register the generated struct in the Angelscript package"), Struct))
+		{
+			return;
+		}
+
+		Struct->PrepareCppStructOps();
+
+		if (!TestRunner->TestNotNull(TEXT("ASStruct discard test should publish a script type before discard"), Struct->ScriptType)
+			|| !TestRunner->TestNotNull(TEXT("ASStruct discard test should create cpp struct ops before discard"), Struct->GetCppStructOps())
+			|| !TestRunner->TestNotNull(TEXT("ASStruct discard test should keep the script ToString binding before discard"), Struct->GetToStringFunction()))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("ASStruct discard test should advertise identical-native support before discard"),
+			EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
+
+		const bool bDiscarded = Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
+		TestRunner->TestTrue(TEXT("ASStruct discard test should discard the owning module successfully"), bDiscarded);
+		TestRunner->TestFalse(
+			TEXT("ASStruct discard test should remove the module record after discard"),
+			Engine.GetModuleByModuleName(ASStructDiscardTest::ModuleName.ToString()).IsValid());
+		TestRunner->TestNull(TEXT("ASStruct discard test should clear the struct script type after discard"), Struct->ScriptType);
+		TestRunner->TestNotNull(
+			TEXT("ASStruct discard test should keep the cached cpp struct ops object alive after discard"),
+			Struct->GetCppStructOps());
+		TestRunner->TestNull(
+			TEXT("ASStruct discard test should clear the cached ToString function after discard"),
+			Struct->GetToStringFunction());
+		TestRunner->TestFalse(
+			TEXT("ASStruct discard test should clear STRUCT_IdenticalNative after discard"),
+			EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	UASStruct* Struct = ASStructDiscardTest::FindStruct();
-	if (!TestNotNull(TEXT("ASStruct discard test should register the generated struct in the Angelscript package"), Struct))
-	{
-		return false;
-	}
-
-	Struct->PrepareCppStructOps();
-
-	if (!TestNotNull(TEXT("ASStruct discard test should publish a script type before discard"), Struct->ScriptType)
-		|| !TestNotNull(TEXT("ASStruct discard test should create cpp struct ops before discard"), Struct->GetCppStructOps())
-		|| !TestNotNull(TEXT("ASStruct discard test should keep the script ToString binding before discard"), Struct->GetToStringFunction()))
-	{
-		return false;
-	}
-
-	TestTrue(
-		TEXT("ASStruct discard test should advertise identical-native support before discard"),
-		EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
-
-	const bool bDiscarded = Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
-	bPassed &= TestTrue(TEXT("ASStruct discard test should discard the owning module successfully"), bDiscarded);
-	bPassed &= TestFalse(
-		TEXT("ASStruct discard test should remove the module record after discard"),
-		Engine.GetModuleByModuleName(ASStructDiscardTest::ModuleName.ToString()).IsValid());
-	bPassed &= TestNull(TEXT("ASStruct discard test should clear the struct script type after discard"), Struct->ScriptType);
-	bPassed &= TestNotNull(
-		TEXT("ASStruct discard test should keep the cached cpp struct ops object alive after discard"),
-		Struct->GetCppStructOps());
-	bPassed &= TestNull(
-		TEXT("ASStruct discard test should clear the cached ToString function after discard"),
-		Struct->GetToStringFunction());
-	bPassed &= TestFalse(
-		TEXT("ASStruct discard test should clear STRUCT_IdenticalNative after discard"),
-		EnumHasAnyFlags(Struct->StructFlags, STRUCT_IdenticalNative));
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

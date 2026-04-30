@@ -2,7 +2,7 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/ScopeExit.h"
 
 // Test Layer: Runtime Integration
@@ -113,114 +113,6 @@ int TouchExampleAssetAgain()
 	}
 }
 
-using namespace LiteralAssetPostInitTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptLiteralAssetPostInitMaterializesAssetOnceTest,
-	"Angelscript.TestModule.ClassGenerator.LiteralAsset.PostInitMaterializesAssetOnce",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptLiteralAssetPostInitMaterializesAssetOnceTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*LiteralAssetPostInitTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* GeneratedClass = LiteralAssetPostInitTest::CompileLiteralAssetCarrier(*this, Engine);
-	if (!TestNotNull(
-			TEXT("Literal-asset post-init test case should compile the generated asset carrier class"),
-			GeneratedClass))
-	{
-		return false;
-	}
-
-	UObject* LiteralAssetBeforeTouch = LiteralAssetPostInitTest::FindLiteralAsset();
-	if (!TestNotNull(
-			TEXT("Literal-asset post-init test case should materialize the asset object before any explicit getter call"),
-			LiteralAssetBeforeTouch))
-	{
-		return false;
-	}
-
-	LiteralAssetPostInitTest::FLiteralAssetSnapshot SnapshotBeforeTouch;
-	if (!LiteralAssetPostInitTest::ReadLiteralAssetSnapshot(*this, LiteralAssetBeforeTouch, SnapshotBeforeTouch))
-	{
-		return false;
-	}
-
-	if (!TestEqual(
-			TEXT("Literal-asset post-init test case should keep the generated literal asset on the expected script class"),
-			LiteralAssetBeforeTouch->GetClass(),
-			GeneratedClass)
-		|| !TestEqual(
-			TEXT("Literal-asset post-init test case should execute __Init_ExampleAsset exactly once during compile teardown"),
-			SnapshotBeforeTouch.PostInitCalls,
-			1)
-		|| !TestTrue(
-			TEXT("Literal-asset post-init test case should preserve the bool flag written by __Init_ExampleAsset"),
-			SnapshotBeforeTouch.bWasPostInit)
-		|| !TestEqual(
-			TEXT("Literal-asset post-init test case should preserve the init marker written by __Init_ExampleAsset"),
-			SnapshotBeforeTouch.InitMarker,
-			LiteralAssetPostInitTest::ExpectedInitMarker))
-	{
-		return false;
-	}
-
-	int32 TouchResult = INDEX_NONE;
-	if (!LiteralAssetPostInitTest::ExecuteModuleInt(
-			*this,
-			Engine,
-			TEXT("int TouchExampleAssetAgain()"),
-			TEXT("Literal-asset post-init test should execute TouchExampleAssetAgain()"),
-			TouchResult))
-	{
-		return false;
-	}
-
-	UObject* LiteralAssetAfterTouch = LiteralAssetPostInitTest::FindLiteralAsset();
-	if (!TestNotNull(
-			TEXT("Literal-asset post-init test case should still expose the canonical asset after repeated getter access"),
-			LiteralAssetAfterTouch))
-	{
-		return false;
-	}
-
-	LiteralAssetPostInitTest::FLiteralAssetSnapshot SnapshotAfterTouch;
-	if (!LiteralAssetPostInitTest::ReadLiteralAssetSnapshot(*this, LiteralAssetAfterTouch, SnapshotAfterTouch))
-	{
-		return false;
-	}
-
-	TestEqual(
-		TEXT("Literal-asset post-init test should return the initialized marker when the generated getter is touched again"),
-		TouchResult,
-		LiteralAssetPostInitTest::ExpectedInitMarker);
-	TestTrue(
-		TEXT("Literal-asset post-init test should keep returning the same materialized asset on repeated getter access"),
-		LiteralAssetAfterTouch == LiteralAssetBeforeTouch);
-	TestEqual(
-		TEXT("Literal-asset post-init test should not rerun __Init_ExampleAsset when the generated getter is touched again"),
-		SnapshotAfterTouch.PostInitCalls,
-		1);
-	TestTrue(
-		TEXT("Literal-asset post-init test should preserve the bool flag after repeated getter access"),
-		SnapshotAfterTouch.bWasPostInit);
-	TestEqual(
-		TEXT("Literal-asset post-init test should preserve the init marker after repeated getter access"),
-		SnapshotAfterTouch.InitMarker,
-		LiteralAssetPostInitTest::ExpectedInitMarker);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
 namespace LiteralAssetPostInitNameCollisionTest
 {
 	static const FName ModuleName(TEXT("ASLiteralAssetPostInitNameCollision"));
@@ -321,139 +213,236 @@ int TouchExampleAssetAgain()
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptLiteralAssetPostInitResolvesGeneratedGetterInsteadOfNameCollisionTest,
-	"Angelscript.TestModule.ClassGenerator.LiteralAsset.PostInitResolvesGeneratedGetterInsteadOfNameCollision",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptLiteralAssetPostInitResolvesGeneratedGetterInsteadOfNameCollisionTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
-
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*LiteralAssetPostInitNameCollisionTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* GeneratedClass = LiteralAssetPostInitNameCollisionTest::CompileLiteralAssetCarrier(*this, Engine);
-	if (!TestNotNull(
-			TEXT("Literal-asset short-name collision test case should compile the generated asset carrier class"),
-			GeneratedClass))
-	{
-		return false;
-	}
-
-	UObject* LiteralAssetAfterCompile = LiteralAssetPostInitNameCollisionTest::FindLiteralAsset();
-	if (!TestNotNull(
-			TEXT("Literal-asset short-name collision test case should materialize the canonical asset during compile teardown"),
-			LiteralAssetAfterCompile))
-	{
-		return false;
-	}
-
-	LiteralAssetPostInitNameCollisionTest::FLiteralAssetCollisionSnapshot SnapshotAfterCompile;
-	if (!LiteralAssetPostInitNameCollisionTest::ReadLiteralAssetSnapshot(*this, LiteralAssetAfterCompile, SnapshotAfterCompile))
-	{
-		return false;
-	}
-
-	if (!TestEqual(
-			TEXT("Literal-asset short-name collision test case should keep the materialized asset on the generated carrier class"),
-			LiteralAssetAfterCompile->GetClass(),
-			GeneratedClass)
-		|| !TestEqual(
-			TEXT("Literal-asset short-name collision test case should execute the generated getter exactly once during post-init"),
-			SnapshotAfterCompile.RightCalls,
-			1)
-		|| !TestEqual(
-			TEXT("Literal-asset short-name collision test case should never execute the namespaced short-name collision getter during post-init"),
-			SnapshotAfterCompile.WrongCalls,
-			0))
-	{
-		return false;
-	}
-
-	int32 TouchResult = INDEX_NONE;
-	if (!LiteralAssetPostInitNameCollisionTest::ExecuteModuleInt(
-			*this,
-			Engine,
-			TEXT("int TouchExampleAssetAgain()"),
-			TEXT("Literal-asset short-name collision test should execute TouchExampleAssetAgain()"),
-			TouchResult))
-	{
-		return false;
-	}
-
-	UObject* LiteralAssetAfterTouch = LiteralAssetPostInitNameCollisionTest::FindLiteralAsset();
-	if (!TestNotNull(
-			TEXT("Literal-asset short-name collision test case should still expose the canonical asset after the explicit getter touch"),
-			LiteralAssetAfterTouch))
-	{
-		return false;
-	}
-
-	LiteralAssetPostInitNameCollisionTest::FLiteralAssetCollisionSnapshot SnapshotAfterTouch;
-	if (!LiteralAssetPostInitNameCollisionTest::ReadLiteralAssetSnapshot(*this, LiteralAssetAfterTouch, SnapshotAfterTouch))
-	{
-		return false;
-	}
-
-	TestEqual(
-		TEXT("Literal-asset short-name collision test should return a non-null result when the explicit getter is touched again"),
-		TouchResult,
-		1);
-	TestTrue(
-		TEXT("Literal-asset short-name collision test should keep returning the same canonical asset on repeated getter access"),
-		LiteralAssetAfterTouch == LiteralAssetAfterCompile);
-	TestEqual(
-		TEXT("Literal-asset short-name collision test should keep the generated getter hit count stable after explicit getter access"),
-		SnapshotAfterTouch.RightCalls,
-		1);
-	TestEqual(
-		TEXT("Literal-asset short-name collision test should keep the namespaced collision getter hit count at zero after explicit getter access"),
-		SnapshotAfterTouch.WrongCalls,
-		0);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Multiple assets in same class coexist
-// ============================================================================
-
 namespace LiteralAssetMultipleCoexistTest
 {
 	static const FName ModuleName(TEXT("ASLiteralAssetMultipleCoexist"));
 	static const FString ScriptFilename(TEXT("ASLiteralAssetMultipleCoexist.as"));
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptLiteralAssetMultipleCoexistTest,
-	"Angelscript.TestModule.ClassGenerator.LiteralAsset.MultipleAssetsInSameClassCoexist",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptLiteralAssetMultipleCoexistTest::RunTest(const FString& Parameters)
+namespace LiteralAssetWithComponentTest
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*LiteralAssetMultipleCoexistTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+	static const FName ModuleName(TEXT("ASLiteralAssetWithComponent"));
+	static const FString ScriptFilename(TEXT("ASLiteralAssetWithComponent.as"));
+}
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		LiteralAssetMultipleCoexistTest::ModuleName,
-		LiteralAssetMultipleCoexistTest::ScriptFilename,
-		TEXT(R"AS(
+TEST_CLASS_WITH_FLAGS(FAngelscriptLiteralAssetPostInitTests,
+	"Angelscript.TestModule.ClassGenerator.LiteralAsset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	TEST_METHOD(PostInitMaterializesAssetOnce)
+	{
+		using namespace LiteralAssetPostInitTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		TestRunner->AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*LiteralAssetPostInitTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		UClass* GeneratedClass = LiteralAssetPostInitTest::CompileLiteralAssetCarrier(*TestRunner, Engine);
+		if (!TestRunner->TestNotNull(
+				TEXT("Literal-asset post-init test case should compile the generated asset carrier class"),
+				GeneratedClass))
+		{
+			return;
+		}
+
+		UObject* LiteralAssetBeforeTouch = LiteralAssetPostInitTest::FindLiteralAsset();
+		if (!TestRunner->TestNotNull(
+				TEXT("Literal-asset post-init test case should materialize the asset object before any explicit getter call"),
+				LiteralAssetBeforeTouch))
+		{
+			return;
+		}
+
+		LiteralAssetPostInitTest::FLiteralAssetSnapshot SnapshotBeforeTouch;
+		if (!LiteralAssetPostInitTest::ReadLiteralAssetSnapshot(*TestRunner, LiteralAssetBeforeTouch, SnapshotBeforeTouch))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestEqual(
+				TEXT("Literal-asset post-init test case should keep the generated literal asset on the expected script class"),
+				LiteralAssetBeforeTouch->GetClass(),
+				GeneratedClass)
+			|| !TestRunner->TestEqual(
+				TEXT("Literal-asset post-init test case should execute __Init_ExampleAsset exactly once during compile teardown"),
+				SnapshotBeforeTouch.PostInitCalls,
+				1)
+			|| !TestRunner->TestTrue(
+				TEXT("Literal-asset post-init test case should preserve the bool flag written by __Init_ExampleAsset"),
+				SnapshotBeforeTouch.bWasPostInit)
+			|| !TestRunner->TestEqual(
+				TEXT("Literal-asset post-init test case should preserve the init marker written by __Init_ExampleAsset"),
+				SnapshotBeforeTouch.InitMarker,
+				LiteralAssetPostInitTest::ExpectedInitMarker))
+		{
+			return;
+		}
+
+		int32 TouchResult = INDEX_NONE;
+		if (!LiteralAssetPostInitTest::ExecuteModuleInt(
+				*TestRunner,
+				Engine,
+				TEXT("int TouchExampleAssetAgain()"),
+				TEXT("Literal-asset post-init test should execute TouchExampleAssetAgain()"),
+				TouchResult))
+		{
+			return;
+		}
+
+		UObject* LiteralAssetAfterTouch = LiteralAssetPostInitTest::FindLiteralAsset();
+		if (!TestRunner->TestNotNull(
+				TEXT("Literal-asset post-init test case should still expose the canonical asset after repeated getter access"),
+				LiteralAssetAfterTouch))
+		{
+			return;
+		}
+
+		LiteralAssetPostInitTest::FLiteralAssetSnapshot SnapshotAfterTouch;
+		if (!LiteralAssetPostInitTest::ReadLiteralAssetSnapshot(*TestRunner, LiteralAssetAfterTouch, SnapshotAfterTouch))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Literal-asset post-init test should return the initialized marker when the generated getter is touched again"),
+			TouchResult,
+			LiteralAssetPostInitTest::ExpectedInitMarker);
+		TestRunner->TestTrue(
+			TEXT("Literal-asset post-init test should keep returning the same materialized asset on repeated getter access"),
+			LiteralAssetAfterTouch == LiteralAssetBeforeTouch);
+		TestRunner->TestEqual(
+			TEXT("Literal-asset post-init test should not rerun __Init_ExampleAsset when the generated getter is touched again"),
+			SnapshotAfterTouch.PostInitCalls,
+			1);
+		TestRunner->TestTrue(
+			TEXT("Literal-asset post-init test should preserve the bool flag after repeated getter access"),
+			SnapshotAfterTouch.bWasPostInit);
+		TestRunner->TestEqual(
+			TEXT("Literal-asset post-init test should preserve the init marker after repeated getter access"),
+			SnapshotAfterTouch.InitMarker,
+			LiteralAssetPostInitTest::ExpectedInitMarker);
+
+		ASTEST_END_SHARE_CLEAN
+	}
+
+	TEST_METHOD(PostInitResolvesGeneratedGetterInsteadOfNameCollision)
+	{
+		using namespace LiteralAssetPostInitNameCollisionTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		TestRunner->AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
+
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*LiteralAssetPostInitNameCollisionTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		UClass* GeneratedClass = LiteralAssetPostInitNameCollisionTest::CompileLiteralAssetCarrier(*TestRunner, Engine);
+		if (!TestRunner->TestNotNull(
+				TEXT("Literal-asset short-name collision test case should compile the generated asset carrier class"),
+				GeneratedClass))
+		{
+			return;
+		}
+
+		UObject* LiteralAssetAfterCompile = LiteralAssetPostInitNameCollisionTest::FindLiteralAsset();
+		if (!TestRunner->TestNotNull(
+				TEXT("Literal-asset short-name collision test case should materialize the canonical asset during compile teardown"),
+				LiteralAssetAfterCompile))
+		{
+			return;
+		}
+
+		LiteralAssetPostInitNameCollisionTest::FLiteralAssetCollisionSnapshot SnapshotAfterCompile;
+		if (!LiteralAssetPostInitNameCollisionTest::ReadLiteralAssetSnapshot(*TestRunner, LiteralAssetAfterCompile, SnapshotAfterCompile))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestEqual(
+				TEXT("Literal-asset short-name collision test case should keep the materialized asset on the generated carrier class"),
+				LiteralAssetAfterCompile->GetClass(),
+				GeneratedClass)
+			|| !TestRunner->TestEqual(
+				TEXT("Literal-asset short-name collision test case should execute the generated getter exactly once during post-init"),
+				SnapshotAfterCompile.RightCalls,
+				1)
+			|| !TestRunner->TestEqual(
+				TEXT("Literal-asset short-name collision test case should never execute the namespaced short-name collision getter during post-init"),
+				SnapshotAfterCompile.WrongCalls,
+				0))
+		{
+			return;
+		}
+
+		int32 TouchResult = INDEX_NONE;
+		if (!LiteralAssetPostInitNameCollisionTest::ExecuteModuleInt(
+				*TestRunner,
+				Engine,
+				TEXT("int TouchExampleAssetAgain()"),
+				TEXT("Literal-asset short-name collision test should execute TouchExampleAssetAgain()"),
+				TouchResult))
+		{
+			return;
+		}
+
+		UObject* LiteralAssetAfterTouch = LiteralAssetPostInitNameCollisionTest::FindLiteralAsset();
+		if (!TestRunner->TestNotNull(
+				TEXT("Literal-asset short-name collision test case should still expose the canonical asset after the explicit getter touch"),
+				LiteralAssetAfterTouch))
+		{
+			return;
+		}
+
+		LiteralAssetPostInitNameCollisionTest::FLiteralAssetCollisionSnapshot SnapshotAfterTouch;
+		if (!LiteralAssetPostInitNameCollisionTest::ReadLiteralAssetSnapshot(*TestRunner, LiteralAssetAfterTouch, SnapshotAfterTouch))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Literal-asset short-name collision test should return a non-null result when the explicit getter is touched again"),
+			TouchResult,
+			1);
+		TestRunner->TestTrue(
+			TEXT("Literal-asset short-name collision test should keep returning the same canonical asset on repeated getter access"),
+			LiteralAssetAfterTouch == LiteralAssetAfterCompile);
+		TestRunner->TestEqual(
+			TEXT("Literal-asset short-name collision test should keep the generated getter hit count stable after explicit getter access"),
+			SnapshotAfterTouch.RightCalls,
+			1);
+		TestRunner->TestEqual(
+			TEXT("Literal-asset short-name collision test should keep the namespaced collision getter hit count at zero after explicit getter access"),
+			SnapshotAfterTouch.WrongCalls,
+			0);
+
+		ASTEST_END_SHARE_CLEAN
+	}
+
+	TEST_METHOD(MultipleAssetsInSameClassCoexist)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		TestRunner->AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*LiteralAssetMultipleCoexistTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			LiteralAssetMultipleCoexistTest::ModuleName,
+			LiteralAssetMultipleCoexistTest::ScriptFilename,
+			TEXT(R"AS(
 UCLASS()
 class UMultiAssetOwner : UObject
 {
@@ -471,61 +460,45 @@ asset SecondAsset of UMultiAssetOwner
 	Marker = 20;
 }
 )AS"),
-		CompileResult);
+			CompileResult);
 
-	if (!TestTrue(TEXT("Multiple assets in same class should compile"), bCompiled))
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Multiple assets in same class should compile"), bCompiled))
+			return;
 
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UMultiAssetOwner"));
-	if (!TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
-		return false;
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, TEXT("UMultiAssetOwner"));
+		if (!TestRunner->TestNotNull(TEXT("Class should be materialized"), GeneratedClass))
+			return;
 
-	UObject* FirstAsset = FindObject<UObject>(Engine.AssetsPackage, TEXT("FirstAsset"));
-	UObject* SecondAsset = FindObject<UObject>(Engine.AssetsPackage, TEXT("SecondAsset"));
-	TestNotNull(TEXT("FirstAsset should be materialized"), FirstAsset);
-	TestNotNull(TEXT("SecondAsset should be materialized"), SecondAsset);
-	if (FirstAsset && SecondAsset)
-	{
-		TestTrue(TEXT("Assets should be independent objects"), FirstAsset != SecondAsset);
+		UObject* FirstAsset = FindObject<UObject>(Engine.AssetsPackage, TEXT("FirstAsset"));
+		UObject* SecondAsset = FindObject<UObject>(Engine.AssetsPackage, TEXT("SecondAsset"));
+		TestRunner->TestNotNull(TEXT("FirstAsset should be materialized"), FirstAsset);
+		TestRunner->TestNotNull(TEXT("SecondAsset should be materialized"), SecondAsset);
+		if (FirstAsset && SecondAsset)
+		{
+			TestRunner->TestTrue(TEXT("Assets should be independent objects"), FirstAsset != SecondAsset);
+		}
+
+		ASTEST_END_SHARE_CLEAN
 	}
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
-
-// ============================================================================
-// Asset coexists with DefaultComponent in same class
-// ============================================================================
-
-namespace LiteralAssetWithComponentTest
-{
-	static const FName ModuleName(TEXT("ASLiteralAssetWithComponent"));
-	static const FString ScriptFilename(TEXT("ASLiteralAssetWithComponent.as"));
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptLiteralAssetWithDefaultComponentTest,
-	"Angelscript.TestModule.ClassGenerator.LiteralAsset.AssetWithDefaultComponentCoexist",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptLiteralAssetWithDefaultComponentTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
-	ON_SCOPE_EXIT
+	TEST_METHOD(AssetWithDefaultComponentCoexist)
 	{
-		Engine.DiscardModule(*LiteralAssetWithComponentTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		TestRunner->AddExpectedError(TEXT("LogUObjectBase: Class pointer is invalid or CDO is invalid."), EAutomationExpectedErrorFlags::Contains, 1);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*LiteralAssetWithComponentTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	ECompileResult CompileResult = ECompileResult::Error;
-	const bool bCompiled = CompileModuleWithResult(
-		&Engine,
-		ECompileType::FullReload,
-		LiteralAssetWithComponentTest::ModuleName,
-		LiteralAssetWithComponentTest::ScriptFilename,
-		TEXT(R"AS(
+		ECompileResult CompileResult = ECompileResult::Error;
+		const bool bCompiled = CompileModuleWithResult(
+			&Engine,
+			ECompileType::FullReload,
+			LiteralAssetWithComponentTest::ModuleName,
+			LiteralAssetWithComponentTest::ScriptFilename,
+			TEXT(R"AS(
 UCLASS()
 class UAssetCarrier : UObject
 {
@@ -545,22 +518,22 @@ asset MyCoexistAsset of UAssetCarrier
 	CoexistMarker = 99;
 }
 )AS"),
-		CompileResult);
+			CompileResult);
 
-	if (!TestTrue(TEXT("Asset + DefaultComponent coexistence should compile"), bCompiled))
-		return false;
+		if (!TestRunner->TestTrue(TEXT("Asset + DefaultComponent coexistence should compile"), bCompiled))
+			return;
 
-	UClass* ActorClass = FindGeneratedClass(&Engine, TEXT("AAssetAndComponentActor"));
-	TestNotNull(TEXT("Actor class should be materialized"), ActorClass);
+		UClass* ActorClass = FindGeneratedClass(&Engine, TEXT("AAssetAndComponentActor"));
+		TestRunner->TestNotNull(TEXT("Actor class should be materialized"), ActorClass);
 
-	UClass* CarrierClass = FindGeneratedClass(&Engine, TEXT("UAssetCarrier"));
-	TestNotNull(TEXT("Carrier class should be materialized"), CarrierClass);
+		UClass* CarrierClass = FindGeneratedClass(&Engine, TEXT("UAssetCarrier"));
+		TestRunner->TestNotNull(TEXT("Carrier class should be materialized"), CarrierClass);
 
-	UObject* AssetObj = FindObject<UObject>(Engine.AssetsPackage, TEXT("MyCoexistAsset"));
-	TestNotNull(TEXT("Asset should coexist with component-bearing actor"), AssetObj);
+		UObject* AssetObj = FindObject<UObject>(Engine.AssetsPackage, TEXT("MyCoexistAsset"));
+		TestRunner->TestNotNull(TEXT("Asset should coexist with component-bearing actor"), AssetObj);
 
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

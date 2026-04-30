@@ -1,8 +1,8 @@
-﻿#include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -44,26 +44,24 @@ namespace ASFunctionDispatchTests
 	}
 }
 
-using namespace ASFunctionDispatchTests;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASFunctionAllocateFunctionForSelectsCorrectThreadSafeDispatchSubclassTest,
-	"Angelscript.TestModule.ClassGenerator.ASFunction.AllocateFunctionForSelectsCorrectThreadSafeDispatchSubclass",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionDispatchTests,
+	"Angelscript.TestModule.ClassGenerator.ASFunction",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASFunctionAllocateFunctionForSelectsCorrectThreadSafeDispatchSubclassTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	const TArray<ASFunctionDispatchTests::FDispatchCase> Cases =
+	TEST_METHOD(AllocateFunctionForSelectsCorrectThreadSafeDispatchSubclass)
 	{
+		using namespace ASFunctionDispatchTests;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		const TArray<ASFunctionDispatchTests::FDispatchCase> Cases =
 		{
-			TEXT("ASFunctionDispatchDefault"),
-			TEXT("ASFunctionDispatchDefault.as"),
-			TEXT("UASFunctionDispatchDefault"),
-			TEXT("default non-thread-safe"),
-			TEXT(R"AS(
+			{
+				TEXT("ASFunctionDispatchDefault"),
+				TEXT("ASFunctionDispatchDefault.as"),
+				TEXT("UASFunctionDispatchDefault"),
+				TEXT("default non-thread-safe"),
+				TEXT(R"AS(
 UCLASS()
 class UASFunctionDispatchDefault : UObject
 {
@@ -74,15 +72,15 @@ class UASFunctionDispatchDefault : UObject
 	}
 }
 )AS"),
-			UASFunction_DWordReturn::StaticClass(),
-			UASFunction_DWordReturn_JIT::StaticClass()
-		},
-		{
-			TEXT("ASFunctionDispatchBlueprintThreadSafeFunction"),
-			TEXT("ASFunctionDispatchBlueprintThreadSafeFunction.as"),
-			TEXT("UASFunctionDispatchBlueprintThreadSafeFunction"),
-			TEXT("function-level BlueprintThreadSafe"),
-			TEXT(R"AS(
+				UASFunction_DWordReturn::StaticClass(),
+				UASFunction_DWordReturn_JIT::StaticClass()
+			},
+			{
+				TEXT("ASFunctionDispatchBlueprintThreadSafeFunction"),
+				TEXT("ASFunctionDispatchBlueprintThreadSafeFunction.as"),
+				TEXT("UASFunctionDispatchBlueprintThreadSafeFunction"),
+				TEXT("function-level BlueprintThreadSafe"),
+				TEXT(R"AS(
 UCLASS()
 class UASFunctionDispatchBlueprintThreadSafeFunction : UObject
 {
@@ -93,15 +91,15 @@ class UASFunctionDispatchBlueprintThreadSafeFunction : UObject
 	}
 }
 )AS"),
-			UASFunction::StaticClass(),
-			UASFunction_JIT::StaticClass()
-		},
-		{
-			TEXT("ASFunctionDispatchClassThreadSafeWithOverride"),
-			TEXT("ASFunctionDispatchClassThreadSafeWithOverride.as"),
-			TEXT("UASFunctionDispatchClassThreadSafeWithOverride"),
-			TEXT("class-level BlueprintThreadSafe with function-level NotBlueprintThreadSafe"),
-			TEXT(R"AS(
+				UASFunction::StaticClass(),
+				UASFunction_JIT::StaticClass()
+			},
+			{
+				TEXT("ASFunctionDispatchClassThreadSafeWithOverride"),
+				TEXT("ASFunctionDispatchClassThreadSafeWithOverride.as"),
+				TEXT("UASFunctionDispatchClassThreadSafeWithOverride"),
+				TEXT("class-level BlueprintThreadSafe with function-level NotBlueprintThreadSafe"),
+				TEXT(R"AS(
 UCLASS(meta = (BlueprintThreadSafe))
 class UASFunctionDispatchClassThreadSafeWithOverride : UObject
 {
@@ -112,74 +110,74 @@ class UASFunctionDispatchClassThreadSafeWithOverride : UObject
 	}
 }
 )AS"),
-			UASFunction_DWordReturn::StaticClass(),
-			UASFunction_DWordReturn_JIT::StaticClass()
-		}
-	};
+				UASFunction_DWordReturn::StaticClass(),
+				UASFunction_DWordReturn_JIT::StaticClass()
+			}
+		};
 
-	ON_SCOPE_EXIT
-	{
+		ON_SCOPE_EXIT
+		{
+			for (const ASFunctionDispatchTests::FDispatchCase& TestCase : Cases)
+			{
+				Engine.DiscardModule(*TestCase.ModuleName.ToString());
+			}
+			ResetSharedCloneEngine(Engine);
+		};
+
 		for (const ASFunctionDispatchTests::FDispatchCase& TestCase : Cases)
 		{
-			Engine.DiscardModule(*TestCase.ModuleName.ToString());
+			UClass* ScriptClass = CompileScriptModule(
+				*TestRunner,
+				Engine,
+				TestCase.ModuleName,
+				TestCase.Filename,
+				TestCase.ScriptSource,
+				TestCase.GeneratedClassName);
+			if (ScriptClass == nullptr)
+			{
+				return;
+			}
+
+			UASFunction* GeneratedFunction = Cast<UASFunction>(FindGeneratedFunction(ScriptClass, TEXT("GetValue")));
+			if (!TestRunner->TestNotNull(
+					*FString::Printf(TEXT("AllocateFunctionFor %s case should generate GetValue"), TestCase.CaseLabel),
+					GeneratedFunction))
+			{
+				return;
+			}
+
+			TestRunner->TestTrue(
+				*FString::Printf(
+					TEXT("AllocateFunctionFor %s case should select %s (actual: %s)"),
+					TestCase.CaseLabel,
+					*ASFunctionDispatchTests::DescribeExpectedFunctionClasses(TestCase),
+					*ASFunctionDispatchTests::DescribeActualFunctionClass(GeneratedFunction)),
+				ASFunctionDispatchTests::MatchesExpectedFunctionClass(*GeneratedFunction, TestCase));
+
+			UObject* Instance = NewObject<UObject>(GetTransientPackage(), ScriptClass);
+			if (!TestRunner->TestNotNull(
+					*FString::Printf(TEXT("AllocateFunctionFor %s case should instantiate the generated class"), TestCase.CaseLabel),
+					Instance))
+			{
+				return;
+			}
+
+			int32 Result = 0;
+			if (!TestRunner->TestTrue(
+					*FString::Printf(TEXT("AllocateFunctionFor %s case should execute the generated function"), TestCase.CaseLabel),
+					ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GeneratedFunction, Result)))
+			{
+				return;
+			}
+
+			TestRunner->TestEqual(
+				*FString::Printf(TEXT("AllocateFunctionFor %s case should keep GetValue returning 1"), TestCase.CaseLabel),
+				Result,
+				1);
 		}
-		ResetSharedCloneEngine(Engine);
-	};
 
-	for (const ASFunctionDispatchTests::FDispatchCase& TestCase : Cases)
-	{
-		UClass* ScriptClass = CompileScriptModule(
-			*this,
-			Engine,
-			TestCase.ModuleName,
-			TestCase.Filename,
-			TestCase.ScriptSource,
-			TestCase.GeneratedClassName);
-		if (ScriptClass == nullptr)
-		{
-			return false;
-		}
-
-		UASFunction* GeneratedFunction = Cast<UASFunction>(FindGeneratedFunction(ScriptClass, TEXT("GetValue")));
-		if (!TestNotNull(
-				*FString::Printf(TEXT("AllocateFunctionFor %s case should generate GetValue"), TestCase.CaseLabel),
-				GeneratedFunction))
-		{
-			return false;
-		}
-
-		TestTrue(
-			*FString::Printf(
-				TEXT("AllocateFunctionFor %s case should select %s (actual: %s)"),
-				TestCase.CaseLabel,
-				*ASFunctionDispatchTests::DescribeExpectedFunctionClasses(TestCase),
-				*ASFunctionDispatchTests::DescribeActualFunctionClass(GeneratedFunction)),
-			ASFunctionDispatchTests::MatchesExpectedFunctionClass(*GeneratedFunction, TestCase));
-
-		UObject* Instance = NewObject<UObject>(GetTransientPackage(), ScriptClass);
-		if (!TestNotNull(
-				*FString::Printf(TEXT("AllocateFunctionFor %s case should instantiate the generated class"), TestCase.CaseLabel),
-				Instance))
-		{
-			return false;
-		}
-
-		int32 Result = 0;
-		if (!TestTrue(
-				*FString::Printf(TEXT("AllocateFunctionFor %s case should execute the generated function"), TestCase.CaseLabel),
-				ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GeneratedFunction, Result)))
-		{
-			return false;
-		}
-
-		TestEqual(
-			*FString::Printf(TEXT("AllocateFunctionFor %s case should keep GetValue returning 1"), TestCase.CaseLabel),
-			Result,
-			1);
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+};
 
 #endif

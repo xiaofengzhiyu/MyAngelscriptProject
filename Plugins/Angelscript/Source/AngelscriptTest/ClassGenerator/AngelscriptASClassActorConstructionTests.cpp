@@ -1,10 +1,10 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
 #include "Components/ActorTestSpawner.h"
 #include "GameFramework/Actor.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/GarbageCollection.h"
 
@@ -147,116 +147,111 @@ class AActorConstructionCarrier : AActor
 	}
 }
 
-using namespace ASClassActorConstructionTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASClassStaticActorConstructorAppliesScriptConstructorAndDefaultsOnceTest,
-	"Angelscript.TestModule.ClassGenerator.ASClass.StaticActorConstructorAppliesScriptConstructorAndDefaultsOnce",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASClassActorConstructionTests,
+	"Angelscript.TestModule.ClassGenerator.ASClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASClassStaticActorConstructorAppliesScriptConstructorAndDefaultsOnceTest::RunTest(const FString& Parameters)
 {
-	bool bVerified = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(StaticActorConstructorAppliesScriptConstructorAndDefaultsOnce)
 	{
-		Engine.DiscardModule(*ASClassActorConstructionTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-		CollectGarbage(RF_NoFlags, true);
-	};
+		using namespace ASClassActorConstructionTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	UASClass* GeneratedASClass = ASClassActorConstructionTest::CompileActorConstructionCarrier(*this, Engine);
-	if (GeneratedASClass == nullptr)
-	{
-		return false;
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ASClassActorConstructionTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+			CollectGarbage(RF_NoFlags, true);
+		};
+
+		UASClass* GeneratedASClass = ASClassActorConstructionTest::CompileActorConstructionCarrier(*TestRunner, Engine);
+		if (GeneratedASClass == nullptr)
+		{
+			return;
+		}
+
+		AActor* DefaultObject = Cast<AActor>(GeneratedASClass->GetDefaultObject());
+		if (!TestRunner->TestNotNull(
+				TEXT("ASClass actor-construction test case should expose a generated actor class default object"),
+				DefaultObject))
+		{
+			return;
+		}
+
+		ASClassActorConstructionTest::FActorConstructionSnapshot DefaultSnapshot;
+		if (!ASClassActorConstructionTest::ReadConstructionSnapshot(*TestRunner, DefaultObject, DefaultSnapshot))
+		{
+			return;
+		}
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+
+		AActor* FirstActor = SpawnScriptActor(*TestRunner, Spawner, GeneratedASClass);
+		AActor* SecondActor = SpawnScriptActor(*TestRunner, Spawner, GeneratedASClass);
+		if (!TestRunner->TestNotNull(TEXT("ASClass actor-construction test case should spawn the first generated actor"), FirstActor)
+			|| !TestRunner->TestNotNull(TEXT("ASClass actor-construction test case should spawn the second generated actor"), SecondActor))
+		{
+			return;
+		}
+
+		ASClassActorConstructionTest::FActorConstructionSnapshot FirstSnapshot;
+		ASClassActorConstructionTest::FActorConstructionSnapshot SecondSnapshot;
+		if (!ASClassActorConstructionTest::ReadConstructionSnapshot(*TestRunner, FirstActor, FirstSnapshot)
+			|| !ASClassActorConstructionTest::ReadConstructionSnapshot(*TestRunner, SecondActor, SecondSnapshot))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("ASClass actor-construction test case should compile a generated actor class"),
+			GeneratedASClass->IsChildOf(AActor::StaticClass()));
+		TestRunner->TestTrue(
+			TEXT("ASClass actor-construction test case should keep runtime actors on the generated class"),
+			FirstActor->GetClass() == GeneratedASClass && SecondActor->GetClass() == GeneratedASClass);
+		TestRunner->TestTrue(
+			TEXT("ASClass actor-construction test case should create distinct runtime actor instances"),
+			FirstActor != SecondActor);
+		TestRunner->TestTrue(
+			TEXT("ASClass actor-construction test case should keep runtime actors distinct from the class default object"),
+			FirstActor != DefaultObject && SecondActor != DefaultObject);
+
+		ASClassActorConstructionTest::VerifyDefaults(
+			*TestRunner,
+			TEXT("ASClass actor-construction test case class default object"),
+			DefaultSnapshot);
+		ASClassActorConstructionTest::VerifyInstanceSnapshot(
+			*TestRunner,
+			TEXT("ASClass actor-construction test case first spawned actor"),
+			FirstSnapshot);
+		ASClassActorConstructionTest::VerifyInstanceSnapshot(
+			*TestRunner,
+			TEXT("ASClass actor-construction test case second spawned actor"),
+			SecondSnapshot);
+
+		TestRunner->TestEqual(
+			TEXT("ASClass actor-construction test case should keep the second actor constructor count isolated from the first actor"),
+			SecondSnapshot.CtorCount,
+			ASClassActorConstructionTest::ExpectedCtorCount);
+		TestRunner->TestEqual(
+			TEXT("ASClass actor-construction test case should keep the class default object on the same scripted integer default as spawned actors"),
+			DefaultSnapshot.DefaultValue,
+			FirstSnapshot.DefaultValue);
+		TestRunner->TestEqual(
+			TEXT("ASClass actor-construction test case should keep both spawned actors on the same scripted integer default"),
+			FirstSnapshot.DefaultValue,
+			SecondSnapshot.DefaultValue);
+		TestRunner->TestEqual(
+			TEXT("ASClass actor-construction test case should keep the class default object on the same scripted string default as spawned actors"),
+			DefaultSnapshot.DefaultLabel,
+			FirstSnapshot.DefaultLabel);
+		TestRunner->TestEqual(
+			TEXT("ASClass actor-construction test case should keep both spawned actors on the same scripted string default"),
+			FirstSnapshot.DefaultLabel,
+			SecondSnapshot.DefaultLabel);
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	AActor* DefaultObject = Cast<AActor>(GeneratedASClass->GetDefaultObject());
-	if (!TestNotNull(
-			TEXT("ASClass actor-construction test case should expose a generated actor class default object"),
-			DefaultObject))
-	{
-		return false;
-	}
-
-	ASClassActorConstructionTest::FActorConstructionSnapshot DefaultSnapshot;
-	if (!ASClassActorConstructionTest::ReadConstructionSnapshot(*this, DefaultObject, DefaultSnapshot))
-	{
-		return false;
-	}
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-
-	AActor* FirstActor = SpawnScriptActor(*this, Spawner, GeneratedASClass);
-	AActor* SecondActor = SpawnScriptActor(*this, Spawner, GeneratedASClass);
-	if (!TestNotNull(TEXT("ASClass actor-construction test case should spawn the first generated actor"), FirstActor)
-		|| !TestNotNull(TEXT("ASClass actor-construction test case should spawn the second generated actor"), SecondActor))
-	{
-		return false;
-	}
-
-	ASClassActorConstructionTest::FActorConstructionSnapshot FirstSnapshot;
-	ASClassActorConstructionTest::FActorConstructionSnapshot SecondSnapshot;
-	if (!ASClassActorConstructionTest::ReadConstructionSnapshot(*this, FirstActor, FirstSnapshot)
-		|| !ASClassActorConstructionTest::ReadConstructionSnapshot(*this, SecondActor, SecondSnapshot))
-	{
-		return false;
-	}
-
-	TestTrue(
-		TEXT("ASClass actor-construction test case should compile a generated actor class"),
-		GeneratedASClass->IsChildOf(AActor::StaticClass()));
-	TestTrue(
-		TEXT("ASClass actor-construction test case should keep runtime actors on the generated class"),
-		FirstActor->GetClass() == GeneratedASClass && SecondActor->GetClass() == GeneratedASClass);
-	TestTrue(
-		TEXT("ASClass actor-construction test case should create distinct runtime actor instances"),
-		FirstActor != SecondActor);
-	TestTrue(
-		TEXT("ASClass actor-construction test case should keep runtime actors distinct from the class default object"),
-		FirstActor != DefaultObject && SecondActor != DefaultObject);
-
-	const bool bDefaultObjectVerified = ASClassActorConstructionTest::VerifyDefaults(
-		*this,
-		TEXT("ASClass actor-construction test case class default object"),
-		DefaultSnapshot);
-	const bool bFirstActorVerified = ASClassActorConstructionTest::VerifyInstanceSnapshot(
-		*this,
-		TEXT("ASClass actor-construction test case first spawned actor"),
-		FirstSnapshot);
-	const bool bSecondActorVerified = ASClassActorConstructionTest::VerifyInstanceSnapshot(
-		*this,
-		TEXT("ASClass actor-construction test case second spawned actor"),
-		SecondSnapshot);
-
-	TestEqual(
-		TEXT("ASClass actor-construction test case should keep the second actor constructor count isolated from the first actor"),
-		SecondSnapshot.CtorCount,
-		ASClassActorConstructionTest::ExpectedCtorCount);
-	TestEqual(
-		TEXT("ASClass actor-construction test case should keep the class default object on the same scripted integer default as spawned actors"),
-		DefaultSnapshot.DefaultValue,
-		FirstSnapshot.DefaultValue);
-	TestEqual(
-		TEXT("ASClass actor-construction test case should keep both spawned actors on the same scripted integer default"),
-		FirstSnapshot.DefaultValue,
-		SecondSnapshot.DefaultValue);
-	TestEqual(
-		TEXT("ASClass actor-construction test case should keep the class default object on the same scripted string default as spawned actors"),
-		DefaultSnapshot.DefaultLabel,
-		FirstSnapshot.DefaultLabel);
-	TestEqual(
-		TEXT("ASClass actor-construction test case should keep both spawned actors on the same scripted string default"),
-		FirstSnapshot.DefaultLabel,
-		SecondSnapshot.DefaultLabel);
-
-	bVerified = bDefaultObjectVerified && bFirstActorVerified && bSecondActorVerified;
-
-	ASTEST_END_SHARE_CLEAN
-	return bVerified;
-}
+};
 
 #endif

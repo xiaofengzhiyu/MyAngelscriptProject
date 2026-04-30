@@ -1,8 +1,8 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UnrealType.h"
 #include "UObject/UObjectGlobals.h"
@@ -26,26 +26,24 @@ namespace ScriptClassStructureTests
 	}
 }
 
-using namespace ScriptClassStructureTests;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptFunctionOnlyScriptClassCompilesAndExecutesTest,
-	"Angelscript.TestModule.ScriptClass.FunctionOnlyClassCompilesAndExecutes",
+TEST_CLASS_WITH_FLAGS(FAngelscriptScriptClassStructureTests,
+	"Angelscript.TestModule.ScriptClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptFunctionOnlyScriptClassCompilesAndExecutesTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	static const FName ModuleName(TEXT("ASFunctionOnlyScriptClassStructure"));
-	ON_SCOPE_EXIT
+	TEST_METHOD(FunctionOnlyClassCompilesAndExecutes)
 	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace ScriptClassStructureTests;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	static const FString ScriptSource = TEXT(R"AS(
+		static const FName ModuleName(TEXT("ASFunctionOnlyScriptClassStructure"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		static const FString ScriptSource = TEXT(R"AS(
 UCLASS()
 class UFunctionOnlyScriptClass : UObject
 {
@@ -57,50 +55,50 @@ class UFunctionOnlyScriptClass : UObject
 }
 )AS");
 
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("FunctionOnlyScriptClass.as"),
-		ScriptSource,
-		TEXT("UFunctionOnlyScriptClass"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
+		UClass* ScriptClass = CompileScriptModule(
+			*TestRunner,
+			Engine,
+			ModuleName,
+			TEXT("FunctionOnlyScriptClass.as"),
+			ScriptSource,
+			TEXT("UFunctionOnlyScriptClass"));
+		if (ScriptClass == nullptr)
+		{
+			return;
+		}
+
+		UASClass* ASClass = Cast<UASClass>(ScriptClass);
+		if (!TestRunner->TestNotNull(TEXT("Function-only script class test case should generate a UASClass"), ASClass))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("Function-only script class test case should remain UObject-derived"), ScriptClass->IsChildOf(UObject::StaticClass()));
+		TestRunner->TestEqual(TEXT("Function-only script class test case should not synthesize any declared user properties"), ScriptClassStructureTests::CountDeclaredProperties(*ScriptClass), 0);
+		TestRunner->TestNull(TEXT("Function-only script class test case should not expose undeclared properties"), FindFProperty<FProperty>(ScriptClass, TEXT("UnexpectedProperty")));
+
+		UFunction* GetValueFunction = FindGeneratedFunction(ScriptClass, TEXT("GetValue"));
+		if (!TestRunner->TestNotNull(TEXT("Function-only script class test case should generate GetValue"), GetValueFunction))
+		{
+			return;
+		}
+
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), ScriptClass);
+		if (!TestRunner->TestNotNull(TEXT("Function-only script class test case should instantiate the generated class"), Instance))
+		{
+			return;
+		}
+
+		int32 Result = 0;
+		if (!TestRunner->TestTrue(TEXT("Function-only script class test case should execute GetValue on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GetValueFunction, Result)))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Function-only script class test case should keep GetValue returning 17"), Result, 17);
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	UASClass* ASClass = Cast<UASClass>(ScriptClass);
-	if (!TestNotNull(TEXT("Function-only script class test case should generate a UASClass"), ASClass))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("Function-only script class test case should remain UObject-derived"), ScriptClass->IsChildOf(UObject::StaticClass()));
-	TestEqual(TEXT("Function-only script class test case should not synthesize any declared user properties"), ScriptClassStructureTests::CountDeclaredProperties(*ScriptClass), 0);
-	TestNull(TEXT("Function-only script class test case should not expose undeclared properties"), FindFProperty<FProperty>(ScriptClass, TEXT("UnexpectedProperty")));
-
-	UFunction* GetValueFunction = FindGeneratedFunction(ScriptClass, TEXT("GetValue"));
-	if (!TestNotNull(TEXT("Function-only script class test case should generate GetValue"), GetValueFunction))
-	{
-		return false;
-	}
-
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), ScriptClass);
-	if (!TestNotNull(TEXT("Function-only script class test case should instantiate the generated class"), Instance))
-	{
-		return false;
-	}
-
-	int32 Result = 0;
-	if (!TestTrue(TEXT("Function-only script class test case should execute GetValue on the game thread"), ExecuteGeneratedIntEventOnGameThread(&Engine, Instance, GetValueFunction, Result)))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Function-only script class test case should keep GetValue returning 17"), Result, 17);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+};
 
 #endif

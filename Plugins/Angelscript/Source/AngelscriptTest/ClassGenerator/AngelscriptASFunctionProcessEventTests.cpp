@@ -1,8 +1,8 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/StructOnScope.h"
 #include "UObject/UObjectGlobals.h"
@@ -118,77 +118,75 @@ class UProcessEventCarrier : UObject
 	}
 }
 
-using namespace ASFunctionProcessEventTests;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASFunctionProcessEventDispatchesThroughNativeThunkTest,
-	"Angelscript.TestModule.ClassGenerator.ASFunction.ProcessEventDispatchesThroughNativeThunk",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionProcessEventTests,
+	"Angelscript.TestModule.ClassGenerator.ASFunction",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASFunctionProcessEventDispatchesThroughNativeThunkTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(ProcessEventDispatchesThroughNativeThunk)
 	{
-		Engine.DiscardModule(*ASFunctionProcessEventTests::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace ASFunctionProcessEventTests;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	UASClass* ScriptClass = ASFunctionProcessEventTests::CompileProcessEventCarrier(*this, Engine);
-	if (!TestNotNull(TEXT("ProcessEvent thunk test case should compile to a UASClass"), ScriptClass))
-	{
-		return false;
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ASFunctionProcessEventTests::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
+
+		UASClass* ScriptClass = ASFunctionProcessEventTests::CompileProcessEventCarrier(*TestRunner, Engine);
+		if (!TestRunner->TestNotNull(TEXT("ProcessEvent thunk test case should compile to a UASClass"), ScriptClass))
+		{
+			return;
+		}
+
+		UFunction* AddTenFunction = FindGeneratedFunction(ScriptClass, TEXT("AddTen"));
+		UFunction* SetStoredValueFunction = FindGeneratedFunction(ScriptClass, TEXT("SetStoredValue"));
+		UASFunction* AddTenScriptFunction = Cast<UASFunction>(AddTenFunction);
+		UASFunction* SetStoredValueScriptFunction = Cast<UASFunction>(SetStoredValueFunction);
+		if (!TestRunner->TestNotNull(TEXT("ProcessEvent thunk test case should generate AddTen"), AddTenFunction)
+			|| !TestRunner->TestNotNull(TEXT("ProcessEvent thunk test case should generate SetStoredValue"), SetStoredValueFunction)
+			|| !TestRunner->TestNotNull(TEXT("ProcessEvent thunk test case should expose AddTen as a UASFunction"), AddTenScriptFunction)
+			|| !TestRunner->TestNotNull(TEXT("ProcessEvent thunk test case should expose SetStoredValue as a UASFunction"), SetStoredValueScriptFunction))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("ProcessEvent thunk test case should route AddTen through UASFunctionNativeThunk"), AddTenFunction->GetNativeFunc() == &UASFunctionNativeThunk);
+		TestRunner->TestTrue(TEXT("ProcessEvent thunk test case should route SetStoredValue through UASFunctionNativeThunk"), SetStoredValueFunction->GetNativeFunc() == &UASFunctionNativeThunk);
+
+		UObject* Instance = NewObject<UObject>(GetTransientPackage(), ScriptClass, TEXT("ProcessEventCarrierInstance"));
+		if (!TestRunner->TestNotNull(TEXT("ProcessEvent thunk test case should instantiate the generated UObject"), Instance))
+		{
+			return;
+		}
+
+		int32 AddTenResult = INDEX_NONE;
+		if (!TestRunner->TestTrue(
+				TEXT("ProcessEvent thunk test case should execute AddTen via ProcessEvent"),
+				ASFunctionProcessEventTests::InvokeIntFunctionThroughProcessEvent(*TestRunner, Engine, Instance, AddTenFunction, 5, AddTenResult))
+			|| !TestRunner->TestEqual(TEXT("ProcessEvent thunk test case should return 15 when AddTen receives 5"), AddTenResult, 15))
+		{
+			return;
+		}
+
+		if (!TestRunner->TestTrue(
+				TEXT("ProcessEvent thunk test case should execute SetStoredValue via ProcessEvent"),
+				ASFunctionProcessEventTests::InvokeVoidFunctionThroughProcessEvent(*TestRunner, Engine, Instance, SetStoredValueFunction, 17)))
+		{
+			return;
+		}
+
+		int32 StoredValue = INDEX_NONE;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, Instance, ASFunctionProcessEventTests::StoredValuePropertyName, StoredValue))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("ProcessEvent thunk test case should write StoredValue through RuntimeCallFunction"), StoredValue, 17);
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	UFunction* AddTenFunction = FindGeneratedFunction(ScriptClass, TEXT("AddTen"));
-	UFunction* SetStoredValueFunction = FindGeneratedFunction(ScriptClass, TEXT("SetStoredValue"));
-	UASFunction* AddTenScriptFunction = Cast<UASFunction>(AddTenFunction);
-	UASFunction* SetStoredValueScriptFunction = Cast<UASFunction>(SetStoredValueFunction);
-	if (!TestNotNull(TEXT("ProcessEvent thunk test case should generate AddTen"), AddTenFunction)
-		|| !TestNotNull(TEXT("ProcessEvent thunk test case should generate SetStoredValue"), SetStoredValueFunction)
-		|| !TestNotNull(TEXT("ProcessEvent thunk test case should expose AddTen as a UASFunction"), AddTenScriptFunction)
-		|| !TestNotNull(TEXT("ProcessEvent thunk test case should expose SetStoredValue as a UASFunction"), SetStoredValueScriptFunction))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("ProcessEvent thunk test case should route AddTen through UASFunctionNativeThunk"), AddTenFunction->GetNativeFunc() == &UASFunctionNativeThunk);
-	TestTrue(TEXT("ProcessEvent thunk test case should route SetStoredValue through UASFunctionNativeThunk"), SetStoredValueFunction->GetNativeFunc() == &UASFunctionNativeThunk);
-
-	UObject* Instance = NewObject<UObject>(GetTransientPackage(), ScriptClass, TEXT("ProcessEventCarrierInstance"));
-	if (!TestNotNull(TEXT("ProcessEvent thunk test case should instantiate the generated UObject"), Instance))
-	{
-		return false;
-	}
-
-	int32 AddTenResult = INDEX_NONE;
-	if (!TestTrue(
-			TEXT("ProcessEvent thunk test case should execute AddTen via ProcessEvent"),
-			ASFunctionProcessEventTests::InvokeIntFunctionThroughProcessEvent(*this, Engine, Instance, AddTenFunction, 5, AddTenResult))
-		|| !TestEqual(TEXT("ProcessEvent thunk test case should return 15 when AddTen receives 5"), AddTenResult, 15))
-	{
-		return false;
-	}
-
-	if (!TestTrue(
-			TEXT("ProcessEvent thunk test case should execute SetStoredValue via ProcessEvent"),
-			ASFunctionProcessEventTests::InvokeVoidFunctionThroughProcessEvent(*this, Engine, Instance, SetStoredValueFunction, 17)))
-	{
-		return false;
-	}
-
-	int32 StoredValue = INDEX_NONE;
-	if (!ReadPropertyValue<FIntProperty>(*this, Instance, ASFunctionProcessEventTests::StoredValuePropertyName, StoredValue))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("ProcessEvent thunk test case should write StoredValue through RuntimeCallFunction"), StoredValue, 17);
-
-	ASTEST_END_SHARE_CLEAN
-	return true;
-}
+};
 
 #endif

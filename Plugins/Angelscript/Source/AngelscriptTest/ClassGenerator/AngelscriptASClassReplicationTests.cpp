@@ -1,9 +1,9 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
 #include "Containers/Set.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/CoreNet.h"
 #include "UObject/FieldIterator.h"
@@ -59,24 +59,22 @@ namespace ASClassReplicationTest
 	}
 }
 
-using namespace ASClassReplicationTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASClassLifetimeScriptReplicationListIncludesInheritedReplicatedPropertiesTest,
-	"Angelscript.TestModule.ClassGenerator.ASClass.LifetimeScriptReplicationListIncludesInheritedReplicatedProperties",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASClassReplicationTests,
+	"Angelscript.TestModule.ClassGenerator.ASClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASClassLifetimeScriptReplicationListIncludesInheritedReplicatedPropertiesTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	TEST_METHOD(LifetimeScriptReplicationListIncludesInheritedReplicatedProperties)
 	{
-		Engine.DiscardModule(*ASClassReplicationTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace ASClassReplicationTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ASClassReplicationTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	const FString ScriptSource = TEXT(R"AS(
+		const FString ScriptSource = TEXT(R"AS(
 UCLASS()
 class AReplicationParent : AActor
 {
@@ -102,87 +100,86 @@ class AReplicationChild : AReplicationParent
 }
 )AS");
 
-	UClass* ParentClass = CompileScriptModule(
-		*this,
-		Engine,
-		ASClassReplicationTest::ModuleName,
-		ASClassReplicationTest::ScriptFilename,
-		ScriptSource,
-		ASClassReplicationTest::ParentClassName);
-	if (ParentClass == nullptr)
-	{
-		return false;
+		UClass* ParentClass = CompileScriptModule(
+			*TestRunner,
+			Engine,
+			ASClassReplicationTest::ModuleName,
+			ASClassReplicationTest::ScriptFilename,
+			ScriptSource,
+			ASClassReplicationTest::ParentClassName);
+		if (ParentClass == nullptr)
+		{
+			return;
+		}
+
+		UClass* ChildClass = FindGeneratedClass(&Engine, ASClassReplicationTest::ChildClassName);
+		if (!TestRunner->TestNotNull(TEXT("ASClass replication test case should generate the child script class"), ChildClass))
+		{
+			return;
+		}
+
+		UASClass* ChildASClass = Cast<UASClass>(ChildClass);
+		if (!TestRunner->TestNotNull(TEXT("ASClass replication test case should compile the child as a UASClass"), ChildASClass))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("ASClass replication test case should keep the child superclass exact"), ChildClass->GetSuperClass(), ParentClass);
+
+		FProperty* ParentValueProperty = FindFProperty<FProperty>(ChildClass, ASClassReplicationTest::ParentValueName);
+		FProperty* ChildValueProperty = FindFProperty<FProperty>(ChildClass, ASClassReplicationTest::ChildValueName);
+		FProperty* ChildNotifiedValueProperty = FindFProperty<FProperty>(ChildClass, ASClassReplicationTest::ChildNotifiedValueName);
+		if (!TestRunner->TestNotNull(TEXT("ASClass replication test case should expose the inherited ParentValue property"), ParentValueProperty)
+			|| !TestRunner->TestNotNull(TEXT("ASClass replication test case should expose the child ChildValue property"), ChildValueProperty)
+			|| !TestRunner->TestNotNull(TEXT("ASClass replication test case should expose the child ChildNotifiedValue property"), ChildNotifiedValueProperty))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("ASClass replication test case should mark ParentValue as replicated"), ParentValueProperty->HasAnyPropertyFlags(CPF_Net));
+		TestRunner->TestTrue(TEXT("ASClass replication test case should mark ChildValue as replicated"), ChildValueProperty->HasAnyPropertyFlags(CPF_Net));
+		TestRunner->TestTrue(TEXT("ASClass replication test case should mark ChildNotifiedValue as replicated"), ChildNotifiedValueProperty->HasAnyPropertyFlags(CPF_Net));
+		TestRunner->TestTrue(TEXT("ASClass replication test case should mark ChildNotifiedValue as a RepNotify property"), ChildNotifiedValueProperty->HasAnyPropertyFlags(CPF_RepNotify));
+		TestRunner->TestEqual(
+			TEXT("ASClass replication test case should preserve the RepNotify function name on the generated child property"),
+			ChildNotifiedValueProperty->RepNotifyFunc,
+			ASClassReplicationTest::ChildRepNotifyFunctionName);
+
+		TArray<FLifetimeProperty> LifetimeProperties;
+		ChildASClass->GetLifetimeScriptReplicationList(LifetimeProperties);
+
+		const TArray<FName> ReplicatedPropertyNames =
+			ASClassReplicationTest::CollectReplicatedPropertyNamesFromLifetimeProps(ChildClass, LifetimeProperties);
+
+		TSet<FName> UniquePropertyNames;
+		for (const FName PropertyName : ReplicatedPropertyNames)
+		{
+			UniquePropertyNames.Add(PropertyName);
+		}
+
+		TestRunner->TestEqual(
+			TEXT("ASClass replication test case should collect exactly the script replicated properties declared across the parent-child chain"),
+			LifetimeProperties.Num(),
+			3);
+		TestRunner->TestEqual(
+			TEXT("ASClass replication test case should resolve every lifetime replication entry back to a concrete property name"),
+			ReplicatedPropertyNames.Num(),
+			LifetimeProperties.Num());
+		TestRunner->TestEqual(
+			TEXT("ASClass replication test case should not duplicate inherited script replicated properties in the lifetime list"),
+			UniquePropertyNames.Num(),
+			ReplicatedPropertyNames.Num());
+		TestRunner->TestTrue(
+			TEXT("ASClass replication test case should include the parent replicated property in the child lifetime list"),
+			ReplicatedPropertyNames.Contains(ASClassReplicationTest::ParentValueName));
+		TestRunner->TestTrue(
+			TEXT("ASClass replication test case should include the direct child replicated property in the child lifetime list"),
+			ReplicatedPropertyNames.Contains(ASClassReplicationTest::ChildValueName));
+		TestRunner->TestTrue(
+			TEXT("ASClass replication test case should include the child RepNotify property in the child lifetime list"),
+			ReplicatedPropertyNames.Contains(ASClassReplicationTest::ChildNotifiedValueName));
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	UClass* ChildClass = FindGeneratedClass(&Engine, ASClassReplicationTest::ChildClassName);
-	if (!TestNotNull(TEXT("ASClass replication test case should generate the child script class"), ChildClass))
-	{
-		return false;
-	}
-
-	UASClass* ChildASClass = Cast<UASClass>(ChildClass);
-	if (!TestNotNull(TEXT("ASClass replication test case should compile the child as a UASClass"), ChildASClass))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("ASClass replication test case should keep the child superclass exact"), ChildClass->GetSuperClass(), ParentClass);
-
-	FProperty* ParentValueProperty = FindFProperty<FProperty>(ChildClass, ASClassReplicationTest::ParentValueName);
-	FProperty* ChildValueProperty = FindFProperty<FProperty>(ChildClass, ASClassReplicationTest::ChildValueName);
-	FProperty* ChildNotifiedValueProperty = FindFProperty<FProperty>(ChildClass, ASClassReplicationTest::ChildNotifiedValueName);
-	if (!TestNotNull(TEXT("ASClass replication test case should expose the inherited ParentValue property"), ParentValueProperty)
-		|| !TestNotNull(TEXT("ASClass replication test case should expose the child ChildValue property"), ChildValueProperty)
-		|| !TestNotNull(TEXT("ASClass replication test case should expose the child ChildNotifiedValue property"), ChildNotifiedValueProperty))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("ASClass replication test case should mark ParentValue as replicated"), ParentValueProperty->HasAnyPropertyFlags(CPF_Net));
-	TestTrue(TEXT("ASClass replication test case should mark ChildValue as replicated"), ChildValueProperty->HasAnyPropertyFlags(CPF_Net));
-	TestTrue(TEXT("ASClass replication test case should mark ChildNotifiedValue as replicated"), ChildNotifiedValueProperty->HasAnyPropertyFlags(CPF_Net));
-	TestTrue(TEXT("ASClass replication test case should mark ChildNotifiedValue as a RepNotify property"), ChildNotifiedValueProperty->HasAnyPropertyFlags(CPF_RepNotify));
-	TestEqual(
-		TEXT("ASClass replication test case should preserve the RepNotify function name on the generated child property"),
-		ChildNotifiedValueProperty->RepNotifyFunc,
-		ASClassReplicationTest::ChildRepNotifyFunctionName);
-
-	TArray<FLifetimeProperty> LifetimeProperties;
-	ChildASClass->GetLifetimeScriptReplicationList(LifetimeProperties);
-
-	const TArray<FName> ReplicatedPropertyNames =
-		ASClassReplicationTest::CollectReplicatedPropertyNamesFromLifetimeProps(ChildClass, LifetimeProperties);
-
-	TSet<FName> UniquePropertyNames;
-	for (const FName PropertyName : ReplicatedPropertyNames)
-	{
-		UniquePropertyNames.Add(PropertyName);
-	}
-
-	TestEqual(
-		TEXT("ASClass replication test case should collect exactly the script replicated properties declared across the parent-child chain"),
-		LifetimeProperties.Num(),
-		3);
-	TestEqual(
-		TEXT("ASClass replication test case should resolve every lifetime replication entry back to a concrete property name"),
-		ReplicatedPropertyNames.Num(),
-		LifetimeProperties.Num());
-	TestEqual(
-		TEXT("ASClass replication test case should not duplicate inherited script replicated properties in the lifetime list"),
-		UniquePropertyNames.Num(),
-		ReplicatedPropertyNames.Num());
-	TestTrue(
-		TEXT("ASClass replication test case should include the parent replicated property in the child lifetime list"),
-		ReplicatedPropertyNames.Contains(ASClassReplicationTest::ParentValueName));
-	TestTrue(
-		TEXT("ASClass replication test case should include the direct child replicated property in the child lifetime list"),
-		ReplicatedPropertyNames.Contains(ASClassReplicationTest::ChildValueName));
-	TestTrue(
-		TEXT("ASClass replication test case should include the child RepNotify property in the child lifetime list"),
-		ReplicatedPropertyNames.Contains(ASClassReplicationTest::ChildNotifiedValueName));
-	ASTEST_END_SHARE_CLEAN
-
-	return true;
-}
+};
 
 #endif

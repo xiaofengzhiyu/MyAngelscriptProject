@@ -1,11 +1,11 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
 #include "Components/ActorComponent.h"
 #include "Components/ActorTestSpawner.h"
 #include "GameFramework/Actor.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/UObjectGlobals.h"
@@ -185,143 +185,138 @@ class UComponentConstructionCarrier : UActorComponent
 	}
 }
 
-using namespace ASClassComponentConstructionTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptASClassStaticComponentConstructorAppliesScriptConstructorAndDefaultsOnceTest,
-	"Angelscript.TestModule.ClassGenerator.ASClass.StaticComponentConstructorAppliesScriptConstructorAndDefaultsOnce",
+TEST_CLASS_WITH_FLAGS(FAngelscriptASClassComponentConstructionTests,
+	"Angelscript.TestModule.ClassGenerator.ASClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptASClassStaticComponentConstructorAppliesScriptConstructorAndDefaultsOnceTest::RunTest(const FString& Parameters)
 {
-	bool bVerified = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	ON_SCOPE_EXIT
+	TEST_METHOD(StaticComponentConstructorAppliesScriptConstructorAndDefaultsOnce)
 	{
-		Engine.DiscardModule(*ASClassComponentConstructionTest::ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-		CollectGarbage(RF_NoFlags, true);
-	};
+		using namespace ASClassComponentConstructionTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	UASClass* GeneratedASClass = ASClassComponentConstructionTest::CompileComponentConstructionCarrier(*this, Engine);
-	if (GeneratedASClass == nullptr)
-	{
-		return false;
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ASClassComponentConstructionTest::ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+			CollectGarbage(RF_NoFlags, true);
+		};
+
+		UASClass* GeneratedASClass = ASClassComponentConstructionTest::CompileComponentConstructionCarrier(*TestRunner, Engine);
+		if (GeneratedASClass == nullptr)
+		{
+			return;
+		}
+
+		UActorComponent* DefaultObject = Cast<UActorComponent>(GeneratedASClass->GetDefaultObject());
+		if (!TestRunner->TestNotNull(
+				TEXT("ASClass component-construction test case should expose a generated component class default object"),
+				DefaultObject))
+		{
+			return;
+		}
+
+		ASClassComponentConstructionTest::FComponentConstructionSnapshot DefaultSnapshot;
+		if (!ASClassComponentConstructionTest::ReadConstructionSnapshot(*TestRunner, DefaultObject, DefaultSnapshot))
+		{
+			return;
+		}
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor& HostActor = Spawner.SpawnActor<AActor>();
+
+		UActorComponent* FirstInstance = ASClassComponentConstructionTest::InstantiateScriptComponent(
+			*TestRunner,
+			HostActor,
+			GeneratedASClass,
+			TEXT("ComponentConstructionCarrierA"),
+			TEXT("ASClass component-construction test case first instance"));
+		UActorComponent* SecondInstance = ASClassComponentConstructionTest::InstantiateScriptComponent(
+			*TestRunner,
+			HostActor,
+			GeneratedASClass,
+			TEXT("ComponentConstructionCarrierB"),
+			TEXT("ASClass component-construction test case second instance"));
+		if (FirstInstance == nullptr || SecondInstance == nullptr)
+		{
+			return;
+		}
+
+		FirstInstance->AddToRoot();
+		SecondInstance->AddToRoot();
+
+		TWeakObjectPtr<UActorComponent> WeakFirstInstance = FirstInstance;
+		TWeakObjectPtr<UActorComponent> WeakSecondInstance = SecondInstance;
+		ON_SCOPE_EXIT
+		{
+			ASClassComponentConstructionTest::ReleaseComponent(WeakSecondInstance);
+			ASClassComponentConstructionTest::ReleaseComponent(WeakFirstInstance);
+		};
+
+		ASClassComponentConstructionTest::FComponentConstructionSnapshot FirstSnapshot;
+		ASClassComponentConstructionTest::FComponentConstructionSnapshot SecondSnapshot;
+		if (!ASClassComponentConstructionTest::ReadConstructionSnapshot(*TestRunner, FirstInstance, FirstSnapshot)
+			|| !ASClassComponentConstructionTest::ReadConstructionSnapshot(*TestRunner, SecondInstance, SecondSnapshot))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("ASClass component-construction test case should compile a generated component class"),
+			GeneratedASClass->IsChildOf(UActorComponent::StaticClass()));
+		TestRunner->TestFalse(
+			TEXT("ASClass component-construction test case should keep the generated class out of the actor hierarchy"),
+			GeneratedASClass->IsChildOf(AActor::StaticClass()));
+		TestRunner->TestTrue(
+			TEXT("ASClass component-construction test case should create distinct runtime components"),
+			FirstInstance != SecondInstance);
+		TestRunner->TestTrue(
+			TEXT("ASClass component-construction test case should keep runtime components distinct from the class default object"),
+			FirstInstance != DefaultObject && SecondInstance != DefaultObject);
+		TestRunner->TestTrue(
+			TEXT("ASClass component-construction test case should keep both runtime components on the same generated class"),
+			FirstInstance->GetClass() == GeneratedASClass && SecondInstance->GetClass() == GeneratedASClass);
+
+		ASClassComponentConstructionTest::VerifySnapshot(
+			*TestRunner,
+			TEXT("ASClass component-construction test case class default object"),
+			DefaultSnapshot,
+			ASClassComponentConstructionTest::ExpectedCtorCount);
+		ASClassComponentConstructionTest::VerifySnapshot(
+			*TestRunner,
+			TEXT("ASClass component-construction test case first instance"),
+			FirstSnapshot,
+			ASClassComponentConstructionTest::ExpectedCtorCount);
+		ASClassComponentConstructionTest::VerifySnapshot(
+			*TestRunner,
+			TEXT("ASClass component-construction test case second instance"),
+			SecondSnapshot,
+			ASClassComponentConstructionTest::ExpectedCtorCount);
+
+		TestRunner->TestEqual(
+			TEXT("ASClass component-construction test case should keep the second instance constructor count isolated from the first instance"),
+			SecondSnapshot.CtorCount,
+			ASClassComponentConstructionTest::ExpectedCtorCount);
+		TestRunner->TestEqual(
+			TEXT("ASClass component-construction test case should keep the class default object on the same scripted integer default as runtime instances"),
+			DefaultSnapshot.DefaultValue,
+			FirstSnapshot.DefaultValue);
+		TestRunner->TestEqual(
+			TEXT("ASClass component-construction test case should keep both runtime components on the same scripted integer default"),
+			FirstSnapshot.DefaultValue,
+			SecondSnapshot.DefaultValue);
+		TestRunner->TestEqual(
+			TEXT("ASClass component-construction test case should keep the class default object on the same scripted string default as runtime instances"),
+			DefaultSnapshot.DefaultLabel,
+			FirstSnapshot.DefaultLabel);
+		TestRunner->TestEqual(
+			TEXT("ASClass component-construction test case should keep both runtime components on the same scripted string default"),
+			FirstSnapshot.DefaultLabel,
+			SecondSnapshot.DefaultLabel);
+
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	UActorComponent* DefaultObject = Cast<UActorComponent>(GeneratedASClass->GetDefaultObject());
-	if (!TestNotNull(
-			TEXT("ASClass component-construction test case should expose a generated component class default object"),
-			DefaultObject))
-	{
-		return false;
-	}
-
-	ASClassComponentConstructionTest::FComponentConstructionSnapshot DefaultSnapshot;
-	if (!ASClassComponentConstructionTest::ReadConstructionSnapshot(*this, DefaultObject, DefaultSnapshot))
-	{
-		return false;
-	}
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor& HostActor = Spawner.SpawnActor<AActor>();
-
-	UActorComponent* FirstInstance = ASClassComponentConstructionTest::InstantiateScriptComponent(
-		*this,
-		HostActor,
-		GeneratedASClass,
-		TEXT("ComponentConstructionCarrierA"),
-		TEXT("ASClass component-construction test case first instance"));
-	UActorComponent* SecondInstance = ASClassComponentConstructionTest::InstantiateScriptComponent(
-		*this,
-		HostActor,
-		GeneratedASClass,
-		TEXT("ComponentConstructionCarrierB"),
-		TEXT("ASClass component-construction test case second instance"));
-	if (FirstInstance == nullptr || SecondInstance == nullptr)
-	{
-		return false;
-	}
-
-	FirstInstance->AddToRoot();
-	SecondInstance->AddToRoot();
-
-	TWeakObjectPtr<UActorComponent> WeakFirstInstance = FirstInstance;
-	TWeakObjectPtr<UActorComponent> WeakSecondInstance = SecondInstance;
-	ON_SCOPE_EXIT
-	{
-		ASClassComponentConstructionTest::ReleaseComponent(WeakSecondInstance);
-		ASClassComponentConstructionTest::ReleaseComponent(WeakFirstInstance);
-	};
-
-	ASClassComponentConstructionTest::FComponentConstructionSnapshot FirstSnapshot;
-	ASClassComponentConstructionTest::FComponentConstructionSnapshot SecondSnapshot;
-	if (!ASClassComponentConstructionTest::ReadConstructionSnapshot(*this, FirstInstance, FirstSnapshot)
-		|| !ASClassComponentConstructionTest::ReadConstructionSnapshot(*this, SecondInstance, SecondSnapshot))
-	{
-		return false;
-	}
-
-	TestTrue(
-		TEXT("ASClass component-construction test case should compile a generated component class"),
-		GeneratedASClass->IsChildOf(UActorComponent::StaticClass()));
-	TestFalse(
-		TEXT("ASClass component-construction test case should keep the generated class out of the actor hierarchy"),
-		GeneratedASClass->IsChildOf(AActor::StaticClass()));
-	TestTrue(
-		TEXT("ASClass component-construction test case should create distinct runtime components"),
-		FirstInstance != SecondInstance);
-	TestTrue(
-		TEXT("ASClass component-construction test case should keep runtime components distinct from the class default object"),
-		FirstInstance != DefaultObject && SecondInstance != DefaultObject);
-	TestTrue(
-		TEXT("ASClass component-construction test case should keep both runtime components on the same generated class"),
-		FirstInstance->GetClass() == GeneratedASClass && SecondInstance->GetClass() == GeneratedASClass);
-
-	const bool bDefaultObjectVerified = ASClassComponentConstructionTest::VerifySnapshot(
-		*this,
-		TEXT("ASClass component-construction test case class default object"),
-		DefaultSnapshot,
-		ASClassComponentConstructionTest::ExpectedCtorCount);
-	const bool bFirstInstanceVerified = ASClassComponentConstructionTest::VerifySnapshot(
-		*this,
-		TEXT("ASClass component-construction test case first instance"),
-		FirstSnapshot,
-		ASClassComponentConstructionTest::ExpectedCtorCount);
-	const bool bSecondInstanceVerified = ASClassComponentConstructionTest::VerifySnapshot(
-		*this,
-		TEXT("ASClass component-construction test case second instance"),
-		SecondSnapshot,
-		ASClassComponentConstructionTest::ExpectedCtorCount);
-
-	TestEqual(
-		TEXT("ASClass component-construction test case should keep the second instance constructor count isolated from the first instance"),
-		SecondSnapshot.CtorCount,
-		ASClassComponentConstructionTest::ExpectedCtorCount);
-	TestEqual(
-		TEXT("ASClass component-construction test case should keep the class default object on the same scripted integer default as runtime instances"),
-		DefaultSnapshot.DefaultValue,
-		FirstSnapshot.DefaultValue);
-	TestEqual(
-		TEXT("ASClass component-construction test case should keep both runtime components on the same scripted integer default"),
-		FirstSnapshot.DefaultValue,
-		SecondSnapshot.DefaultValue);
-	TestEqual(
-		TEXT("ASClass component-construction test case should keep the class default object on the same scripted string default as runtime instances"),
-		DefaultSnapshot.DefaultLabel,
-		FirstSnapshot.DefaultLabel);
-	TestEqual(
-		TEXT("ASClass component-construction test case should keep both runtime components on the same scripted string default"),
-		FirstSnapshot.DefaultLabel,
-		SecondSnapshot.DefaultLabel);
-
-	bVerified = bDefaultObjectVerified && bFirstInstanceVerified && bSecondInstanceVerified;
-
-	ASTEST_END_SHARE_CLEAN
-	return bVerified;
-}
+};
 
 #endif

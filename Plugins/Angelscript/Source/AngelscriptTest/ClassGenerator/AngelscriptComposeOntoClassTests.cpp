@@ -2,8 +2,8 @@
 #include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptTestUtilities.h"
 
+#include "CQTest.h"
 #include "HAL/FileManager.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
@@ -159,205 +159,194 @@ class UComposeOntoProjected : UObject
 	}
 }
 
-using namespace ComposeOntoClassTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptComposeOntoClassMissingTargetFailsClosedTest,
-	"Angelscript.TestModule.ClassGenerator.ComposeOntoClass.MissingTargetFailsClosed",
+TEST_CLASS_WITH_FLAGS(FAngelscriptComposeOntoClassTests,
+	"Angelscript.TestModule.ClassGenerator.ComposeOntoClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptComposeOntoClassValidTargetFailsClosedTest,
-	"Angelscript.TestModule.ClassGenerator.ComposeOntoClass.ValidTargetDoesNotSilentlyPublishNoOpClass",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptComposeOntoClassMissingTargetFailsClosedTest::RunTest(const FString& Parameters)
 {
-	AddExpectedErrorPlain(
-		ComposeOntoClassTest::MissingComposeTarget,
-		EAutomationExpectedErrorFlags::Contains,
-		1);
-	AddExpectedErrorPlain(
-		ComposeOntoClassTest::ExpectedHotReloadError,
-		EAutomationExpectedErrorFlags::Contains,
-		1);
-
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	Engine.Diagnostics.Empty();
-	Engine.LastEmittedDiagnostics.Empty();
-	Engine.bDiagnosticsDirty = false;
-
-	ComposeOntoClassTest::FPreparedAnnotatedModules PreparedModules;
-	if (!ComposeOntoClassTest::PrepareAnnotatedModulesForGenerator(
-		*this,
-		Engine,
-		ComposeOntoClassTest::BuildComposeOntoProbeScript(),
-		PreparedModules))
+	TEST_METHOD(MissingTargetFailsClosed)
 	{
-		return false;
-	}
+		using namespace ComposeOntoClassTest;
+		TestRunner->AddExpectedErrorPlain(
+			ComposeOntoClassTest::MissingComposeTarget,
+			EAutomationExpectedErrorFlags::Contains,
+			1);
+		TestRunner->AddExpectedErrorPlain(
+			ComposeOntoClassTest::ExpectedHotReloadError,
+			EAutomationExpectedErrorFlags::Contains,
+			1);
 
-	const FString PreparedModuleName = PreparedModules.Modules[0]->ModuleName;
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*PreparedModuleName);
-		ResetSharedCloneEngine(Engine);
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-		if (!PreparedModules.AbsoluteFilename.IsEmpty())
-		{
-			IFileManager::Get().Delete(*PreparedModules.AbsoluteFilename, false, true, true);
-		}
-	};
+		Engine.Diagnostics.Empty();
+		Engine.LastEmittedDiagnostics.Empty();
+		Engine.bDiagnosticsDirty = false;
 
-	if (!TestEqual(
-		TEXT("ComposeOntoClass missing-target test should preprocess exactly one class descriptor"),
-		PreparedModules.Modules[0]->Classes.Num(),
-		1))
-	{
-		return false;
-	}
-
-	TSharedPtr<FAngelscriptClassDesc> ClassDesc = PreparedModules.Modules[0]->Classes[0];
-	if (!TestNotNull(TEXT("ComposeOntoClass missing-target test should preprocess a class descriptor"), ClassDesc.Get()))
-	{
-		return false;
-	}
-
-	ClassDesc->ComposeOntoClass = ComposeOntoClassTest::MissingComposeTarget;
-
-	const ECompileResult CompileResult =
-		ComposeOntoClassTest::CompilePreparedAnnotatedModules(Engine, PreparedModules.Modules);
-	const TArray<FString> ExpectedDiagnosticFragments
-	{
-		TEXT("ComposeOntoClass"),
-		ComposeOntoClassTest::MissingComposeTarget
-	};
-
-	const bool bCompileFailed = TestEqual(
-		TEXT("ComposeOntoClass missing-target test should fail compilation instead of silently succeeding"),
-		CompileResult,
-		ECompileResult::Error);
-	const bool bReportedComposeDiagnostic = TestTrue(
-		TEXT("ComposeOntoClass missing-target test should emit a diagnostic naming the missing compose target"),
-		ComposeOntoClassTest::DiagnosticsContainAllFragments(
+		ComposeOntoClassTest::FPreparedAnnotatedModules PreparedModules;
+		if (!ComposeOntoClassTest::PrepareAnnotatedModulesForGenerator(
+			*TestRunner,
 			Engine,
-			PreparedModules.AbsoluteFilename,
-			ExpectedDiagnosticFragments));
-	const bool bNoGeneratedClass = TestNull(
-		TEXT("ComposeOntoClass missing-target test should not publish the composed script class"),
-		FindGeneratedClass(&Engine, ComposeOntoClassTest::GeneratedClassName));
-	const bool bNoModuleRecord = TestTrue(
-		TEXT("ComposeOntoClass missing-target test should not publish a module record after failure"),
-		!Engine.GetModuleByModuleName(PreparedModuleName).IsValid());
-	bPassed = bCompileFailed && bReportedComposeDiagnostic && bNoGeneratedClass && bNoModuleRecord;
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptComposeOntoClassValidTargetFailsClosedTest::RunTest(const FString& Parameters)
-{
-	AddExpectedErrorPlain(
-		ComposeOntoClassTest::ExpectedComposeUnsupportedFragment,
-		EAutomationExpectedErrorFlags::Contains,
-		1);
-	AddExpectedErrorPlain(
-		ComposeOntoClassTest::ExpectedHotReloadError,
-		EAutomationExpectedErrorFlags::Contains,
-		1);
-
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	Engine.Diagnostics.Empty();
-	Engine.LastEmittedDiagnostics.Empty();
-	Engine.bDiagnosticsDirty = false;
-
-	ComposeOntoClassTest::FPreparedAnnotatedModules PreparedModules;
-	if (!ComposeOntoClassTest::PrepareAnnotatedModulesForGenerator(
-		*this,
-		Engine,
-		ComposeOntoClassTest::BuildComposeOntoValidTargetScript(),
-		PreparedModules))
-	{
-		return false;
-	}
-
-	const FString PreparedModuleName = PreparedModules.Modules[0]->ModuleName;
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*PreparedModuleName);
-		ResetSharedCloneEngine(Engine);
-
-		if (!PreparedModules.AbsoluteFilename.IsEmpty())
+			ComposeOntoClassTest::BuildComposeOntoProbeScript(),
+			PreparedModules))
 		{
-			IFileManager::Get().Delete(*PreparedModules.AbsoluteFilename, false, true, true);
+			return;
 		}
-	};
 
-	if (!TestEqual(
-		TEXT("ComposeOntoClass valid-target test should preprocess exactly two class descriptors"),
-		PreparedModules.Modules[0]->Classes.Num(),
-		2))
-	{
-		return false;
-	}
-
-	TSharedPtr<FAngelscriptClassDesc> HostClassDesc;
-	TSharedPtr<FAngelscriptClassDesc> ProjectedClassDesc;
-	for (const TSharedRef<FAngelscriptClassDesc>& ClassDesc : PreparedModules.Modules[0]->Classes)
-	{
-		if (ClassDesc->ClassName == ComposeOntoClassTest::ComposeHostClassName.ToString())
+		const FString PreparedModuleName = PreparedModules.Modules[0]->ModuleName;
+		ON_SCOPE_EXIT
 		{
-			HostClassDesc = ClassDesc;
-		}
-		else if (ClassDesc->ClassName == ComposeOntoClassTest::ComposeProjectedClassName.ToString())
+			Engine.DiscardModule(*PreparedModuleName);
+			ResetSharedCloneEngine(Engine);
+
+			if (!PreparedModules.AbsoluteFilename.IsEmpty())
+			{
+				IFileManager::Get().Delete(*PreparedModules.AbsoluteFilename, false, true, true);
+			}
+		};
+
+		if (!TestRunner->TestEqual(
+			TEXT("ComposeOntoClass missing-target test should preprocess exactly one class descriptor"),
+			PreparedModules.Modules[0]->Classes.Num(),
+			1))
 		{
-			ProjectedClassDesc = ClassDesc;
+			return;
 		}
+
+		TSharedPtr<FAngelscriptClassDesc> ClassDesc = PreparedModules.Modules[0]->Classes[0];
+		if (!TestRunner->TestNotNull(TEXT("ComposeOntoClass missing-target test should preprocess a class descriptor"), ClassDesc.Get()))
+		{
+			return;
+		}
+
+		ClassDesc->ComposeOntoClass = ComposeOntoClassTest::MissingComposeTarget;
+
+		const ECompileResult CompileResult =
+			ComposeOntoClassTest::CompilePreparedAnnotatedModules(Engine, PreparedModules.Modules);
+		const TArray<FString> ExpectedDiagnosticFragments
+		{
+			TEXT("ComposeOntoClass"),
+			ComposeOntoClassTest::MissingComposeTarget
+		};
+
+		TestRunner->TestEqual(
+			TEXT("ComposeOntoClass missing-target test should fail compilation instead of silently succeeding"),
+			CompileResult,
+			ECompileResult::Error);
+		TestRunner->TestTrue(
+			TEXT("ComposeOntoClass missing-target test should emit a diagnostic naming the missing compose target"),
+			ComposeOntoClassTest::DiagnosticsContainAllFragments(
+				Engine,
+				PreparedModules.AbsoluteFilename,
+				ExpectedDiagnosticFragments));
+		TestRunner->TestNull(
+			TEXT("ComposeOntoClass missing-target test should not publish the composed script class"),
+			FindGeneratedClass(&Engine, ComposeOntoClassTest::GeneratedClassName));
+		TestRunner->TestTrue(
+			TEXT("ComposeOntoClass missing-target test should not publish a module record after failure"),
+			!Engine.GetModuleByModuleName(PreparedModuleName).IsValid());
+
+		ASTEST_END_SHARE_CLEAN
 	}
 
-	if (!TestNotNull(TEXT("ComposeOntoClass valid-target test should preprocess the compose host descriptor"), HostClassDesc.Get())
-		|| !TestNotNull(TEXT("ComposeOntoClass valid-target test should preprocess the projected descriptor"), ProjectedClassDesc.Get()))
+	TEST_METHOD(ValidTargetDoesNotSilentlyPublishNoOpClass)
 	{
-		return false;
-	}
+		using namespace ComposeOntoClassTest;
+		TestRunner->AddExpectedErrorPlain(
+			ComposeOntoClassTest::ExpectedComposeUnsupportedFragment,
+			EAutomationExpectedErrorFlags::Contains,
+			1);
+		TestRunner->AddExpectedErrorPlain(
+			ComposeOntoClassTest::ExpectedHotReloadError,
+			EAutomationExpectedErrorFlags::Contains,
+			1);
 
-	ProjectedClassDesc->ComposeOntoClass = ComposeOntoClassTest::ComposeHostClassName.ToString();
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	const ECompileResult CompileResult =
-		ComposeOntoClassTest::CompilePreparedAnnotatedModules(Engine, PreparedModules.Modules);
-	const TArray<FString> ExpectedDiagnosticFragments
-	{
-		TEXT("ComposeOntoClass"),
-		ComposeOntoClassTest::ComposeHostClassName.ToString(),
-		ComposeOntoClassTest::ExpectedComposeUnsupportedFragment
-	};
+		Engine.Diagnostics.Empty();
+		Engine.LastEmittedDiagnostics.Empty();
+		Engine.bDiagnosticsDirty = false;
 
-	const bool bCompileFailed = TestEqual(
-		TEXT("ComposeOntoClass valid-target test should fail compilation instead of silently publishing a no-op composed class"),
-		CompileResult,
-		ECompileResult::Error);
-	const bool bReportedComposeDiagnostic = TestTrue(
-		TEXT("ComposeOntoClass valid-target test should emit an unsupported-yet diagnostic for the real compose target"),
-		ComposeOntoClassTest::DiagnosticsContainAllFragments(
+		ComposeOntoClassTest::FPreparedAnnotatedModules PreparedModules;
+		if (!ComposeOntoClassTest::PrepareAnnotatedModulesForGenerator(
+			*TestRunner,
 			Engine,
-			PreparedModules.AbsoluteFilename,
-			ExpectedDiagnosticFragments));
-	const bool bNoProjectedClass = TestNull(
-		TEXT("ComposeOntoClass valid-target test should not publish the projected compose class while compose materialization is unsupported"),
-		FindGeneratedClass(&Engine, ComposeOntoClassTest::ComposeProjectedClassName));
-	const bool bNoModuleRecord = TestTrue(
-		TEXT("ComposeOntoClass valid-target test should not publish a module record after the unsupported compose path"),
-		!Engine.GetModuleByModuleName(PreparedModuleName).IsValid());
-	bPassed = bCompileFailed && bReportedComposeDiagnostic && bNoProjectedClass && bNoModuleRecord;
+			ComposeOntoClassTest::BuildComposeOntoValidTargetScript(),
+			PreparedModules))
+		{
+			return;
+		}
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+		const FString PreparedModuleName = PreparedModules.Modules[0]->ModuleName;
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*PreparedModuleName);
+			ResetSharedCloneEngine(Engine);
+
+			if (!PreparedModules.AbsoluteFilename.IsEmpty())
+			{
+				IFileManager::Get().Delete(*PreparedModules.AbsoluteFilename, false, true, true);
+			}
+		};
+
+		if (!TestRunner->TestEqual(
+			TEXT("ComposeOntoClass valid-target test should preprocess exactly two class descriptors"),
+			PreparedModules.Modules[0]->Classes.Num(),
+			2))
+		{
+			return;
+		}
+
+		TSharedPtr<FAngelscriptClassDesc> HostClassDesc;
+		TSharedPtr<FAngelscriptClassDesc> ProjectedClassDesc;
+		for (const TSharedRef<FAngelscriptClassDesc>& ClassDesc : PreparedModules.Modules[0]->Classes)
+		{
+			if (ClassDesc->ClassName == ComposeOntoClassTest::ComposeHostClassName.ToString())
+			{
+				HostClassDesc = ClassDesc;
+			}
+			else if (ClassDesc->ClassName == ComposeOntoClassTest::ComposeProjectedClassName.ToString())
+			{
+				ProjectedClassDesc = ClassDesc;
+			}
+		}
+
+		if (!TestRunner->TestNotNull(TEXT("ComposeOntoClass valid-target test should preprocess the compose host descriptor"), HostClassDesc.Get())
+			|| !TestRunner->TestNotNull(TEXT("ComposeOntoClass valid-target test should preprocess the projected descriptor"), ProjectedClassDesc.Get()))
+		{
+			return;
+		}
+
+		ProjectedClassDesc->ComposeOntoClass = ComposeOntoClassTest::ComposeHostClassName.ToString();
+
+		const ECompileResult CompileResult =
+			ComposeOntoClassTest::CompilePreparedAnnotatedModules(Engine, PreparedModules.Modules);
+		const TArray<FString> ExpectedDiagnosticFragments
+		{
+			TEXT("ComposeOntoClass"),
+			ComposeOntoClassTest::ComposeHostClassName.ToString(),
+			ComposeOntoClassTest::ExpectedComposeUnsupportedFragment
+		};
+
+		TestRunner->TestEqual(
+			TEXT("ComposeOntoClass valid-target test should fail compilation instead of silently publishing a no-op composed class"),
+			CompileResult,
+			ECompileResult::Error);
+		TestRunner->TestTrue(
+			TEXT("ComposeOntoClass valid-target test should emit an unsupported-yet diagnostic for the real compose target"),
+			ComposeOntoClassTest::DiagnosticsContainAllFragments(
+				Engine,
+				PreparedModules.AbsoluteFilename,
+				ExpectedDiagnosticFragments));
+		TestRunner->TestNull(
+			TEXT("ComposeOntoClass valid-target test should not publish the projected compose class while compose materialization is unsupported"),
+			FindGeneratedClass(&Engine, ComposeOntoClassTest::ComposeProjectedClassName));
+		TestRunner->TestTrue(
+			TEXT("ComposeOntoClass valid-target test should not publish a module record after the unsupported compose path"),
+			!Engine.GetModuleByModuleName(PreparedModuleName).IsValid());
+
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

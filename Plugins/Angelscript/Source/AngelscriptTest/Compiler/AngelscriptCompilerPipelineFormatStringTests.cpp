@@ -4,13 +4,12 @@
 #include "Preprocessor/AngelscriptPreprocessor.h"
 
 #include "HAL/FileManager.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineFormatStringTest
@@ -84,174 +83,177 @@ namespace CompilerPipelineFormatStringTest
 
 using namespace CompilerPipelineFormatStringTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerFormatStringRewriteProducesExpectedOutputTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.FormatStringRewriteProducesExpectedOutput",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineFormatStringTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerFormatStringRewriteProducesExpectedOutputTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString ScriptSource = TEXT(R"AS(
-int Entry()
-{
-	float Value = 12.34f;
-	int Score = 0;
-
-	if (f"{{Alpha}}" == "{Alpha}")
+	TEST_METHOD(FormatStringRewriteProducesExpectedOutput)
 	{
-		Score += 1000;
+	using namespace AngelscriptTestSupport;
+
+
+		const FString ScriptSource = TEXT(R"AS(
+	int Entry()
+	{
+		float Value = 12.34f;
+		int Score = 0;
+
+		if (f"{{Alpha}}" == "{Alpha}")
+		{
+			Score += 1000;
+		}
+
+		if (f"{20 + 1}" == "21")
+		{
+			Score += 100;
+		}
+
+		if (f"{21 =}" == "21 = 21")
+		{
+			Score += 10;
+		}
+
+		if (f"{255 :#06x}" == "0x00ff")
+		{
+			Score += 4;
+		}
+
+		if (f"{Value :.1f}" == "12.3")
+		{
+			Score += 2;
+		}
+
+		if (f"{Value =:.1f}" == "Value = 12.3")
+		{
+			Score += 1;
+		}
+
+		return Score;
 	}
+	)AS");
 
-	if (f"{20 + 1}" == "21")
-	{
-		Score += 100;
-	}
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	if (f"{21 =}" == "21 = 21")
-	{
-		Score += 10;
-	}
-
-	if (f"{255 :#06x}" == "0x00ff")
-	{
-		Score += 4;
-	}
-
-	if (f"{Value :.1f}" == "12.3")
-	{
-		Score += 2;
-	}
-
-	if (f"{Value =:.1f}" == "Value = 12.3")
-	{
-		Score += 1;
-	}
-
-	return Score;
-}
-)AS");
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	const FString AbsoluteScriptPath = CompilerPipelineFormatStringTest::WriteFixture(
-		CompilerPipelineFormatStringTest::RelativeScriptPath,
-		ScriptSource);
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*CompilerPipelineFormatStringTest::ModuleName.ToString());
-		IFileManager::Get().Delete(*AbsoluteScriptPath, false, true);
-	};
-
-	Engine.ResetDiagnostics();
-
-	FAngelscriptPreprocessor Preprocessor;
-	Preprocessor.AddFile(CompilerPipelineFormatStringTest::RelativeScriptPath, AbsoluteScriptPath);
-
-	const bool bPreprocessSucceeded = Preprocessor.Preprocess();
-	const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
-
-	int32 PreprocessErrorCount = 0;
-	const TArray<FString> PreprocessMessages = CompilerPipelineFormatStringTest::CollectDiagnosticMessages(
-		Engine,
-		AbsoluteScriptPath,
-		PreprocessErrorCount);
-	const FString ProcessedCode = (Modules.Num() > 0 && Modules[0]->Code.Num() > 0)
-		? Modules[0]->Code[0].Code
-		: FString();
-
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should preprocess successfully"),
-		bPreprocessSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Format string rewrite test case should not emit preprocessing errors"),
-		PreprocessErrorCount,
-		0);
-	bPassed &= TestEqual(
-		TEXT("Format string rewrite test case should keep preprocessing diagnostics empty"),
-		PreprocessMessages.Num(),
-		0);
-	bPassed &= TestEqual(
-		TEXT("Format string rewrite test case should produce exactly one module descriptor"),
-		Modules.Num(),
-		1);
-	if (Modules.Num() > 0)
-	{
-		bPassed &= TestEqual(
-			TEXT("Format string rewrite test case should preserve the expected module name"),
-			Modules[0]->ModuleName,
-			CompilerPipelineFormatStringTest::ModuleName.ToString());
-	}
-
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should materialize escaped opening braces in processed code"),
-		ProcessedCode.Contains(TEXT(".AppendChar('{')")));
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should materialize escaped closing braces in processed code"),
-		ProcessedCode.Contains(TEXT(".AppendChar('}')")));
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should rewrite equals expansion into an explicit label prefix"),
-		ProcessedCode.Contains(TEXT("\"21 = \"+(21)")));
-	bPassed &= TestEqual(
-		TEXT("Format string rewrite test case should produce three ApplyFormat calls for both specifier paths"),
-		CompilerPipelineFormatStringTest::CountOccurrences(ProcessedCode, TEXT("FString::ApplyFormat((")),
-		3);
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should preserve the hex format specifier in processed code"),
-		ProcessedCode.Contains(TEXT("\"#06x\"")));
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should preserve the decimal precision format specifier in processed code"),
-		ProcessedCode.Contains(TEXT("\".1f\"")));
-
-	Engine.ResetDiagnostics();
-
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::SoftReloadOnly,
-		CompilerPipelineFormatStringTest::ModuleName,
-		CompilerPipelineFormatStringTest::RelativeScriptPath,
-		ScriptSource,
-		true,
-		Summary,
-		true);
-
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should compile through the normal preprocessor pipeline"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should report that it used the preprocessor"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should mark compile succeeded in the summary"),
-		Summary.bCompileSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Format string rewrite test case should keep compile diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-
-	int32 EntryResult = 0;
-	const bool bExecuted = bCompiled
-		&& ExecuteIntFunction(
-			&Engine,
+		const FString AbsoluteScriptPath = CompilerPipelineFormatStringTest::WriteFixture(
 			CompilerPipelineFormatStringTest::RelativeScriptPath,
+			ScriptSource);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineFormatStringTest::ModuleName.ToString());
+			IFileManager::Get().Delete(*AbsoluteScriptPath, false, true);
+		};
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptPreprocessor Preprocessor;
+		Preprocessor.AddFile(CompilerPipelineFormatStringTest::RelativeScriptPath, AbsoluteScriptPath);
+
+		const bool bPreprocessSucceeded = Preprocessor.Preprocess();
+		const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
+
+		int32 PreprocessErrorCount = 0;
+		const TArray<FString> PreprocessMessages = CompilerPipelineFormatStringTest::CollectDiagnosticMessages(
+			Engine,
+			AbsoluteScriptPath,
+			PreprocessErrorCount);
+		const FString ProcessedCode = (Modules.Num() > 0 && Modules[0]->Code.Num() > 0)
+			? Modules[0]->Code[0].Code
+			: FString();
+
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should preprocess successfully"),
+			bPreprocessSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Format string rewrite test case should not emit preprocessing errors"),
+			PreprocessErrorCount,
+			0);
+		TestRunner->TestEqual(
+			TEXT("Format string rewrite test case should keep preprocessing diagnostics empty"),
+			PreprocessMessages.Num(),
+			0);
+		TestRunner->TestEqual(
+			TEXT("Format string rewrite test case should produce exactly one module descriptor"),
+			Modules.Num(),
+			1);
+		if (Modules.Num() > 0)
+		{
+			TestRunner->TestEqual(
+				TEXT("Format string rewrite test case should preserve the expected module name"),
+				Modules[0]->ModuleName,
+				CompilerPipelineFormatStringTest::ModuleName.ToString());
+		}
+
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should materialize escaped opening braces in processed code"),
+			ProcessedCode.Contains(TEXT(".AppendChar('{')")));
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should materialize escaped closing braces in processed code"),
+			ProcessedCode.Contains(TEXT(".AppendChar('}')")));
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should rewrite equals expansion into an explicit label prefix"),
+			ProcessedCode.Contains(TEXT("\"21 = \"+(21)")));
+		TestRunner->TestEqual(
+			TEXT("Format string rewrite test case should produce three ApplyFormat calls for both specifier paths"),
+			CompilerPipelineFormatStringTest::CountOccurrences(ProcessedCode, TEXT("FString::ApplyFormat((")),
+			3);
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should preserve the hex format specifier in processed code"),
+			ProcessedCode.Contains(TEXT("\"#06x\"")));
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should preserve the decimal precision format specifier in processed code"),
+			ProcessedCode.Contains(TEXT("\".1f\"")));
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::SoftReloadOnly,
 			CompilerPipelineFormatStringTest::ModuleName,
-			TEXT("int Entry()"),
-			EntryResult);
-	bPassed &= TestTrue(
-		TEXT("Format string rewrite test case should execute the compiled Entry function"),
-		bExecuted);
-	if (bExecuted)
-	{
-		bPassed &= TestEqual(
-			TEXT("Format string rewrite test case should keep escaped braces, plain interpolation, equals expansion, and every specifier branch executable"),
-			EntryResult,
-			1117);
+			CompilerPipelineFormatStringTest::RelativeScriptPath,
+			ScriptSource,
+			true,
+			Summary,
+			true);
+
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should compile through the normal preprocessor pipeline"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should report that it used the preprocessor"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should mark compile succeeded in the summary"),
+			Summary.bCompileSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Format string rewrite test case should keep compile diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+
+		int32 EntryResult = 0;
+		const bool bExecuted = bCompiled
+			&& ExecuteIntFunction(
+				&Engine,
+				CompilerPipelineFormatStringTest::RelativeScriptPath,
+				CompilerPipelineFormatStringTest::ModuleName,
+				TEXT("int Entry()"),
+				EntryResult);
+		TestRunner->TestTrue(
+			TEXT("Format string rewrite test case should execute the compiled Entry function"),
+			bExecuted);
+		if (bExecuted)
+		{
+			TestRunner->TestEqual(
+				TEXT("Format string rewrite test case should keep escaped braces, plain interpolation, equals expansion, and every specifier branch executable"),
+				EntryResult,
+				1117);
+		}
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif

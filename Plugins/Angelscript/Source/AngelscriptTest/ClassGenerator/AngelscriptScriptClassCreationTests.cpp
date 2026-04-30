@@ -1,10 +1,10 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
+#include "CQTest.h"
 #include "Components/ActorTestSpawner.h"
 #include "Engine/Blueprint.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/Guid.h"
 #include "Misc/PackageName.h"
 #include "Misc/ScopeExit.h"
@@ -112,65 +112,28 @@ namespace ScriptClassCreationTest
 	};
 }
 
-using namespace ScriptClassCreationTest;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassCompilesToUClassTest,
-	"Angelscript.TestModule.ScriptClass.CompilesToUClass",
+TEST_CLASS_WITH_FLAGS(FAngelscriptScriptClassCreationTests,
+	"Angelscript.TestModule.ScriptClass",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassCanSpawnInTestWorldTest,
-	"Angelscript.TestModule.ScriptClass.CanSpawnInTestWorld",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassMultiSpawnKeepsStateIsolationTest,
-	"Angelscript.TestModule.ScriptClass.MultiSpawnKeepsStateIsolation",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassBlueprintChildCompilesTest,
-	"Angelscript.TestModule.ScriptClass.BlueprintChildCompiles",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassCDOHasExpectedDefaultsTest,
-	"Angelscript.TestModule.ScriptClass.CDOHasExpectedDefaults",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassRecompileDoesNotCrashClassSwitchTest,
-	"Angelscript.TestModule.ScriptClass.RecompileDoesNotCrashClassSwitch",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassNonUClassTypeCannotSpawnTest,
-	"Angelscript.TestModule.ScriptClass.NonUClassTypeCannotSpawn",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTestScriptClassRenameReplacesOldClassTest,
-	"Angelscript.TestModule.ScriptClass.RenameReplacesOldClass",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptTestScriptClassCompilesToUClassTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassCompilesToUClass"));
-	ON_SCOPE_EXIT
+	TEST_METHOD(CompilesToUClass)
 	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassCompilesToUClass"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassCompilesToUClass.as"),
-		TEXT(R"AS(
+		UClass* ScriptClass = CompileScriptModule(
+			*TestRunner,
+			Engine,
+			ModuleName,
+			TEXT("TestScriptClassCompilesToUClass.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassCompilesToUClass : AActor
 {
@@ -178,49 +141,49 @@ class ATestScriptClassCompilesToUClass : AActor
 	int SpawnMarker = 7;
 }
 )AS"),
-		TEXT("ATestScriptClassCompilesToUClass"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
+			TEXT("ATestScriptClassCompilesToUClass"));
+		if (ScriptClass == nullptr)
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("Script-class compile test case should produce an actor-derived generated UClass"), ScriptClass->IsChildOf(AActor::StaticClass()));
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor* Actor = SpawnScriptActor(*TestRunner, Spawner, ScriptClass);
+		if (Actor == nullptr)
+		{
+			return;
+		}
+
+		int32 SpawnMarker = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, Actor, TEXT("SpawnMarker"), SpawnMarker))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Script-class compile test case should instantiate an actor with script property defaults"), SpawnMarker, 7);
 	}
 
-	TestTrue(TEXT("Script-class compile test case should produce an actor-derived generated UClass"), ScriptClass->IsChildOf(AActor::StaticClass()));
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor* Actor = SpawnScriptActor(*this, Spawner, ScriptClass);
-	if (Actor == nullptr)
+	TEST_METHOD(CanSpawnInTestWorld)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassCanSpawnInTestWorld"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	int32 SpawnMarker = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, Actor, TEXT("SpawnMarker"), SpawnMarker))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Script-class compile test case should instantiate an actor with script property defaults"), SpawnMarker, 7);
-	return true;
-}
-
-bool FAngelscriptTestScriptClassCanSpawnInTestWorldTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassCanSpawnInTestWorld"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassCanSpawnInTestWorld.as"),
-		TEXT(R"AS(
+		UClass* ScriptClass = CompileScriptModule(
+			*TestRunner,
+			Engine,
+			ModuleName,
+			TEXT("TestScriptClassCanSpawnInTestWorld.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassCanSpawnInTestWorld : AActor
 {
@@ -234,49 +197,47 @@ class ATestScriptClassCanSpawnInTestWorld : AActor
 	}
 }
 )AS"),
-		TEXT("ATestScriptClassCanSpawnInTestWorld"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
+			TEXT("ATestScriptClassCanSpawnInTestWorld"));
+		if (ScriptClass == nullptr)
+		{
+			return;
+		}
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor* Actor = SpawnScriptActor(*TestRunner, Spawner, ScriptClass);
+		if (Actor == nullptr)
+		{
+			return;
+		}
+
+		BeginPlayActor(Engine, *Actor);
+
+		int32 BeginPlayObserved = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, Actor, TEXT("BeginPlayObserved"), BeginPlayObserved))
+		{
+			return;
+		}
+
+		TestRunner->TestEqual(TEXT("Script-class spawn test case should observe BeginPlay after entering the test world"), BeginPlayObserved, 1);
 	}
 
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor* Actor = SpawnScriptActor(*this, Spawner, ScriptClass);
-	if (Actor == nullptr)
+	TEST_METHOD(MultiSpawnKeepsStateIsolation)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassMultiSpawnKeepsStateIsolation"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	BeginPlayActor(Engine, *Actor);
-
-	int32 BeginPlayObserved = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, Actor, TEXT("BeginPlayObserved"), BeginPlayObserved))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Script-class spawn test case should observe BeginPlay after entering the test world"), BeginPlayObserved, 1);
-	return true;
-}
-
-bool FAngelscriptTestScriptClassMultiSpawnKeepsStateIsolationTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassMultiSpawnKeepsStateIsolation"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassMultiSpawnKeepsStateIsolation.as"),
-		TEXT(R"AS(
+		UClass* ScriptClass = CompileScriptModule(
+			*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassMultiSpawnKeepsStateIsolation.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassMultiSpawnKeepsStateIsolation : AActor
 {
@@ -284,65 +245,48 @@ class ATestScriptClassMultiSpawnKeepsStateIsolation : AActor
 	int LocalState = 3;
 }
 )AS"),
-		TEXT("ATestScriptClassMultiSpawnKeepsStateIsolation"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
+			TEXT("ATestScriptClassMultiSpawnKeepsStateIsolation"));
+		if (ScriptClass == nullptr) { return; }
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor* FirstActor = SpawnScriptActor(*TestRunner, Spawner, ScriptClass);
+		AActor* SecondActor = SpawnScriptActor(*TestRunner, Spawner, ScriptClass);
+		if (!TestRunner->TestNotNull(TEXT("State-isolation test case should spawn first actor"), FirstActor)
+			|| !TestRunner->TestNotNull(TEXT("State-isolation test case should spawn second actor"), SecondActor))
+		{ return; }
+
+		FIntProperty* LocalStateProperty = FindFProperty<FIntProperty>(ScriptClass, TEXT("LocalState"));
+		if (!TestRunner->TestNotNull(TEXT("State-isolation test case should expose LocalState property"), LocalStateProperty))
+		{ return; }
+
+		LocalStateProperty->SetPropertyValue_InContainer(FirstActor, 11);
+
+		int32 FirstValue = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, FirstActor, TEXT("LocalState"), FirstValue)) { return; }
+		int32 SecondValue = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, SecondActor, TEXT("LocalState"), SecondValue)) { return; }
+
+		TestRunner->TestTrue(TEXT("State-isolation test case should spawn distinct actor instances"), FirstActor != SecondActor);
+		TestRunner->TestEqual(TEXT("State-isolation test case should keep the mutated value on the first actor"), FirstValue, 11);
+		TestRunner->TestEqual(TEXT("State-isolation test case should keep the second actor at its own default state"), SecondValue, 3);
 	}
 
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor* FirstActor = SpawnScriptActor(*this, Spawner, ScriptClass);
-	AActor* SecondActor = SpawnScriptActor(*this, Spawner, ScriptClass);
-	if (!TestNotNull(TEXT("State-isolation test case should spawn first actor"), FirstActor)
-		|| !TestNotNull(TEXT("State-isolation test case should spawn second actor"), SecondActor))
+	TEST_METHOD(BlueprintChildCompiles)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassBlueprintChildCompiles"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	FIntProperty* LocalStateProperty = FindFProperty<FIntProperty>(ScriptClass, TEXT("LocalState"));
-	if (!TestNotNull(TEXT("State-isolation test case should expose LocalState property"), LocalStateProperty))
-	{
-		return false;
-	}
-
-	LocalStateProperty->SetPropertyValue_InContainer(FirstActor, 11);
-
-	int32 FirstValue = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, FirstActor, TEXT("LocalState"), FirstValue))
-	{
-		return false;
-	}
-
-	int32 SecondValue = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, SecondActor, TEXT("LocalState"), SecondValue))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("State-isolation test case should spawn distinct actor instances"), FirstActor != SecondActor);
-	TestEqual(TEXT("State-isolation test case should keep the mutated value on the first actor"), FirstValue, 11);
-	TestEqual(TEXT("State-isolation test case should keep the second actor at its own default state"), SecondValue, 3);
-	return true;
-}
-
-bool FAngelscriptTestScriptClassBlueprintChildCompilesTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassBlueprintChildCompiles"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassBlueprintChildCompiles.as"),
-		TEXT(R"AS(
+		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassBlueprintChildCompiles.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassBlueprintChildCompiles : AActor
 {
@@ -356,69 +300,47 @@ class ATestScriptClassBlueprintChildCompiles : AActor
 	}
 }
 )AS"),
-		TEXT("ATestScriptClassBlueprintChildCompiles"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
+			TEXT("ATestScriptClassBlueprintChildCompiles"));
+		if (ScriptClass == nullptr) { return; }
+
+		ScriptClassCreationTest::FScopedTransientBlueprint Blueprint;
+		Blueprint.BlueprintAsset = ScriptClassCreationTest::CreateTransientBlueprintChild(*TestRunner, ScriptClass, TEXT("ScriptClassBlueprintChild"));
+		if (Blueprint.BlueprintAsset == nullptr) { return; }
+		if (!ScriptClassCreationTest::CompileAndValidateBlueprint(*TestRunner, *Blueprint.BlueprintAsset)) { return; }
+
+		UClass* BlueprintClass = Blueprint.GetGeneratedClass();
+		if (!TestRunner->TestNotNull(TEXT("Blueprint-child test case should provide a generated blueprint class"), BlueprintClass)) { return; }
+
+		TestRunner->TestTrue(TEXT("Blueprint-child test case should generate a blueprint class inheriting from the script parent"), BlueprintClass->IsChildOf(ScriptClass));
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor* Actor = SpawnScriptActor(*TestRunner, Spawner, BlueprintClass);
+		if (Actor == nullptr) { return; }
+
+		BeginPlayActor(Engine, *Actor);
+
+		int32 BeginPlayCount = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, Actor, TEXT("BeginPlayCount"), BeginPlayCount)) { return; }
+
+		TestRunner->TestEqual(TEXT("Blueprint-child test case should preserve the script BeginPlay override when spawned"), BeginPlayCount, 1);
 	}
 
-	ScriptClassCreationTest::FScopedTransientBlueprint Blueprint;
-	Blueprint.BlueprintAsset = ScriptClassCreationTest::CreateTransientBlueprintChild(*this, ScriptClass, TEXT("ScriptClassBlueprintChild"));
-	if (Blueprint.BlueprintAsset == nullptr)
+	TEST_METHOD(CDOHasExpectedDefaults)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassCDOHasExpectedDefaults"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	if (!ScriptClassCreationTest::CompileAndValidateBlueprint(*this, *Blueprint.BlueprintAsset))
-	{
-		return false;
-	}
-
-	UClass* BlueprintClass = Blueprint.GetGeneratedClass();
-	if (!TestNotNull(TEXT("Blueprint-child test case should provide a generated blueprint class"), BlueprintClass))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("Blueprint-child test case should generate a blueprint class inheriting from the script parent"), BlueprintClass->IsChildOf(ScriptClass));
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor* Actor = SpawnScriptActor(*this, Spawner, BlueprintClass);
-	if (Actor == nullptr)
-	{
-		return false;
-	}
-
-	BeginPlayActor(Engine, *Actor);
-
-	int32 BeginPlayCount = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, Actor, TEXT("BeginPlayCount"), BeginPlayCount))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Blueprint-child test case should preserve the script BeginPlay override when spawned"), BeginPlayCount, 1);
-	return true;
-}
-
-bool FAngelscriptTestScriptClassCDOHasExpectedDefaultsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassCDOHasExpectedDefaults"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* ScriptClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassCDOHasExpectedDefaults.as"),
-		TEXT(R"AS(
+		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassCDOHasExpectedDefaults.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassCDOHasExpectedDefaults : AActor
 {
@@ -432,81 +354,51 @@ class ATestScriptClassCDOHasExpectedDefaults : AActor
 	FString DefaultLabel = "CDOStable";
 }
 )AS"),
-		TEXT("ATestScriptClassCDOHasExpectedDefaults"));
-	if (ScriptClass == nullptr)
-	{
-		return false;
+			TEXT("ATestScriptClassCDOHasExpectedDefaults"));
+		if (ScriptClass == nullptr) { return; }
+
+		UObject* DefaultObject = ScriptClass->GetDefaultObject();
+		if (!TestRunner->TestNotNull(TEXT("CDO-defaults test case should provide a generated class default object"), DefaultObject)) { return; }
+
+		int32 DefaultCounter = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, DefaultObject, TEXT("DefaultCounter"), DefaultCounter)) { return; }
+		bool bDefaultFlag = false;
+		if (!ReadPropertyValue<FBoolProperty>(*TestRunner, DefaultObject, TEXT("bDefaultFlag"), bDefaultFlag)) { return; }
+		FString DefaultLabel;
+		if (!ReadPropertyValue<FStrProperty>(*TestRunner, DefaultObject, TEXT("DefaultLabel"), DefaultLabel)) { return; }
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor* SpawnedActor = SpawnScriptActor(*TestRunner, Spawner, ScriptClass);
+		if (SpawnedActor == nullptr) { return; }
+
+		int32 SpawnedDefaultCounter = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, SpawnedActor, TEXT("DefaultCounter"), SpawnedDefaultCounter)) { return; }
+		FString SpawnedDefaultLabel;
+		if (!ReadPropertyValue<FStrProperty>(*TestRunner, SpawnedActor, TEXT("DefaultLabel"), SpawnedDefaultLabel)) { return; }
+
+		TestRunner->TestEqual(TEXT("CDO-defaults test case should preserve integer defaults on the class default object"), DefaultCounter, 21);
+		TestRunner->TestTrue(TEXT("CDO-defaults test case should preserve boolean defaults on the class default object"), bDefaultFlag);
+		TestRunner->TestEqual(TEXT("CDO-defaults test case should preserve string defaults on the class default object"), DefaultLabel, FString(TEXT("CDOStable")));
+		TestRunner->TestEqual(TEXT("CDO-defaults test case should apply class default integer values to spawned actor instances"), SpawnedDefaultCounter, 21);
+		TestRunner->TestEqual(TEXT("CDO-defaults test case should apply class default string values to spawned actor instances"), SpawnedDefaultLabel, FString(TEXT("CDOStable")));
 	}
 
-	UObject* DefaultObject = ScriptClass->GetDefaultObject();
-	if (!TestNotNull(TEXT("CDO-defaults test case should provide a generated class default object"), DefaultObject))
+	TEST_METHOD(RecompileDoesNotCrashClassSwitch)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassRecompileDoesNotCrashClassSwitch"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	int32 DefaultCounter = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, DefaultObject, TEXT("DefaultCounter"), DefaultCounter))
-	{
-		return false;
-	}
-
-	bool bDefaultFlag = false;
-	if (!ReadPropertyValue<FBoolProperty>(*this, DefaultObject, TEXT("bDefaultFlag"), bDefaultFlag))
-	{
-		return false;
-	}
-
-	FString DefaultLabel;
-	if (!ReadPropertyValue<FStrProperty>(*this, DefaultObject, TEXT("DefaultLabel"), DefaultLabel))
-	{
-		return false;
-	}
-
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor* SpawnedActor = SpawnScriptActor(*this, Spawner, ScriptClass);
-	if (SpawnedActor == nullptr)
-	{
-		return false;
-	}
-
-	int32 SpawnedDefaultCounter = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, SpawnedActor, TEXT("DefaultCounter"), SpawnedDefaultCounter))
-	{
-		return false;
-	}
-
-	FString SpawnedDefaultLabel;
-	if (!ReadPropertyValue<FStrProperty>(*this, SpawnedActor, TEXT("DefaultLabel"), SpawnedDefaultLabel))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("CDO-defaults test case should preserve integer defaults on the class default object"), DefaultCounter, 21);
-	TestTrue(TEXT("CDO-defaults test case should preserve boolean defaults on the class default object"), bDefaultFlag);
-	TestEqual(TEXT("CDO-defaults test case should preserve string defaults on the class default object"), DefaultLabel, FString(TEXT("CDOStable")));
-	TestEqual(TEXT("CDO-defaults test case should apply class default integer values to spawned actor instances"), SpawnedDefaultCounter, 21);
-	TestEqual(TEXT("CDO-defaults test case should apply class default string values to spawned actor instances"), SpawnedDefaultLabel, FString(TEXT("CDOStable")));
-	return true;
-}
-
-bool FAngelscriptTestScriptClassRecompileDoesNotCrashClassSwitchTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassRecompileDoesNotCrashClassSwitch"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* InitialClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassRecompileDoesNotCrashClassSwitch.as"),
-		TEXT(R"AS(
+		UClass* InitialClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassRecompileDoesNotCrashClassSwitch.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassRecompileDoesNotCrashClassSwitch : AActor
 {
@@ -514,32 +406,20 @@ class ATestScriptClassRecompileDoesNotCrashClassSwitch : AActor
 	int GenerationValue = 1;
 }
 )AS"),
-		TEXT("ATestScriptClassRecompileDoesNotCrashClassSwitch"));
-	if (InitialClass == nullptr)
-	{
-		return false;
-	}
+			TEXT("ATestScriptClassRecompileDoesNotCrashClassSwitch"));
+		if (InitialClass == nullptr) { return; }
 
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	AActor* FirstGenerationActor = SpawnScriptActor(*this, Spawner, InitialClass);
-	if (FirstGenerationActor == nullptr)
-	{
-		return false;
-	}
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		AActor* FirstGenerationActor = SpawnScriptActor(*TestRunner, Spawner, InitialClass);
+		if (FirstGenerationActor == nullptr) { return; }
 
-	int32 InitialGenerationValue = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, FirstGenerationActor, TEXT("GenerationValue"), InitialGenerationValue))
-	{
-		return false;
-	}
+		int32 InitialGenerationValue = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, FirstGenerationActor, TEXT("GenerationValue"), InitialGenerationValue)) { return; }
 
-	UClass* RecompiledClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassRecompileDoesNotCrashClassSwitch.as"),
-		TEXT(R"AS(
+		UClass* RecompiledClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassRecompileDoesNotCrashClassSwitch.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassRecompileDoesNotCrashClassSwitch : AActor
 {
@@ -550,53 +430,37 @@ class ATestScriptClassRecompileDoesNotCrashClassSwitch : AActor
 	int AddedAfterRecompile = 17;
 }
 )AS"),
-		TEXT("ATestScriptClassRecompileDoesNotCrashClassSwitch"));
-	if (RecompiledClass == nullptr)
-	{
-		return false;
+			TEXT("ATestScriptClassRecompileDoesNotCrashClassSwitch"));
+		if (RecompiledClass == nullptr) { return; }
+
+		AActor* RecompiledActor = SpawnScriptActor(*TestRunner, Spawner, RecompiledClass);
+		if (RecompiledActor == nullptr) { return; }
+
+		int32 RecompiledGenerationValue = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, RecompiledActor, TEXT("GenerationValue"), RecompiledGenerationValue)) { return; }
+		int32 AddedAfterRecompile = 0;
+		if (!ReadPropertyValue<FIntProperty>(*TestRunner, RecompiledActor, TEXT("AddedAfterRecompile"), AddedAfterRecompile)) { return; }
+
+		TestRunner->TestEqual(TEXT("Recompile test case should produce the initial default before class switch"), InitialGenerationValue, 1);
+		TestRunner->TestEqual(TEXT("Recompile test case should expose updated defaults after recompiling the same script class"), RecompiledGenerationValue, 2);
+		TestRunner->TestEqual(TEXT("Recompile test case should expose newly added reflected properties after class switch"), AddedAfterRecompile, 17);
 	}
 
-	AActor* RecompiledActor = SpawnScriptActor(*this, Spawner, RecompiledClass);
-	if (RecompiledActor == nullptr)
+	TEST_METHOD(NonUClassTypeCannotSpawn)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
+		FAngelscriptEngineScope EngineScope(Engine);
+		static const FName ModuleName(TEXT("TestScriptClassNonUClassTypeCannotSpawn"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedCloneEngine(Engine);
+		};
 
-	int32 RecompiledGenerationValue = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, RecompiledActor, TEXT("GenerationValue"), RecompiledGenerationValue))
-	{
-		return false;
-	}
-
-	int32 AddedAfterRecompile = 0;
-	if (!ReadPropertyValue<FIntProperty>(*this, RecompiledActor, TEXT("AddedAfterRecompile"), AddedAfterRecompile))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Recompile test case should produce the initial default before class switch"), InitialGenerationValue, 1);
-	TestEqual(TEXT("Recompile test case should expose updated defaults after recompiling the same script class"), RecompiledGenerationValue, 2);
-	TestEqual(TEXT("Recompile test case should expose newly added reflected properties after class switch"), AddedAfterRecompile, 17);
-	return true;
-}
-
-bool FAngelscriptTestScriptClassNonUClassTypeCannotSpawnTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ScriptClassCreationTest::AcquireFreshScriptClassEngine();
-	FAngelscriptEngineScope EngineScope(Engine);
-	static const FName ModuleName(TEXT("TestScriptClassNonUClassTypeCannotSpawn"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
-	};
-
-	UClass* NonActorClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassNonUClassTypeCannotSpawn.as"),
-		TEXT(R"AS(
+		UClass* NonActorClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassNonUClassTypeCannotSpawn.as"),
+			TEXT(R"AS(
 UCLASS()
 class UTestScriptClassNonUClassTypeCannotSpawn : UObject
 {
@@ -604,46 +468,36 @@ class UTestScriptClassNonUClassTypeCannotSpawn : UObject
 	int Value = 5;
 }
 )AS"),
-		TEXT("UTestScriptClassNonUClassTypeCannotSpawn"));
-	if (NonActorClass == nullptr)
-	{
-		return false;
+			TEXT("UTestScriptClassNonUClassTypeCannotSpawn"));
+		if (NonActorClass == nullptr) { return; }
+
+		TestRunner->TestFalse(TEXT("Non-uclass-type spawn test case should compile a generated class that is not actor-derived"), NonActorClass->IsChildOf(AActor::StaticClass()));
+
+		UObject* ObjectInstance = NewObject<UObject>(GetTransientPackage(), NonActorClass);
+		if (!TestRunner->TestNotNull(TEXT("Non-uclass-type spawn test case should still allow plain UObject creation"), ObjectInstance)) { return; }
+
+		FActorTestSpawner Spawner;
+		Spawner.InitializeGameSubsystems();
+		FActorSpawnParameters SpawnParameters;
+		AActor* SpawnedActor = Spawner.GetWorld().SpawnActor<AActor>(NonActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
+		TestRunner->TestNull(TEXT("Non-uclass-type spawn test case should reject spawning non-actor generated classes into the world"), SpawnedActor);
 	}
 
-	TestFalse(TEXT("Non-uclass-type spawn test case should compile a generated class that is not actor-derived"), NonActorClass->IsChildOf(AActor::StaticClass()));
-
-	UObject* ObjectInstance = NewObject<UObject>(GetTransientPackage(), NonActorClass);
-	if (!TestNotNull(TEXT("Non-uclass-type spawn test case should still allow plain UObject creation"), ObjectInstance))
+	TEST_METHOD(RenameReplacesOldClass)
 	{
-		return false;
-	}
+		using namespace ScriptClassCreationTest;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
+		static const FName ModuleName(TEXT("TestScriptClassRenameReplacesOldClass"));
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*ModuleName.ToString());
+			ResetSharedInitializedTestEngine(Engine);
+		};
 
-	FActorTestSpawner Spawner;
-	Spawner.InitializeGameSubsystems();
-	FActorSpawnParameters SpawnParameters;
-	AActor* SpawnedActor = Spawner.GetWorld().SpawnActor<AActor>(NonActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
-	TestNull(TEXT("Non-uclass-type spawn test case should reject spawning non-actor generated classes into the world"), SpawnedActor);
-	return true;
-}
-
-bool FAngelscriptTestScriptClassRenameReplacesOldClassTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = false;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	static const FName ModuleName(TEXT("TestScriptClassRenameReplacesOldClass"));
-	ON_SCOPE_EXIT
-	{
-		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedInitializedTestEngine(Engine);
-	};
-
-	UClass* OldClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassRenameReplacesOldClass.as"),
-		TEXT(R"AS(
+		UClass* OldClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassRenameReplacesOldClass.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassRenameOld : AActor
 {
@@ -651,18 +505,12 @@ class ATestScriptClassRenameOld : AActor
 	int Version = 1;
 }
 )AS"),
-		TEXT("ATestScriptClassRenameOld"));
-	if (OldClass == nullptr)
-	{
-		return false;
-	}
+			TEXT("ATestScriptClassRenameOld"));
+		if (OldClass == nullptr) { return; }
 
-	UClass* NewClass = CompileScriptModule(
-		*this,
-		Engine,
-		ModuleName,
-		TEXT("TestScriptClassRenameReplacesOldClass.as"),
-		TEXT(R"AS(
+		UClass* NewClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+			TEXT("TestScriptClassRenameReplacesOldClass.as"),
+			TEXT(R"AS(
 UCLASS()
 class ATestScriptClassRenameNew : AActor
 {
@@ -670,27 +518,19 @@ class ATestScriptClassRenameNew : AActor
 	int Version = 2;
 }
 )AS"),
-		TEXT("ATestScriptClassRenameNew"));
-	if (!TestNotNull(TEXT("Rename test case should compile the renamed generated class"), NewClass))
-	{
-		return false;
+			TEXT("ATestScriptClassRenameNew"));
+		if (!TestRunner->TestNotNull(TEXT("Rename test case should compile the renamed generated class"), NewClass)) { return; }
+
+		TestRunner->TestTrue(TEXT("Rename test case should expose the new generated class by its new name"), FindGeneratedClass(&Engine, TEXT("ATestScriptClassRenameNew")) == NewClass);
+		TestRunner->TestTrue(TEXT("Rename test case should keep the old generated class address distinct from the new class"), OldClass != NewClass);
+		TestRunner->TestTrue(TEXT("Rename test case should move the old generated class out of the active class name"), OldClass->GetName().Contains(TEXT("REPLACED")) || OldClass->GetName() != TEXT("ATestScriptClassRenameOld"));
+
+		FIntProperty* VersionProperty = FindFProperty<FIntProperty>(NewClass, TEXT("Version"));
+		if (!TestRunner->TestNotNull(TEXT("Rename test case should expose the new reflected property on the renamed class"), VersionProperty)) { return; }
+
+		TestRunner->TestEqual(TEXT("Rename test case should apply the renamed class default value after replacement"), VersionProperty->GetPropertyValue_InContainer(NewClass->GetDefaultObject()), 2);
+		ASTEST_END_SHARE_CLEAN
 	}
-
-	TestTrue(TEXT("Rename test case should expose the new generated class by its new name"), FindGeneratedClass(&Engine, TEXT("ATestScriptClassRenameNew")) == NewClass);
-	TestTrue(TEXT("Rename test case should keep the old generated class address distinct from the new class"), OldClass != NewClass);
-	TestTrue(TEXT("Rename test case should move the old generated class out of the active class name"), OldClass->GetName().Contains(TEXT("REPLACED")) || OldClass->GetName() != TEXT("ATestScriptClassRenameOld"));
-
-
-	FIntProperty* VersionProperty = FindFProperty<FIntProperty>(NewClass, TEXT("Version"));
-	if (!TestNotNull(TEXT("Rename test case should expose the new reflected property on the renamed class"), VersionProperty))
-	{
-		return false;
-	}
-
-	bPassed = TestEqual(TEXT("Rename test case should apply the renamed class default value after replacement"), VersionProperty->GetPropertyValue_InContainer(NewClass->GetDefaultObject()), 2);
-	ASTEST_END_SHARE_CLEAN
-
-	return bPassed;
-}
+};
 
 #endif

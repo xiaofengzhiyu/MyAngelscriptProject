@@ -5,14 +5,13 @@
 #include "Preprocessor/AngelscriptPreprocessor.h"
 
 #include "HAL/FileManager.h"
-#include "Misc/AutomationTest.h"
+#include "CQTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/Class.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
 using namespace AngelscriptTestSupport;
 
 namespace CompilerPipelineNamespaceTest
@@ -65,177 +64,180 @@ namespace CompilerPipelineNamespaceTest
 
 using namespace CompilerPipelineNamespaceTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptCompilerNamespacedAnnotatedClassStaticHelperRoundTripTest,
-	"Angelscript.TestModule.Compiler.EndToEnd.NamespacedAnnotatedClassStaticHelperRoundTrip",
+TEST_CLASS_WITH_FLAGS(FCompilerPipelineNamespaceTests,
+	"Angelscript.TestModule.Compiler.EndToEnd",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptCompilerNamespacedAnnotatedClassStaticHelperRoundTripTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	const FString ScriptSource = TEXT(R"AS(
-namespace Gameplay
-{
-	UCLASS()
-	class UNamespaceCarrier : UObject
+	TEST_METHOD(NamespacedAnnotatedClassStaticHelperRoundTrip)
 	{
-		UFUNCTION()
-		int GetValue()
+	using namespace AngelscriptTestSupport;
+
+
+		const FString ScriptSource = TEXT(R"AS(
+	namespace Gameplay
+	{
+		UCLASS()
+		class UNamespaceCarrier : UObject
 		{
-			return 42;
+			UFUNCTION()
+			int GetValue()
+			{
+				return 42;
+			}
 		}
 	}
-}
 
-int Entry()
-{
-	return Gameplay::UNamespaceCarrier::StaticClass() != nullptr ? 42 : 0;
-}
-)AS");
-
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-
-	const FString AbsoluteScriptPath = CompilerPipelineNamespaceTest::WriteFixture(
-		CompilerPipelineNamespaceTest::RelativeScriptPath,
-		ScriptSource);
-	ON_SCOPE_EXIT
+	int Entry()
 	{
-		Engine.DiscardModule(*CompilerPipelineNamespaceTest::ModuleName.ToString());
-		IFileManager::Get().Delete(*AbsoluteScriptPath, false, true);
-	};
+		return Gameplay::UNamespaceCarrier::StaticClass() != nullptr ? 42 : 0;
+	}
+	)AS");
 
-	Engine.ResetDiagnostics();
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	FAngelscriptPreprocessor Preprocessor;
-	Preprocessor.AddFile(CompilerPipelineNamespaceTest::RelativeScriptPath, AbsoluteScriptPath);
+		const FString AbsoluteScriptPath = CompilerPipelineNamespaceTest::WriteFixture(
+			CompilerPipelineNamespaceTest::RelativeScriptPath,
+			ScriptSource);
+		ON_SCOPE_EXIT
+		{
+			Engine.DiscardModule(*CompilerPipelineNamespaceTest::ModuleName.ToString());
+			IFileManager::Get().Delete(*AbsoluteScriptPath, false, true);
+		};
 
-	const bool bPreprocessSucceeded = Preprocessor.Preprocess();
-	const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
+		Engine.ResetDiagnostics();
 
-	int32 PreprocessErrorCount = 0;
-	const TArray<FString> PreprocessMessages = CompilerPipelineNamespaceTest::CollectDiagnosticMessages(
-		Engine,
-		AbsoluteScriptPath,
-		PreprocessErrorCount);
+		FAngelscriptPreprocessor Preprocessor;
+		Preprocessor.AddFile(CompilerPipelineNamespaceTest::RelativeScriptPath, AbsoluteScriptPath);
 
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should preprocess successfully"),
-		bPreprocessSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Namespaced annotated class test case should keep preprocessing errors at zero"),
-		PreprocessErrorCount,
-		0);
-	bPassed &= TestEqual(
-		TEXT("Namespaced annotated class test case should keep preprocessing diagnostics empty"),
-		PreprocessMessages.Num(),
-		0);
-	bPassed &= TestEqual(
-		TEXT("Namespaced annotated class test case should emit exactly one module descriptor"),
-		Modules.Num(),
-		1);
-	if (!bPreprocessSucceeded || Modules.Num() != 1)
-	{
-		return false;
+		const bool bPreprocessSucceeded = Preprocessor.Preprocess();
+		const TArray<TSharedRef<FAngelscriptModuleDesc>> Modules = Preprocessor.GetModulesToCompile();
+
+		int32 PreprocessErrorCount = 0;
+		const TArray<FString> PreprocessMessages = CompilerPipelineNamespaceTest::CollectDiagnosticMessages(
+			Engine,
+			AbsoluteScriptPath,
+			PreprocessErrorCount);
+
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should preprocess successfully"),
+			bPreprocessSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Namespaced annotated class test case should keep preprocessing errors at zero"),
+			PreprocessErrorCount,
+			0);
+		TestRunner->TestEqual(
+			TEXT("Namespaced annotated class test case should keep preprocessing diagnostics empty"),
+			PreprocessMessages.Num(),
+			0);
+		TestRunner->TestEqual(
+			TEXT("Namespaced annotated class test case should emit exactly one module descriptor"),
+			Modules.Num(),
+			1);
+		if (!bPreprocessSucceeded || Modules.Num() != 1)
+		{
+			return;
+		}
+
+		const TSharedRef<FAngelscriptModuleDesc> ModuleDesc = Modules[0];
+		const TSharedPtr<FAngelscriptClassDesc> ClassDesc = ModuleDesc->GetClass(CompilerPipelineNamespaceTest::ClassName);
+		if (!TestRunner->TestTrue(TEXT("Namespaced annotated class test case should parse the annotated class descriptor"), ClassDesc.IsValid()))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should record the class namespace during preprocessing"),
+			ClassDesc->Namespace.IsSet());
+		if (ClassDesc->Namespace.IsSet())
+		{
+			TestRunner->TestEqual(
+				TEXT("Namespaced annotated class test case should preserve the Gameplay namespace"),
+				ClassDesc->Namespace.GetValue(),
+				FString(TEXT("Gameplay")));
+		}
+
+		if (!TestRunner->TestTrue(TEXT("Namespaced annotated class test case should keep one processed code section"), ModuleDesc->Code.Num() == 1))
+		{
+			return;
+		}
+
+		const FString& ProcessedCode = ModuleDesc->Code[0].Code;
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should keep the generated helper inside the Gameplay namespace"),
+			ProcessedCode.Contains(TEXT("namespace Gameplay")));
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should emit the __StaticType global for the namespaced class"),
+			ProcessedCode.Contains(TEXT("__StaticType_UNamespaceCarrier")));
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should emit the nested StaticClass helper wrapper"),
+			ProcessedCode.Contains(TEXT("namespace UNamespaceCarrier { UClass StaticClass()")));
+
+		Engine.ResetDiagnostics();
+
+		FAngelscriptCompileTraceSummary Summary;
+		const bool bCompiled = CompileModuleWithSummary(
+			&Engine,
+			ECompileType::FullReload,
+			CompilerPipelineNamespaceTest::ModuleName,
+			CompilerPipelineNamespaceTest::RelativeScriptPath,
+			ScriptSource,
+			true,
+			Summary);
+
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should compile through the normal preprocessor pipeline"),
+			bCompiled);
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should record preprocessor usage in the compile summary"),
+			Summary.bUsedPreprocessor);
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should mark compile succeeded in the summary"),
+			Summary.bCompileSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Namespaced annotated class test case should compile as fully handled"),
+			Summary.CompileResult,
+			ECompileResult::FullyHandled);
+		TestRunner->TestEqual(
+			TEXT("Namespaced annotated class test case should keep compile diagnostics empty"),
+			Summary.Diagnostics.Num(),
+			0);
+		if (!bCompiled)
+		{
+			return;
+		}
+
+		UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelineNamespaceTest::ClassName);
+		if (!TestRunner->TestNotNull(TEXT("Namespaced annotated class test case should materialize the generated class"), GeneratedClass))
+		{
+			return;
+		}
+
+		TestRunner->TestNotNull(
+			TEXT("Namespaced annotated class test case should materialize the generated class method"),
+			FindGeneratedFunction(GeneratedClass, *CompilerPipelineNamespaceTest::MethodName));
+
+		int32 Result = 0;
+		const bool bExecuted = ExecuteIntFunction(
+			&Engine,
+			CompilerPipelineNamespaceTest::ModuleName,
+			CompilerPipelineNamespaceTest::EntryDecl,
+			Result);
+		TestRunner->TestTrue(
+			TEXT("Namespaced annotated class test case should execute the entry point"),
+			bExecuted);
+		if (bExecuted)
+		{
+			TestRunner->TestEqual(
+				TEXT("Namespaced annotated class test case should resolve Gameplay::UNamespaceCarrier::StaticClass() at runtime"),
+				Result,
+				42);
+		}
+
+		ASTEST_END_SHARE_CLEAN
+
 	}
 
-	const TSharedRef<FAngelscriptModuleDesc> ModuleDesc = Modules[0];
-	const TSharedPtr<FAngelscriptClassDesc> ClassDesc = ModuleDesc->GetClass(CompilerPipelineNamespaceTest::ClassName);
-	if (!TestTrue(TEXT("Namespaced annotated class test case should parse the annotated class descriptor"), ClassDesc.IsValid()))
-	{
-		return false;
-	}
-
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should record the class namespace during preprocessing"),
-		ClassDesc->Namespace.IsSet());
-	if (ClassDesc->Namespace.IsSet())
-	{
-		bPassed &= TestEqual(
-			TEXT("Namespaced annotated class test case should preserve the Gameplay namespace"),
-			ClassDesc->Namespace.GetValue(),
-			FString(TEXT("Gameplay")));
-	}
-
-	if (!TestTrue(TEXT("Namespaced annotated class test case should keep one processed code section"), ModuleDesc->Code.Num() == 1))
-	{
-		return false;
-	}
-
-	const FString& ProcessedCode = ModuleDesc->Code[0].Code;
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should keep the generated helper inside the Gameplay namespace"),
-		ProcessedCode.Contains(TEXT("namespace Gameplay")));
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should emit the __StaticType global for the namespaced class"),
-		ProcessedCode.Contains(TEXT("__StaticType_UNamespaceCarrier")));
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should emit the nested StaticClass helper wrapper"),
-		ProcessedCode.Contains(TEXT("namespace UNamespaceCarrier { UClass StaticClass()")));
-
-	Engine.ResetDiagnostics();
-
-	FAngelscriptCompileTraceSummary Summary;
-	const bool bCompiled = CompileModuleWithSummary(
-		&Engine,
-		ECompileType::FullReload,
-		CompilerPipelineNamespaceTest::ModuleName,
-		CompilerPipelineNamespaceTest::RelativeScriptPath,
-		ScriptSource,
-		true,
-		Summary);
-
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should compile through the normal preprocessor pipeline"),
-		bCompiled);
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should record preprocessor usage in the compile summary"),
-		Summary.bUsedPreprocessor);
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should mark compile succeeded in the summary"),
-		Summary.bCompileSucceeded);
-	bPassed &= TestEqual(
-		TEXT("Namespaced annotated class test case should compile as fully handled"),
-		Summary.CompileResult,
-		ECompileResult::FullyHandled);
-	bPassed &= TestEqual(
-		TEXT("Namespaced annotated class test case should keep compile diagnostics empty"),
-		Summary.Diagnostics.Num(),
-		0);
-	if (!bCompiled)
-	{
-		return false;
-	}
-
-	UClass* GeneratedClass = FindGeneratedClass(&Engine, *CompilerPipelineNamespaceTest::ClassName);
-	if (!TestNotNull(TEXT("Namespaced annotated class test case should materialize the generated class"), GeneratedClass))
-	{
-		return false;
-	}
-
-	bPassed &= TestNotNull(
-		TEXT("Namespaced annotated class test case should materialize the generated class method"),
-		FindGeneratedFunction(GeneratedClass, *CompilerPipelineNamespaceTest::MethodName));
-
-	int32 Result = 0;
-	const bool bExecuted = ExecuteIntFunction(
-		&Engine,
-		CompilerPipelineNamespaceTest::ModuleName,
-		CompilerPipelineNamespaceTest::EntryDecl,
-		Result);
-	bPassed &= TestTrue(
-		TEXT("Namespaced annotated class test case should execute the entry point"),
-		bExecuted);
-	if (bExecuted)
-	{
-		bPassed &= TestEqual(
-			TEXT("Namespaced annotated class test case should resolve Gameplay::UNamespaceCarrier::StaticClass() at runtime"),
-			Result,
-			42);
-	}
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+};
 
 #endif
