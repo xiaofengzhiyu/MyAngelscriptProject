@@ -199,7 +199,8 @@ int Entry()
 
 		Engine.ResetDiagnostics();
 
-		const FString ScriptSource = TEXT(R"(#if !EDITOR
+		const FString ScriptSource = TEXT(R"(
+#if !EDITOR
 #restrict usage disallow Runtime.*
 #endif
 int Entry()

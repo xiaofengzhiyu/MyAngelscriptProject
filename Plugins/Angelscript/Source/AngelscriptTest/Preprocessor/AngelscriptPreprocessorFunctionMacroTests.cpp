@@ -53,7 +53,8 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorFunctionMacroTest,
 			{
 				TEXT("Function in unsupported conditional"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidConditionalFunction.as"),
-				TEXT(R"(UCLASS()
+				TEXT(R"(
+UCLASS()
 class UBadFunctionConditionalCarrier : UObject
 {
 #ifndef UNKNOWN_FLAG
@@ -70,7 +71,8 @@ class UBadFunctionConditionalCarrier : UObject
 			{
 				TEXT("Property in unsupported conditional"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidConditionalProperty.as"),
-				TEXT(R"(UCLASS()
+				TEXT(R"(
+UCLASS()
 class UBadPropertyConditionalCarrier : UObject
 {
 #ifndef UNKNOWN_FLAG
@@ -189,7 +191,8 @@ class UEditorConditionalCarrier : UObject
 			{
 				TEXT("Global BlueprintEvent"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidSpecifierGlobalBlueprintEvent.as"),
-				TEXT(R"(UFUNCTION(BlueprintEvent)
+				TEXT(R"(
+UFUNCTION(BlueprintEvent)
 int BadGlobalEvent()
 {
     return 1;
@@ -201,7 +204,8 @@ int BadGlobalEvent()
 			{
 				TEXT("Conflicting BlueprintEvent+Override"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidSpecifierBlueprintConflict.as"),
-				TEXT(R"(UCLASS()
+				TEXT(R"(
+UCLASS()
 class UBadCarrier : UObject
 {
     UFUNCTION(BlueprintEvent, BlueprintOverride)
@@ -217,7 +221,8 @@ class UBadCarrier : UObject
 			{
 				TEXT("Unknown function specifier"),
 				TEXT("Tests/Preprocessor/FunctionMacros/InvalidSpecifierUnknown.as"),
-				TEXT(R"(UCLASS()
+				TEXT(R"(
+UCLASS()
 class UBadCarrier : UObject
 {
     UFUNCTION(DefinitelyUnknownSpecifier)

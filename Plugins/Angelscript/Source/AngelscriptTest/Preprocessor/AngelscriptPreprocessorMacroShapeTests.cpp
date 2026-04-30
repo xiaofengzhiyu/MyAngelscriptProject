@@ -37,7 +37,8 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorMacroShapeTest,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_MODULE_CLEAN();
 		ASTEST_BEGIN_MODULE_CLEAN
 
-		const FString ScriptSource = TEXT(R"(UCLASS(Abstract, BlueprintType)
+		const FString ScriptSource = TEXT(R"(
+UCLASS(Abstract, BlueprintType)
 class UMacroCarrier : UObject
 {
 }

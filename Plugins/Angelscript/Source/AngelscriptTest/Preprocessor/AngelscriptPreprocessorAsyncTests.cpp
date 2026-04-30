@@ -315,7 +315,8 @@ public:
 		const FString SharedPadding = MakeAsyncLoadPadding(60000);
 		const FString ProviderRelativePath = TEXT("Tests/Preprocessor/AsyncLoad/Provider.as");
 		const FString ProviderContents =
-			FString(TEXT(R"(const int ProviderMultiplier = 3;
+			FString(TEXT(R"(
+const int ProviderMultiplier = 3;
 int ProvideValue()
 {
     return 7;
@@ -325,7 +326,8 @@ int ProvideValue()
 
 		const FString ConsumerRelativePath = TEXT("Tests/Preprocessor/AsyncLoad/Consumer.as");
 		const FString ConsumerContents =
-			FString(TEXT(R"(import Tests.Preprocessor.AsyncLoad.Provider;
+			FString(TEXT(R"(
+import Tests.Preprocessor.AsyncLoad.Provider;
 class AAsyncLoadMacroActor : AActor
 {
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
