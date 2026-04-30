@@ -55,6 +55,7 @@ int Entry()
 
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("NameLiteralRoundTrip"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -144,6 +145,7 @@ int Entry()
 		{
 			FFixtureFile File(Case.RelativePath, Case.Source);
 			auto Result = RunPreprocess(Engine, File);
+			LogProcessedCode(Result, *FString::Printf(TEXT("PrefixedBoundary_%s"), Case.Label));
 
 			AssertPreprocessSucceeded(*TestRunner, Result);
 			AssertModuleCount(*TestRunner, Result, 1);
@@ -394,6 +396,7 @@ int Entry()
 
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("FormatStringExpansion"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);

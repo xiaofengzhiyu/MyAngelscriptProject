@@ -164,6 +164,7 @@ int Entry()
 )"));
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("RestrictUsageInactiveBranch"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertNoDiagnostics(*TestRunner, Result);
@@ -266,6 +267,7 @@ int Entry()
 )"));
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("RestrictUsageAllow"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);

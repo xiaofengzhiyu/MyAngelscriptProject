@@ -44,6 +44,7 @@ int ReturnSeven()
 )"));
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("BasicParse"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -141,6 +142,11 @@ int UseShared()
 
 		auto Result = RunPreprocess(Engine, Files);
 
+		// On-demand inspection of preprocessor output. Silent by default
+		// (LogPreprocessorDump=NoLogging). Enable via:
+		//   -LogCmds="LogPreprocessorDump Verbose"
+		LogProcessedCode(Result, TEXT("ImportParsing"));
+
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 2);
 
@@ -204,6 +210,7 @@ int UseShared()
 
 		// First preprocess
 		auto Result1 = RunPreprocess(Engine, File);
+		LogProcessedCode(Result1, TEXT("LongSource_Pass1"));
 		AssertPreprocessSucceeded(*TestRunner, Result1);
 		AssertModuleCount(*TestRunner, Result1, 1);
 
@@ -222,6 +229,7 @@ int UseShared()
 
 		// Second preprocess — should be deterministic
 		auto Result2 = RunPreprocess(Engine, File);
+		LogProcessedCode(Result2, TEXT("LongSource_Pass2"));
 		AssertPreprocessSucceeded(*TestRunner, Result2);
 
 		const FAngelscriptModuleDesc* Module2 = Result2.FindModule(ModuleName.ToString());

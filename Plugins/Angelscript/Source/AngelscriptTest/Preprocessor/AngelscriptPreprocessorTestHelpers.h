@@ -32,12 +32,23 @@
 #include "Preprocessor/AngelscriptPreprocessor.h"
 
 #include "HAL/FileManager.h"
+#include "Logging/LogMacros.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+// Dedicated log category for on-demand inspection of preprocessor outputs from
+// any *Tests.cpp under Preprocessor/. Default verbosity is NoLogging so the
+// payload (which can be the full processed source of every module) is never
+// formatted in normal runs. To enable, either:
+//   * pass -LogCmds="LogPreprocessorDump Verbose" on the editor command line,
+//   * or call LogPreprocessorDump.SetVerbosity(ELogVerbosity::Verbose) inside
+//     the specific TEST_METHOD that needs the dump.
+// Compile-time verbosity is Verbose so all sites stay live in the binary.
+DECLARE_LOG_CATEGORY_EXTERN(LogPreprocessorDump, NoLogging, Verbose);
 
 namespace PreprocessorTestHelpers
 {
@@ -746,7 +757,7 @@ namespace PreprocessorTestHelpers
 	}
 
 	// =========================================================================
-	// 6. Debug: Dump Preprocessing Result To Disk
+	// 6. Debug: Dump Preprocessing Result To Disk / Log
 	// =========================================================================
 
 	namespace Detail
@@ -852,6 +863,43 @@ namespace PreprocessorTestHelpers
 		}
 
 		FFileHelper::SaveStringToFile(Index, *FPaths::Combine(DumpDir, TEXT("Index.txt")));
+	}
+
+	/** Log every module's processed code via LogPreprocessorDump.
+	 *
+	 *  By default LogPreprocessorDump is NoLogging so this call is effectively
+	 *  free at runtime — both the formatting of the per-module string and the
+	 *  enclosing UE_LOG body are skipped via UE_LOG_ACTIVE_ON_CHANNEL().
+	 *
+	 *  To see the output, enable the category in one of these ways:
+	 *    1) Editor command line:  -LogCmds="LogPreprocessorDump Verbose"
+	 *    2) From a TEST_METHOD:   LogPreprocessorDump.SetVerbosity(ELogVerbosity::Verbose);
+	 *
+	 *  Output format (one block per module):
+	 *      [Preprocessor:<ContextLabel>] module=<Name> imports=[A, B, ...]
+	 *      ----- BEGIN -----
+	 *      <processed code>
+	 *      ----- END -----
+	 *
+	 *  ContextLabel is intended to be the calling test name so multiple
+	 *  invocations in the same run can be told apart in the log. */
+	inline void LogProcessedCode(const FPreprocessResult& Result, const TCHAR* ContextLabel)
+	{
+		if (!UE_LOG_ACTIVE(LogPreprocessorDump, Verbose))
+		{
+			return;
+		}
+
+		for (const TSharedRef<FAngelscriptModuleDesc>& ModuleRef : Result.Modules)
+		{
+			const FAngelscriptModuleDesc& Module = ModuleRef.Get();
+			UE_LOG(LogPreprocessorDump, Verbose,
+				TEXT("[Preprocessor:%s] module=%s imports=[%s]\n----- BEGIN -----\n%s\n----- END -----"),
+				ContextLabel,
+				*Module.ModuleName,
+				*FString::Join(Module.ImportedModules, TEXT(", ")),
+				*Result.JoinedCode(Module));
+		}
 	}
 
 } // namespace PreprocessorTestHelpers

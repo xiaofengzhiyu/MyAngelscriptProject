@@ -74,6 +74,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorDirectiveTest,
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 
 		auto Result = RunPreprocess(Engine, File, {{TEXT("MYFLAG"), false}});
+		LogProcessedCode(Result, TEXT("IfdefBoolean"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -164,6 +165,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorDirectiveTest,
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("InactiveBranchSkipsUnknown"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -246,6 +248,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPreprocessorDirectiveTest,
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("ElifShortCircuits"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -316,6 +319,7 @@ int Entry()
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("StringLiteralDirective"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertErrorCount(*TestRunner, Result, 0);
@@ -375,6 +379,7 @@ int Entry()
 
 		// Use EDITOR flag so the compound condition is the actual error, not a missing flag
 		auto Result = RunPreprocess(Engine, File, {{TEXT("EDITOR"), true}});
+		LogProcessedCode(Result, TEXT("CompoundCondition"));
 
 		AssertPreprocessFailed(*TestRunner, Result);
 		AssertErrorCount(*TestRunner, Result, 1);
@@ -447,6 +452,7 @@ int Entry()
 			FFixtureFile File(Case.RelativePath, Case.Source);
 
 			auto Result = RunPreprocess(Engine, File);
+			LogProcessedCode(Result, *FString::Printf(TEXT("StructuralError_%s"), Case.Label));
 
 			TestRunner->TestFalse(
 				FString::Printf(TEXT("%s should fail preprocessing"), Case.Label),
@@ -508,6 +514,7 @@ int Entry()
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("TabSeparated"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -587,6 +594,7 @@ int Entry()
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 
 		auto Result = RunPreprocess(Engine, File);
+		LogProcessedCode(Result, TEXT("IncludeDirective"));
 
 		AssertPreprocessFailed(*TestRunner, Result);
 		AssertErrorCount(*TestRunner, Result, 1);
@@ -663,6 +671,7 @@ int Entry()
 		FFixtureFile File(RelativeScriptPath, ScriptSource);
 		auto Result = RunPreprocess(Engine, File,
 			{{TEXT("OUTER"), false}, {TEXT("MIDDLE"), false}, {TEXT("INNER"), true}});
+		LogProcessedCode(Result, TEXT("DeeplyNested_Custom"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 1);
@@ -686,6 +695,7 @@ int Entry()
 		// should select 'return 5;'. This validates that flag overrides actually
 		// drove the result above, instead of being a no-op.
 		auto DefaultResult = RunPreprocess(Engine, File);
+		LogProcessedCode(DefaultResult, TEXT("DeeplyNested_Default"));
 		AssertPreprocessSucceeded(*TestRunner, DefaultResult);
 		FAngelscriptModuleDesc* DefaultModule = AssertModuleExists(
 			*TestRunner, DefaultResult, TEXT("Tests.Preprocessor.Directives.DeeplyNestedConditionals"));

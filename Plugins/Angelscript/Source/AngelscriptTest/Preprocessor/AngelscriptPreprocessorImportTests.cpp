@@ -73,6 +73,7 @@ int FromB()
 		Files.Emplace(MoveTemp(FileB));
 
 		auto Result = RunPreprocess(Engine, Files);
+		LogProcessedCode(Result, TEXT("CircularDependency"));
 
 		AssertPreprocessFailed(*TestRunner, Result);
 		AssertDiagnosticContains(*TestRunner, Result, TEXT("Detected circular import"));
@@ -122,6 +123,7 @@ int UseShared()
 
 		// Do NOT disable automatic imports for this test
 		auto Result = RunPreprocess(Engine, Files, {}, /*bDisableAutomaticImports=*/ false);
+		LogProcessedCode(Result, TEXT("AutomaticModeManualImport"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 2);
@@ -197,6 +199,7 @@ int UseShared()
 		Files.Emplace(MoveTemp(BrokenFile));
 
 		auto Result = RunPreprocess(Engine, Files);
+		LogProcessedCode(Result, TEXT("MissingSemicolon"));
 
 		AssertPreprocessFailed(*TestRunner, Result);
 		AssertErrorCount(*TestRunner, Result, 1);
@@ -244,6 +247,7 @@ int Entry()
 		Files.Emplace(MoveTemp(ImportingFile));
 
 		auto Result = RunPreprocess(Engine, Files);
+		LogProcessedCode(Result, TEXT("TrailingBlockComment"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertErrorCount(*TestRunner, Result, 0);
@@ -332,6 +336,7 @@ int Entry()
 		Files.Emplace(MoveTemp(SharedFile));
 
 		auto Result = RunPreprocess(Engine, Files);
+		LogProcessedCode(Result, TEXT("DuplicateDedup"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 2);
@@ -434,6 +439,7 @@ int Entry()
 		Files.Emplace(MoveTemp(BaseFile));
 
 		auto Result = RunPreprocess(Engine, Files);
+		LogProcessedCode(Result, TEXT("TopologicalOrder"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 3);
@@ -538,6 +544,7 @@ int Entry()
 			Files.Emplace(MoveTemp(ConsumerFile));
 
 			auto Result = RunPreprocess(Engine, Files, {}, /*bDisableAutomaticImports=*/ false);
+			LogProcessedCode(Result, *FString::Printf(TEXT("AutomaticWarning_%s"), Case.Label));
 
 			TestRunner->TestTrue(
 				FString::Printf(TEXT("%s should preprocess successfully"), Case.Label),
@@ -632,6 +639,7 @@ int Entry()
 )"));
 
 			auto Result = RunPreprocess(Engine, Files, {{TEXT("USESHARED"), true}});
+			LogProcessedCode(Result, TEXT("ImportConditional_Active"));
 
 			AssertPreprocessSucceeded(*TestRunner, Result);
 			AssertModuleCount(*TestRunner, Result, 2);
@@ -672,6 +680,7 @@ int Entry()
 )"));
 
 			auto Result2 = RunPreprocess(Engine, Files2, {{TEXT("USESHARED"), false}});
+			LogProcessedCode(Result2, TEXT("ImportConditional_Dead"));
 
 			AssertPreprocessSucceeded(*TestRunner, Result2);
 
@@ -749,6 +758,7 @@ int Entry()
 		Files.Emplace(MoveTemp(RootFile));
 
 		auto Result = RunPreprocess(Engine, Files);
+		LogProcessedCode(Result, TEXT("WideImportGraph"));
 
 		AssertPreprocessSucceeded(*TestRunner, Result);
 		AssertModuleCount(*TestRunner, Result, 5);
