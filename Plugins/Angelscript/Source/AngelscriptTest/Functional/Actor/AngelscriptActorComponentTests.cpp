@@ -59,11 +59,11 @@ class ATestActorCreateComponent : AActor
 			TEXT("ATestActorCreateComponent"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunCreateComponentTest")));
 		if (!Invoker.IsValid()) return;
@@ -109,11 +109,11 @@ class ATestActorGetComponent : AActor
 			TEXT("ATestActorGetComponent"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunGetComponentTest")));
 		if (!Invoker.IsValid()) return;
@@ -157,11 +157,11 @@ class ATestActorGetOrCreateComponent : AActor
 			TEXT("ATestActorGetOrCreateComponent"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunGetOrCreateComponentTest")));
 		if (!Invoker.IsValid()) return;
@@ -218,11 +218,11 @@ class ATestActorGetAllComponents : AActor
 			TEXT("ATestActorGetAllComponents"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunGetAllComponentsTest")));
 		if (!Invoker.IsValid()) return;

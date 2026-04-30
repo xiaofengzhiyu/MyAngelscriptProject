@@ -398,6 +398,84 @@ if (Inv.Call()) {
 |---|---|---|
 | `AngelscriptFStringBindingsTests.cpp` | 17 个 TEST_METHOD，300+ 用例 | FString 全 API + 全局函数 + 跨边界传参/返回 |
 
+## 测试模板（Template/ 目录）
+
+`Plugins/Angelscript/Source/AngelscriptTest/Template/` 下保存了一组「教学型」测试模板，作为新测试的起点。它们本身也是 Automation 测试、会随回归一起运行，但首要价值是**演示标准做法**。新增同类测试时优先 copy-paste 改写一个模板，而不是从零拼接。
+
+| 模板 | 主题 | Automation 前缀 | 推荐起点的场景 |
+|---|---|---|---|
+| `Template_CQTest.cpp` | CQTest 骨架（编译 / 单 / 多断言 / 错误处理） | `Angelscript.Template.CQTest.*` | 任何要写 AS 编译执行回归的纯 C++ 测试，先看它 |
+| `Template_GlobalFunctions.cpp` | 通过 `FASGlobalFunctionInvoker` 调用 AS 全局函数 | `Angelscript.Template.GlobalFunctions.*` | C++ 直接调 AS 全局函数（非 `UFUNCTION`）传参 / 返回 |
+| `Template_ReflectionAccess.cpp` | 通过 `ReadPropertyValue` / `GetEnumByPath` 读 AS 端 UPROPERTY / UFUNCTION | `Angelscript.Template.Reflection.*` | UE 5.x 反射读 AS-side 属性，含 `float` ↔ `FDoubleProperty` 注意点 |
+| `Template_WorldTick.cpp` | World.Tick / Actor.Tick / Component.Tick 三种驱动方式 | `Angelscript.Template.WorldTick.*` | 任何与「逐帧推进」绑定的 actor / component 测试 |
+| `Template_GameLifetime.cpp` | 完整 Actor 生命周期：Construction → BeginPlay → Tick → EndPlay → Destroyed | `Angelscript.Template.GameLifetime.*` | 验证生命周期事件链 / 顺序、Destroy 后属性读取 |
+| `Template_Blueprint.cpp` | 以 AS 类为父的瞬态 Blueprint 子类 | `Angelscript.Template.Blueprint.*` | Blueprint 继承 / 参数链 / 编译验证 |
+| `Template_BlueprintWorldTick.cpp` | Blueprint actor child 在 world tick 下的回调链 | `Angelscript.Template.Blueprint.*` | Blueprint 子类的 BeginPlay / Tick 集成 |
+
+约定：
+
+- 模板文件位于 `Template/`，**不**作为新增功能 case 的最终落点。新功能 case 仍按 `Documents/Guides/TestConventions.md` 第 3 节的层级落到对应主题目录（`Actor/`、`Bindings/` 等）。
+- 模板的 Automation 前缀统一使用 `Angelscript.Template.*`，避免与功能测试主题冲突。
+- 新增 / 修改模板时同步更新本表与 `TestCatalog.md`。
+
+### Actor / World Tick 测试推荐 harness
+
+`Shared/AngelscriptTestWorld.h::FAngelscriptTestWorld` 是当前 actor / component 类功能测试的标准 harness（在 `FActorTestSpawner` 之上做组合扩展，自带 `FAngelscriptEngineScope`）。`Template_WorldTick.cpp` 与 `Template_GameLifetime.cpp` 是它的两份示范用法；harness 自身契约由 `Shared/AngelscriptTestWorldTests.cpp`（前缀 `Angelscript.TestModule.Shared.TestWorld.*`）锁定。
+
+构造与基本用法：
+
+```cpp
+FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+FAngelscriptEngineScope Scope(Engine);
+
+FAngelscriptTestWorld W(*TestRunner, Engine);
+ASSERT_THAT(IsTrue(W.IsValid()));
+
+AActor* Actor = W.SpawnActorOfClass(ScriptClass);
+W.BeginPlay(*Actor);
+```
+
+三种 tick 驱动方式必须按场景区分使用：
+
+| 方法 | 行为 | 适合的断言 |
+|---|---|---|
+| `W.Tick(Dt, N)` | `World.Tick` + 手动 `TActorIterator` 派发 actor / component tick | `>= N` 弱断言；多 actor / 含 component 场景 |
+| `W.TickViaManager(Dt, N)` | 仅调用 `World.Tick`，由 UE world scheduler 决定派发 | `>= 1` 弱断言；演示 UE 调度路径 |
+| `W.DispatchActorTick(Actor, Dt, N)` / `W.DispatchComponentTick(Comp, Dt, N)` | 直接循环 `Actor->Tick` / `Component->TickComponent`，绕开调度器 | **`== N` 严格断言**；首选用于精确 tick 计数 |
+
+> **常见坑**：在 test world 里 `World.Tick` 不保证每一帧都派发 `ReceiveTick`。任何要做 `TickCount == NumTicks` 严格断言的测试必须用 `DispatchActorTick` / `DispatchComponentTick`，否则会出现实际跑了 N 帧但 AS 端只记录 1 次的偏差。
+
+完整生命周期（Construction → BeginPlay → Tick → EndPlay → Destroyed）的标准模式：
+
+```cpp
+FAngelscriptTestWorld W(*this, Engine);
+AActor* Actor = W.SpawnActorOfClass<AActor>(ScriptClass);  // 触发 UserConstructionScript
+W.BeginPlay(*Actor);                                       // 触发 BeginPlay
+W.Tick(0.016f, 3);                                         // 触发 Tick × N
+W.DestroyAndDrain(*Actor);                                 // 同步触发 EndPlay + Destroyed
+```
+
+要点：
+
+- AS 中的 `UFUNCTION(BlueprintOverride) void UserConstructionScript()` 才是 Spawn 阶段的构造回调，**不是** `ConstructionScript`。
+- `Actor->Destroy()` 会同步派发 `EndPlay(EEndPlayReason::Destroyed)` 与 `Destroyed`，actor 随后被标记 `PendingKill`；但 UObject 内存仍存活，`FProperty::GetPropertyValue_InContainer`（即 `ReadPropertyValue`）依然可读，所以 `DestroyAndDrain` 之后断言阶段计数与 `LastEndPlayReason` 是合法做法。`TWeakObjectPtr::IsValid()` 在 `PendingKill` 后返回 `false`，不要把它当存活检查。
+- AS 声明的 `float UPROPERTY` 在 UE 5.x 下被反射为 `FDoubleProperty`；C++ 侧必须用 `ReadPropertyValue<FDoubleProperty>` + `double`，否则 `FFloatProperty` 查找会返回空。
+- Component tick 需要在 spawn 后手动开启，AS 不会自动翻 flag：
+
+```cpp
+Component->PrimaryComponentTick.bCanEverTick = true;
+Component->SetComponentTickEnabled(true);
+```
+
+- BeginPlay 通过 harness 调用是幂等的（内部依赖 `AActor::HasActorBegunPlay()` 守卫），重复调用不会重派发。
+
+新增 actor / component 测试时，不要再手写 `FActorTestSpawner` + 局部 `FAngelscriptEngineScope` + 局部 dispatch helper，统一用 `FAngelscriptTestWorld`。模块清理仍按现行 RAII 模式手写：
+
+```cpp
+static const FName ModuleName(TEXT("MyTestModule"));
+ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
+```
+
 ## 与 Gauntlet 的边界
 
 - `Tools\RunTests.ps1` / `Tools\RunTestSuite.ps1` 负责仓库内标准自动化测试入口、日志、摘要和超时收口。

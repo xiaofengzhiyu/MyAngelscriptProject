@@ -53,11 +53,11 @@ class ATestScriptActorBeginPlayRunsInWorld : AActor
 			TEXT("ATestScriptActorBeginPlayRunsInWorld"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("BeginPlayObserved"), 1,
 			TEXT("Spawned script actor should observe BeginPlay when entering the test world"));
@@ -93,11 +93,11 @@ class ATestScriptActorNativeUFunctionCanBeInvoked : AActor
 			TEXT("ATestScriptActorNativeUFunctionCanBeInvoked"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("ReceiveNativeValue")));
 		if (!Invoker.IsValid()) return;
@@ -142,11 +142,11 @@ class ATestScriptActorBeginPlayCallsAnotherScriptUFunction : AActor
 			TEXT("ATestScriptActorBeginPlayCallsAnotherScriptUFunction"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("ScriptDispatchObserved"), 1,
 			TEXT("Script actor BeginPlay should dispatch into another script UFUNCTION"));
@@ -191,18 +191,18 @@ class ATestScriptActorTickRunsNTimes : AActor
 			TEXT("ATestScriptActorTickRunsNTimes"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
 		EnableActorTick(*Actor);
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		int32 InitialLogicalTickCount = 0;
 		if (!GetByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("LogicalTickCount"), InitialLogicalTickCount)) return;
 
-		W.Tick(Engine, DefaultActorTestDeltaTime, DefaultActorTestTickCount);
+		W.Tick(DefaultActorTestDeltaTime, DefaultActorTestTickCount);
 
 		int32 FinalLogicalTickCount = 0;
 		if (!GetByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("LogicalTickCount"), FinalLogicalTickCount)) return;
@@ -250,7 +250,7 @@ class ATestScriptActorCrossInstanceCallDoesNotLeakState : AActor
 			TEXT("ATestScriptActorCrossInstanceCallDoesNotLeakState"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* SourceActor = W.SpawnActorOfClass(ScriptClass);
 		AActor* TargetActor = W.SpawnActorOfClass(ScriptClass);
@@ -259,7 +259,7 @@ class ATestScriptActorCrossInstanceCallDoesNotLeakState : AActor
 
 		if (!SetObjectByPath(*TestRunner, SourceActor, TEXT("TargetActor"), TargetActor)) return;
 
-		W.BeginPlay(Engine, *SourceActor);
+		W.BeginPlay(*SourceActor);
 
 		TestRunner->TestTrue(TEXT("Source and target should be distinct"), SourceActor != TargetActor);
 		VerifyByPath<FIntProperty, int32>(*TestRunner, SourceActor, TEXT("LocalState"), 11,
@@ -323,7 +323,7 @@ class ATestScriptActorDestroyedInvocationSource : AActor
 		UClass* TargetClass = FindGeneratedClass(&Engine, TEXT("ATestScriptActorDestroyedInvocationTarget"));
 		if (!TestRunner->TestNotNull(TEXT("Target class should be generated"), TargetClass)) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* SourceActor = W.SpawnActorOfClass(SourceClass);
 		AActor* TargetActor = W.SpawnActorOfClass(TargetClass);
@@ -332,12 +332,12 @@ class ATestScriptActorDestroyedInvocationSource : AActor
 
 		if (!SetObjectByPath(*TestRunner, SourceActor, TEXT("TargetActor"), TargetActor)) return;
 
-		W.BeginPlay(Engine, *SourceActor);
-		W.BeginPlay(Engine, *TargetActor);
+		W.BeginPlay(*SourceActor);
+		W.BeginPlay(*TargetActor);
 
 		TWeakObjectPtr<AActor> WeakTargetActor = TargetActor;
 		TargetActor->Destroy();
-		W.Tick(Engine, 0.0f, 1);
+		W.Tick(0.0f, 1);
 
 		if (!TestRunner->TestFalse(TEXT("Destroyed actor should no longer be valid"), WeakTargetActor.IsValid())) return;
 
@@ -371,13 +371,13 @@ class ATestScriptActorMissingFunctionReportsExplicitFailure : AActor
 			TEXT("ATestScriptActorMissingFunctionReportsExplicitFailure"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
-		W.Tick(Engine, 0.0f, 1);
+		W.BeginPlay(*Actor);
+		W.Tick(0.0f, 1);
 
 		FStringOutputDevice Output;
 		const bool bCallSucceeded = Actor->CallFunctionByNameWithArguments(TEXT("DoesNotExist"), Output, nullptr, true);
@@ -430,12 +430,12 @@ class ATestInhParentBase1 : AActor
 			TEXT("ATestInhParentBase1"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		int32 CallCount = 0;
 		int32 LastHash = 0;
@@ -523,12 +523,12 @@ class ATestInhHealthPickup2 : ATestInhParentBase2
 		TestRunner->TestTrue(TEXT("Child class should be a subclass of the parent"),
 			ChildClass->IsChildOf(ParentClass));
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* ChildActor = W.SpawnActorOfClass(ChildClass);
 		if (!TestRunner->TestNotNull(TEXT("Child actor should spawn"), ChildActor)) return;
 
-		W.BeginPlay(Engine, *ChildActor);
+		W.BeginPlay(*ChildActor);
 
 		int32 ParentCallCount = 0, ParentLastHash = 0;
 		int32 ChildCallCount = 0, ChildLastHash = 0;
@@ -599,7 +599,7 @@ class ATestInhHealthPickup3 : ATestInhParentBase3
 		UClass* ChildClass = FindGeneratedClass(&Engine, TEXT("ATestInhHealthPickup3"));
 		if (!TestRunner->TestNotNull(TEXT("Child class should be generated"), ChildClass)) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* ChildActor = W.SpawnActorOfClass(ChildClass);
 		if (!TestRunner->TestNotNull(TEXT("Child actor should spawn"), ChildActor)) return;

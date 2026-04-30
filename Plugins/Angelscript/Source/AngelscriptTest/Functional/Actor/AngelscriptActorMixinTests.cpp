@@ -63,11 +63,11 @@ class ATestActorMixinSetQuat : AActor
 			TEXT("ATestActorMixinSetQuat"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunSetQuatTest")));
 		if (!Invoker.IsValid()) return;
@@ -119,11 +119,11 @@ class ATestActorMixinSetLocSweep : AActor
 			TEXT("ATestActorMixinSetLocSweep"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunSetLocSweepTest")));
 		if (!Invoker.IsValid()) return;
@@ -174,11 +174,11 @@ class ATestActorMixinSetLocAndRot : AActor
 			TEXT("ATestActorMixinSetLocAndRot"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunSetLocAndRotTest")));
 		if (!Invoker.IsValid()) return;
@@ -239,11 +239,11 @@ class ATestMixinAttachParent : AActor
 			TEXT("ATestMixinAttachParent"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("RunGetAttachedTest")));
 		if (!Invoker.IsValid()) return;

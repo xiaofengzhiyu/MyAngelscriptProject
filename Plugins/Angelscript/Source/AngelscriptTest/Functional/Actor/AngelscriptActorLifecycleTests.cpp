@@ -51,11 +51,11 @@ class ATestActorBeginPlay : AActor
 			TEXT("ATestActorBeginPlay"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("BeginPlay actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), 1,
 			TEXT("BeginPlay should run exactly once when the script actor is spawned"));
@@ -87,13 +87,13 @@ class ATestActorBeginPlayIdempotent : AActor
 			TEXT("ATestActorBeginPlayIdempotent"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
+		W.BeginPlay(*Actor);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), 1,
 			TEXT("BeginPlay helper should not dispatch BeginPlay again after the actor has begun play"));
@@ -129,14 +129,14 @@ class ATestActorTick : AActor
 			TEXT("ATestActorTick"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Tick actor should spawn"), Actor)) return;
 
 		EnableActorTick(*Actor);
-		W.BeginPlay(Engine, *Actor);
-		W.Tick(Engine, DefaultActorTestDeltaTime, 5);
+		W.BeginPlay(*Actor);
+		W.Tick(DefaultActorTestDeltaTime, 5);
 
 		int32 EventCallCount = 0;
 		if (!GetByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), EventCallCount)) return;
@@ -177,17 +177,17 @@ class ATestActorTickRegisteredDispatch : AActor
 			TEXT("ATestActorTickRegisteredDispatch"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
 		EnableActorTick(*Actor);
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		TestRunner->TestTrue(TEXT("Actor should have a registered PrimaryActorTick"),
 			Actor->PrimaryActorTick.IsTickFunctionRegistered());
 
-		W.TickViaManager(Engine, DefaultActorTestDeltaTime, 3);
+		W.TickViaManager(DefaultActorTestDeltaTime, 3);
 
 		int32 EventCallCount = 0;
 		if (!GetByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), EventCallCount)) return;
@@ -224,14 +224,14 @@ class ATestActorReceiveEndPlay : AActor
 			TEXT("ATestActorReceiveEndPlay"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		Actor->Destroy();
-		W.Tick(Engine, 0.0f, 1);
+		W.Tick(0.0f, 1);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), 1,
 			TEXT("EndPlay should run exactly once when the script actor is destroyed"));
@@ -267,14 +267,14 @@ class ATestActorReceiveEndPlayReason : AActor
 			TEXT("ATestActorReceiveEndPlayReason"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		Actor->Destroy();
-		W.Tick(Engine, 0.0f, 1);
+		W.Tick(0.0f, 1);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), 1,
 			TEXT("EndPlay should run exactly once before capturing the destroy reason"));
@@ -333,14 +333,14 @@ class ATestActorDestroyLifecycleOrder : AActor
 			TEXT("ATestActorDestroyLifecycleOrder"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		Actor->Destroy();
-		W.Tick(Engine, 0.0f, 1);
+		W.Tick(0.0f, 1);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EndPlayCallCount"), 1,
 			TEXT("Destroy() should dispatch EndPlay exactly once"));
@@ -378,14 +378,14 @@ class ATestActorReceiveDestroyed : AActor
 			TEXT("ATestActorReceiveDestroyed"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		Actor->Destroy();
-		W.Tick(Engine, 0.0f, 1);
+		W.Tick(0.0f, 1);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("EventCallCount"), 1,
 			TEXT("Destroyed should run exactly once when the script actor is destroyed"));
@@ -427,7 +427,7 @@ class ATestActorConstructionScript : AActor
 			TEXT("ATestActorConstructionScript"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
@@ -482,12 +482,12 @@ class ATestActorReset : AActor
 			TEXT("ATestActorReset"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		if (!SetByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("ResetValue"), 99)) return;
 		Actor->Reset();
 

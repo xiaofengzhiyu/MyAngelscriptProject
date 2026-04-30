@@ -3,12 +3,11 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptReflectiveAccess.h"
 #include "Shared/AngelscriptTestMacros.h"
+#include "Shared/AngelscriptTestWorld.h"
 
-#include "Components/ActorTestSpawner.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Misc/AutomationTest.h"
-#include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -46,64 +45,6 @@ namespace AngelscriptActorTestUtils
 		DestroySharedAndStrayGlobalTestEngine();
 		return AcquireCleanSharedCloneEngine();
 	}
-
-	struct FScopedActorWorld
-	{
-		explicit FScopedActorWorld(FAutomationTestBase& InTest)
-			: Test(InTest)
-		{
-			Spawner.InitializeGameSubsystems();
-			World = &Spawner.GetWorld();
-			bIsValid = Test.TestNotNull(TEXT("Actor test world should be created"), World);
-		}
-
-		bool IsValid() const { return bIsValid && World != nullptr; }
-
-		UWorld& GetWorld() const { return *World; }
-		FActorTestSpawner& GetSpawner() { return Spawner; }
-
-		template <typename ActorType = AActor>
-		ActorType* SpawnActorOfClass(
-			UClass* ActorClass,
-			const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters(),
-			const FVector& Location = FVector::ZeroVector,
-			const FRotator& Rotation = FRotator::ZeroRotator)
-		{
-			return SpawnScriptActor<ActorType>(Test, Spawner, ActorClass, SpawnParameters, Location, Rotation);
-		}
-
-		void BeginPlay(FAngelscriptEngine& Engine, AActor& Actor) const
-		{
-			BeginPlayActor(Engine, Actor);
-		}
-
-		void BeginPlay(AActor& Actor) const
-		{
-			BeginPlayActor(Actor);
-		}
-
-		void Tick(FAngelscriptEngine& Engine, float DeltaTime, int32 NumTicks) const
-		{
-			if (IsValid())
-			{
-				TickWorld(Engine, *World, DeltaTime, NumTicks);
-			}
-		}
-
-		void TickViaManager(FAngelscriptEngine& Engine, float DeltaTime, int32 NumTicks) const
-		{
-			if (IsValid())
-			{
-				TickWorldThroughTickManager(Engine, *World, DeltaTime, NumTicks);
-			}
-		}
-
-	private:
-		FAutomationTestBase& Test;
-		FActorTestSpawner Spawner;
-		UWorld* World = nullptr;
-		bool bIsValid = false;
-	};
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

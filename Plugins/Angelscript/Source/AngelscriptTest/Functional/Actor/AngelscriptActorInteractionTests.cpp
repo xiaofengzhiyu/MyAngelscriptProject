@@ -66,7 +66,7 @@ class ATestActorPointDamage : AActor
 			TEXT("ATestActorPointDamage"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
@@ -139,7 +139,7 @@ class ATestActorRadialDamage : AActor
 			TEXT("ATestActorRadialDamage"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
@@ -189,7 +189,7 @@ class ATestActorMultiSpawn : AActor
 			TEXT("ATestActorMultiSpawn"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		TArray<AActor*> SpawnedActors;
 		for (int32 Index = 0; Index < 3; ++Index)
@@ -260,7 +260,7 @@ class ATestActorCrossCallA : AActor
 		UClass* ActorBClass = FindGeneratedClass(&Engine, TEXT("ATestActorCrossCallB"));
 		if (!TestRunner->TestNotNull(TEXT("CrossCall target class should be generated"), ActorBClass)) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* ActorA = W.SpawnActorOfClass(ActorAClass);
 		AActor* ActorB = W.SpawnActorOfClass(ActorBClass);
@@ -313,7 +313,7 @@ class ATestActorAnyDamage : AActor
 			TEXT("ATestActorAnyDamage"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
@@ -371,7 +371,7 @@ class ATestOverlapTrigger : AActor
 		UClass* TriggerClass = FindGeneratedClass(&Engine, TEXT("ATestOverlapTrigger"));
 		if (!TestRunner->TestNotNull(TEXT("Trigger class should be generated"), TriggerClass)) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Receiver = W.SpawnActorOfClass(ReceiverClass, FActorSpawnParameters(), FVector::ZeroVector);
 		if (!TestRunner->TestNotNull(TEXT("Receiver should spawn"), Receiver)) return;
@@ -434,7 +434,7 @@ class ATestEndOverlapTrigger : AActor
 		UClass* TriggerClass = FindGeneratedClass(&Engine, TEXT("ATestEndOverlapTrigger"));
 		if (!TestRunner->TestNotNull(TEXT("Trigger class should be generated"), TriggerClass)) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Receiver = W.SpawnActorOfClass(ReceiverClass);
 		AActor* Trigger = W.SpawnActorOfClass(TriggerClass);
@@ -480,11 +480,11 @@ class ATestActorSpawnInvalidClass : AActor
 			TEXT("ATestActorSpawnInvalidClass"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		TestRunner->AddExpectedError(TEXT("Angelscript"), EAutomationExpectedErrorFlags::Contains, 0);
 
@@ -553,7 +553,7 @@ class ATestDelegateListener : AActor
 		UClass* ListenerClass = FindGeneratedClass(&Engine, TEXT("ATestDelegateListener"));
 		if (!TestRunner->TestNotNull(TEXT("Listener class should be generated"), ListenerClass)) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Broadcaster = W.SpawnActorOfClass(BroadcasterClass);
 		AActor* Listener = W.SpawnActorOfClass(ListenerClass);

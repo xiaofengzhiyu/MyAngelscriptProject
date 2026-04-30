@@ -85,11 +85,11 @@ class ATestActorUProperty : AActor
 			TEXT("ATestActorUProperty"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		VerifyByPath<FIntProperty, int32>(*TestRunner, Actor, TEXT("Health"), 100,
 			TEXT("Script-defined int UPROPERTY should keep its default value after spawn"));
@@ -123,11 +123,11 @@ class ATestActorUFunction : AActor
 			TEXT("ATestActorUFunction"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		FFunctionInvoker Invoker(*TestRunner, Actor, FName(TEXT("GetHealth")));
 		if (!Invoker.IsValid()) return;
@@ -154,11 +154,11 @@ class ATestActorDefaultValues : AActor
 			TEXT("ATestActorDefaultValues"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 
 		TestRunner->TestTrue(TEXT("Script default values should apply the configured tick interval"),
 			FMath::IsNearlyEqual(Actor->PrimaryActorTick.TickInterval, 0.5f));
@@ -233,7 +233,7 @@ class ATestActorInterfaceBoundMethods : AActor
 			TEXT("ATestActorInterfaceBoundMethods"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass, FActorSpawnParameters(),
 			FVector(10.0, 20.0, 30.0), FRotator(5.0, 45.0, 15.0));
@@ -260,7 +260,7 @@ class ATestActorInterfaceBoundMethods : AActor
 			TEXT("AActor instigator bindings should return native instigator references"),
 			CallScriptIntFunctionWithInstigator(*TestRunner, Actor, TEXT("CheckInstigator"), &InstigatorPawn, &InstigatorController), 1);
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		TestRunner->TestEqual(
 			TEXT("AActor bound methods should report expected post-BeginPlay state"),
 			CallScriptIntFunction(*TestRunner, Actor, TEXT("CheckAfterBeginPlay")), 1);
@@ -327,7 +327,7 @@ class ATestActorInterfaceComponentAndInput : AActor
 			TEXT("ATestActorInterfaceComponentAndInput"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
@@ -426,12 +426,12 @@ class ATestActorInterfaceSpawnAndQuery : AActor
 			TEXT("ATestActorInterfaceSpawnAndQuery"));
 		if (ScriptClass == nullptr) return;
 
-		FScopedActorWorld W(*TestRunner);
+		FAngelscriptTestWorld W(*TestRunner, Engine);
 		if (!W.IsValid()) return;
 		AActor* Actor = W.SpawnActorOfClass(ScriptClass);
 		if (!TestRunner->TestNotNull(TEXT("Actor should spawn"), Actor)) return;
 
-		W.BeginPlay(Engine, *Actor);
+		W.BeginPlay(*Actor);
 		TestRunner->TestEqual(
 			TEXT("AActor spawn and world query bindings should operate from script"),
 			CallScriptIntFunction(*TestRunner, Actor, TEXT("RunSpawnAndQuery")), 1);
