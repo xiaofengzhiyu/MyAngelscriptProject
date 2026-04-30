@@ -61,8 +61,9 @@ int AbilitySpec_DefaultLevel()
 			TestRunner->AddInfo(TEXT("FGameplayAbilitySpec not available, skipping"));
 			return;
 		}
+		// UE 5.7: FGameplayAbilitySpec default Level changed from 0 to 1
 		ExpectGlobalInt(*TestRunner, Engine, Mod.GetModule(), GGASExtProfile,
-			TEXT("int AbilitySpec_DefaultLevel()"), TEXT("Default ability spec level"), 0);
+			TEXT("int AbilitySpec_DefaultLevel()"), TEXT("Default ability spec level"), 1);
 	}
 };
 

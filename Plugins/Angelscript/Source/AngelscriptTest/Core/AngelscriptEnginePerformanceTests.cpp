@@ -620,11 +620,11 @@ class %s : UObject
 }
 
 
-TEST_CLASS_WITH_FLAGS(FAngelscriptStartupPerformanceTests,
-	"Angelscript.TestModule.Core.Performance.Startup",
+TEST_CLASS_WITH_FLAGS(FAngelscriptEnginePerformanceTests,
+	"Angelscript.TestModule.Core.Performance",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	TEST_METHOD(Full)
+	TEST_METHOD(Startup_Full)
 	{
 		using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
 	using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
@@ -632,7 +632,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptStartupPerformanceTests,
 	ValidateAndWriteStartupMetrics(*TestRunner, TEXT("P3_1_StartupPerformance_Full"), TEXT("Angelscript.TestModule.Core.Performance.Startup.Full"), Samples, { TEXT("Measured with fresh full-engine startup samples." )});
 	}
 
-	TEST_METHOD(Clone)
+	TEST_METHOD(Startup_Clone)
 	{
 		using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
 	using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
@@ -645,7 +645,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptStartupPerformanceTests,
 	ValidateAndWriteStartupMetrics(*TestRunner, TEXT("P3_1_StartupPerformance_Clone"), TEXT("Angelscript.TestModule.Core.Performance.Startup.Clone"), Samples, { TEXT("Clone samples measure shared-state adoption without startup bind replay.") });
 	}
 
-	TEST_METHOD(CreateForTestingFallbackFull)
+	TEST_METHOD(Startup_CreateForTestingFallbackFull)
 	{
 		using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
 	using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
@@ -653,7 +653,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptStartupPerformanceTests,
 	ValidateAndWriteStartupMetrics(*TestRunner, TEXT("P3_1_StartupPerformance_CreateForTestingFallback"), TEXT("Angelscript.TestModule.Core.Performance.Startup.CreateForTestingFallbackFull"), Samples, { TEXT("CreateForTesting falls back to a full engine when no global source engine exists.") });
 	}
 
-	TEST_METHOD(CreateForTestingClone)
+	TEST_METHOD(Startup_CreateForTestingClone)
 	{
 		using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;
 	using namespace AngelscriptTest_Core_AngelscriptEnginePerformanceTests_Private;

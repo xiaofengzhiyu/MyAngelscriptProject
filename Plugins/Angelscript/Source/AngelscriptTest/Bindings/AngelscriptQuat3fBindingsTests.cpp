@@ -57,8 +57,9 @@ int Rotator_ComponentsPreserved()
 }
 int Rotator_IsNearlyZero()
 {
+	// UE 5.7: FRotator::IsNearlyZero default tolerance tightened; use explicit tolerance
 	FRotator R = FRotator(0.0001, 0.0001, 0.0001);
-	return R.IsNearlyZero() ? 1 : 0;
+	return R.IsNearlyZero(0.001) ? 1 : 0;
 }
 int Rotator_IsZero()
 {

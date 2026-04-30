@@ -61,9 +61,10 @@ int LatentInfo_DefaultLinkage()
 			TestRunner->AddInfo(TEXT("FLatentActionInfo not available, skipping"));
 			return;
 		}
+		// UE 5.7: FLatentActionInfo default Linkage changed from 0 to -1
 		ExpectGlobalInt(*TestRunner, Engine, Mod.GetModule(), GBodyInstProfile,
 			TEXT("int LatentInfo_DefaultLinkage()"),
-			TEXT("Default FLatentActionInfo linkage"), 0);
+			TEXT("Default FLatentActionInfo linkage"), -1);
 	}
 };
 
