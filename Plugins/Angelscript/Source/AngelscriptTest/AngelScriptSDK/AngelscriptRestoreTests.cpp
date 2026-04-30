@@ -245,7 +245,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptRestoreTests,
 
 		FMemoryBinaryStream Stream;
 		bool bWasDebugInfoStripped = false;
-		AddExpectedErrorPlain(TEXT("Unexpected end of file"), EAutomationExpectedErrorFlags::Contains, -1);
+		TestRunner->AddExpectedErrorPlain(TEXT("Unexpected end of file"), EAutomationExpectedErrorFlags::Contains, -1);
 		const int LoadResult = RestoredModule->LoadByteCode(&Stream, &bWasDebugInfoStripped);
 		TestRunner->TestNotEqual(TEXT("Restore should reject an empty bytecode stream"), LoadResult, static_cast<int>(asSUCCESS));
 	}
@@ -302,7 +302,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptRestoreTests,
 		}
 
 		bool bWasDebugInfoStripped = false;
-		AddExpectedErrorPlain(TEXT("Unexpected end of file"), EAutomationExpectedErrorFlags::Contains, -1);
+		TestRunner->AddExpectedErrorPlain(TEXT("Unexpected end of file"), EAutomationExpectedErrorFlags::Contains, -1);
 		const int LoadResult = RestoredModule->LoadByteCode(&Stream, &bWasDebugInfoStripped);
 		TestRunner->TestNotEqual(TEXT("Restore should reject a truncated bytecode stream"), LoadResult, static_cast<int>(asSUCCESS));
 	}
@@ -360,7 +360,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptRestoreTests,
 		}
 
 		bool bWasDebugInfoStripped = false;
-		AddExpectedErrorPlain(TEXT("Unexpected end of file"), EAutomationExpectedErrorFlags::Contains, -1);
+		TestRunner->AddExpectedErrorPlain(TEXT("Unexpected end of file"), EAutomationExpectedErrorFlags::Contains, -1);
 		const int FailedLoadResult = RestoredModule->LoadByteCode(&TruncatedStream, &bWasDebugInfoStripped);
 		if (!TestRunner->TestNotEqual(TEXT("Restore failure cleanup test should reject the truncated bytecode stream"), FailedLoadResult, static_cast<int>(asSUCCESS)))
 		{
@@ -375,7 +375,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptRestoreTests,
 		{
 			return;
 		}
-		if (!TestNull(TEXT("Restore failure cleanup test should not leave the failed function declaration behind"), RestoredModule->GetFunctionByDecl("int Test()")))
+		if (!TestRunner->TestNull(TEXT("Restore failure cleanup test should not leave the failed function declaration behind"), RestoredModule->GetFunctionByDecl("int Test()")))
 		{
 			return;
 		}

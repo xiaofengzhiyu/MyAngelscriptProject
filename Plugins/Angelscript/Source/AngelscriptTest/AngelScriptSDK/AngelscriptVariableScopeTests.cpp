@@ -45,7 +45,7 @@ int Entry()
 	return x;
 }
 )");
-		TestNull(TEXT("Access to out-of-scope variable should fail compilation"), M);
+		TestRunner->TestNull(TEXT("Access to out-of-scope variable should fail compilation"), M);
 	}
 
 	TEST_METHOD(Shadowing)

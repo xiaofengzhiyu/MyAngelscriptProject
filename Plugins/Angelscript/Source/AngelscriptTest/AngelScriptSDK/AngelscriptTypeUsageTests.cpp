@@ -160,7 +160,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTypeUsageTests,
 		ASTEST_BEGIN_SHARE_CLEAN
 
 		asIScriptModule* Module = BuildModule(
-			*this,
+			*TestRunner,
 			Engine,
 			"ASTypeUsageFromTypeIdScriptKinds",
 			TEXT(R"ANGELSCRIPT(
@@ -231,7 +231,7 @@ class UTypeUsageCarrier : UObject
 				if (ContainerUsage.SubTypes.Num() == 1)
 				{
 					ExpectUsageMatches(
-						*this,
+						*TestRunner,
 						TEXT("Container subtype type id"),
 						ContainerUsage.SubTypes[0],
 						FAngelscriptType::GetScriptStruct(),
@@ -251,7 +251,7 @@ class UTypeUsageCarrier : UObject
 		ASTEST_BEGIN_SHARE_CLEAN
 
 		asIScriptModule* Module = BuildModule(
-			*this,
+			*TestRunner,
 			Engine,
 			"ASTypeUsageFromPropertyScriptMemberMatrix",
 			TEXT(R"ANGELSCRIPT(
@@ -353,7 +353,7 @@ class FHolder
 		ASTEST_BEGIN_SHARE_CLEAN
 
 		asIScriptModule* Module = BuildModule(
-			*this,
+			*TestRunner,
 			Engine,
 			"ASTypeUsageQualifiers",
 			TEXT(R"ANGELSCRIPT(
@@ -371,11 +371,11 @@ int Produce()
 		if (Module != nullptr)
 		{
 			asIScriptFunction* QualifiersFunction = GetFunctionByDecl(
-				*this,
+				*TestRunner,
 				*Module,
 				TEXT("void Qualifiers(const int&, int&, bool)"));
 			asIScriptFunction* ProduceFunction = GetFunctionByDecl(
-				*this,
+				*TestRunner,
 				*Module,
 				TEXT("int Produce()"));
 
@@ -539,7 +539,7 @@ class ATypeUsageNativePropertyProbe : AActor
 					TEXT("const int&"));
 
 				ExpectUsageMatches(
-					*this,
+					*TestRunner,
 					TEXT("const AActor handle data type"),
 					ActorHandleUsage,
 					FAngelscriptType::GetByClass(AActor::StaticClass()),
@@ -554,7 +554,7 @@ class ATypeUsageNativePropertyProbe : AActor
 
 				const TSharedPtr<FAngelscriptType> ArrayType = FAngelscriptType::GetByAngelscriptTypeName(TEXT("TArray"));
 				ExpectUsageMatches(
-					*this,
+					*TestRunner,
 					TEXT("array<int> data type"),
 					ArrayValueUsage,
 					ArrayType,

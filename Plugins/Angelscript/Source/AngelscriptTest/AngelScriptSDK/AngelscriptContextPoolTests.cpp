@@ -97,7 +97,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptContextPoolTests,
 		}
 
 		asIScriptFunction* RunFunction = CompileContextPoolFunction(
-			*this,
+			*TestRunner,
 			*EngineA,
 			MakeContextPoolModuleName(TEXT("ContextPoolReuseAndResetPerEngine")),
 			"void Run() {}",

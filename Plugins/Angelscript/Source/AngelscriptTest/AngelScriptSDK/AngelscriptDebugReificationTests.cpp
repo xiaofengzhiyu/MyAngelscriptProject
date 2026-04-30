@@ -34,29 +34,29 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebugReificationTests,
 		const int32 UnknownType = GetReifyType<FIntPoint>();
 
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification should keep an unregistered type in the Unknown bucket"),
 			UnknownType,
 			EReifiedType::Unknown);
 
 #if WITH_AS_DEBUGVALUES
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification should map int32 to the int32 debugger type"),
 			Int32Type,
 			EReifiedType::_Enum_int32);
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification should map double to the double debugger type"),
 			DoubleType,
 			EReifiedType::_Enum_double);
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification should map FName to the FName debugger type"),
 			NameType,
 			EReifiedType::_Enum_FName);
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification should map UObject* to the UObject debugger type"),
 			ObjectType,
 			EReifiedType::_Enum_UObject);
@@ -70,22 +70,22 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebugReificationTests,
 			ObjectType);
 #else
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification fallback should collapse int32 to Unknown"),
 			Int32Type,
 			EReifiedType::Unknown);
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification fallback should collapse double to Unknown"),
 			DoubleType,
 			EReifiedType::Unknown);
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification fallback should collapse FName to Unknown"),
 			NameType,
 			EReifiedType::Unknown);
 		ExpectReifyType(
-			*this,
+			*TestRunner,
 			TEXT("Debug reification fallback should collapse UObject* to Unknown"),
 			ObjectType,
 			EReifiedType::Unknown);

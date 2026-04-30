@@ -79,7 +79,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptParserTests,
 	TEST_METHOD(Declarations)
 	{
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateParserModule(BareEngine, "ParserDeclarations");
 		if (!TestRunner->TestNotNull(TEXT("Parser declaration test should create a backing module"), Module))
 		{
@@ -112,7 +112,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptParserTests,
 	TEST_METHOD(ExpressionAst)
 	{
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateParserModule(BareEngine, "ParserExpressions");
 		if (!TestRunner->TestNotNull(TEXT("Parser expression test should create a backing module"), Module))
 		{
@@ -138,7 +138,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptParserTests,
 	TEST_METHOD(ControlFlow)
 	{
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateParserModule(BareEngine, "ParserControlFlow");
 		if (!TestRunner->TestNotNull(TEXT("Parser control-flow test should create a backing module"), Module))
 		{
@@ -166,7 +166,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptParserTests,
 	TEST_METHOD(SyntaxErrors)
 	{
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateParserModule(BareEngine, "ParserSyntaxErrors");
 		if (!TestRunner->TestNotNull(TEXT("Parser syntax-error test should create a backing module"), Module))
 		{
@@ -187,7 +187,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptParserTests,
 	TEST_METHOD(ReuseAfterSyntaxError)
 	{
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateParserModule(BareEngine, "ParserReuseAfterSyntaxError");
 		if (!TestRunner->TestNotNull(TEXT("Parser reuse-after-error test should create a backing module"), Module))
 		{

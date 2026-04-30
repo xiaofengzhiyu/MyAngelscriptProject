@@ -103,7 +103,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASSDKModuleTests,
 
 		// Verify module is gone
 		asIScriptModule* DiscardedModule = ScriptEngine->GetModule("ASSDKModuleDiscard", asGM_ONLY_IF_EXISTS);
-		TestNull(TEXT("ASSDK module discard test should discard the module"), DiscardedModule);
+		TestRunner->TestNull(TEXT("ASSDK module discard test should discard the module"), DiscardedModule);
 	}
 
 	TEST_METHOD(Multi)

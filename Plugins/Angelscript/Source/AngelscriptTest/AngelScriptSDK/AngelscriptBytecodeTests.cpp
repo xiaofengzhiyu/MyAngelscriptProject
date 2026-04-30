@@ -27,7 +27,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptBytecodeTests,
 	{
 		using namespace AngelscriptTest_AngelScriptSDK_AngelscriptBytecodeTests_Private;
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateBytecodeModule(BareEngine, "BytecodeInstructionSequence");
 		if (!TestRunner->TestNotNull(TEXT("Bytecode instruction test should create a backing module"), Module))
 		{
@@ -50,7 +50,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptBytecodeTests,
 	{
 		using namespace AngelscriptTest_AngelScriptSDK_AngelscriptBytecodeTests_Private;
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateBytecodeModule(BareEngine, "BytecodeAppend");
 		if (!TestRunner->TestNotNull(TEXT("Bytecode append test should create a backing module"), Module))
 		{
@@ -75,7 +75,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptBytecodeTests,
 	{
 		using namespace AngelscriptTest_AngelScriptSDK_AngelscriptBytecodeTests_Private;
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateBytecodeModule(BareEngine, "BytecodeJumpResolution");
 		if (!TestRunner->TestNotNull(TEXT("Bytecode jump test should create a backing module"), Module))
 		{
@@ -95,7 +95,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptBytecodeTests,
 	{
 		using namespace AngelscriptTest_AngelScriptSDK_AngelscriptBytecodeTests_Private;
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateBytecodeModule(BareEngine, "BytecodeOutput");
 		if (!TestRunner->TestNotNull(TEXT("Bytecode output test should create a backing module"), Module))
 		{

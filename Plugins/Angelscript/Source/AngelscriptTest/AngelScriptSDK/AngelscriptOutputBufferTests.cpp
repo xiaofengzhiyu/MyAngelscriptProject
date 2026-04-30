@@ -22,7 +22,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASSDKOutputBufferTests, "Angelscript.TestModul
 		// Compile invalid code - should produce error messages
 		Messages.Reset();
 		asIScriptModule* M = BuildNativeModule(SE, "BadCode", "int Entry() { return undeclared_var; }\n");
-		TestNull(TEXT("Invalid code should fail to compile"), M);
+		TestRunner->TestNull(TEXT("Invalid code should fail to compile"), M);
 
 		// Verify error was captured
 		bool HasError = false;

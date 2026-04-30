@@ -188,6 +188,16 @@
 	{ \
 		ON_SCOPE_EXIT { BareEngine->ShutDownAndRelease(); };
 
+// CQTest-compatible version (TEST_METHOD is void, uses TestRunner->)
+#define ASTEST_BEGIN_BARE_VOID \
+	if (BareEngine == nullptr) \
+	{ \
+		TestRunner->AddError(TEXT("Failed to create bare AngelScript SDK engine")); \
+		return; \
+	} \
+	{ \
+		ON_SCOPE_EXIT { BareEngine->ShutDownAndRelease(); };
+
 #define ASTEST_END_BARE \
 	}
 

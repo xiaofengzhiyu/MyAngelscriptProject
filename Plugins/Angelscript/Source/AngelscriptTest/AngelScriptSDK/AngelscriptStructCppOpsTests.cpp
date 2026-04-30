@@ -49,7 +49,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptStructCppOpsTests,
 		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 		ASTEST_BEGIN_SHARE_CLEAN
 		UScriptStruct* Struct = BuildScriptStruct(
-			*this,
+			*TestRunner,
 			Engine,
 			"StructCppOpsScopeModule",
 			TEXT(R"ANGELSCRIPT(

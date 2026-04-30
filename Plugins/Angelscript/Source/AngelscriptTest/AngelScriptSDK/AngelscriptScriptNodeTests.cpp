@@ -48,7 +48,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptScriptNodeTests,
 	{
 		using namespace AngelscriptTest_AngelScriptSDK_AngelscriptScriptNodeTests_Private;
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateScriptNodeModule(BareEngine, "ScriptNodeTraversal");
 		if (!TestRunner->TestNotNull(TEXT("ScriptNode traversal test should create a backing module"), Module))
 		{
@@ -84,7 +84,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptScriptNodeTests,
 	{
 		using namespace AngelscriptTest_AngelScriptSDK_AngelscriptScriptNodeTests_Private;
 		asCScriptEngine* BareEngine = ASTEST_CREATE_ENGINE_BARE();
-		ASTEST_BEGIN_BARE
+		ASTEST_BEGIN_BARE_VOID
 		asCModule* Module = CreateScriptNodeModule(BareEngine, "ScriptNodeCopy");
 		if (!TestRunner->TestNotNull(TEXT("ScriptNode copy test should create a backing module"), Module))
 		{
