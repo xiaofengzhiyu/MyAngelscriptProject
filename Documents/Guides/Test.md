@@ -152,7 +152,7 @@ Tools\RunTests.ps1 -Group AngelscriptFast -Label fast -TimeoutMs 600000 -- -log
 
 - `-TestPrefix`：按测试名前缀运行
 - `-Group`：按 `Config/DefaultEngine.ini` 中定义的 automation group 运行
-- `-TimeoutMs`：本次测试超时，必须大于 `0` 且不超过 `900000`
+- `-TimeoutMs`：本次测试超时，必须大于 `0` 且不超过 `3600000`
 - `-Label`：输出目录标签
 - `-OutputRoot`：自定义输出父目录；脚本会在其下再创建 `Tests/<Label>/<RunId>/`
 - `-Render`：关闭 `-NullRHI`
@@ -513,5 +513,5 @@ ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
 ## 推荐提示词
 
 ```text
-请先读取项目根目录的 AgentConfig.ini；如果缺失或 ProjectFile 不属于当前 worktree，先执行 Tools\Bootstrap\powershell\BootstrapWorktree.ps1。自动化测试只能通过 Tools\RunTests.ps1 或 Tools\RunTestSuite.ps1 执行，并显式带一个不超过 900000ms 的超时。不要手写 UnrealEditor-Cmd.exe 命令，也不要手写 -ABSLOG / -ReportExportPath 共享路径；日志、报告和摘要必须写入当前 run 的独立目录。除非明确需要真实渲染，否则保持默认 headless 模式。
+请先读取项目根目录的 AgentConfig.ini；如果缺失或 ProjectFile 不属于当前 worktree，先执行 Tools\Bootstrap\powershell\BootstrapWorktree.ps1。自动化测试只能通过 Tools\RunTests.ps1 或 Tools\RunTestSuite.ps1 执行，并显式带一个不超过 3600000ms 的超时。不要手写 UnrealEditor-Cmd.exe 命令，也不要手写 -ABSLOG / -ReportExportPath 共享路径；日志、报告和摘要必须写入当前 run 的独立目录。除非明确需要真实渲染，否则保持默认 headless 模式。
 ```

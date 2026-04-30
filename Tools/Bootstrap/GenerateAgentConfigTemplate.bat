@@ -33,7 +33,7 @@ if /I not "%~1"=="--force" if exist "%TARGET_FILE%" (
     echo DefaultTimeoutMs=180000
     echo.
     echo [Test]
-    echo ; Default timeout in milliseconds for automation tests. Hard-capped at 900000.
+    echo ; Default timeout in milliseconds for automation tests. Hard-capped at 3600000.
     echo DefaultTimeoutMs=600000
     echo.
     echo [References]

@@ -149,7 +149,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Labe
 **必须严格遵循 `Documents/Guides/Test.md` 和 AGENTS.md 中的测试规则。**
 
 - 唯一标准入口：`Tools\RunTests.ps1`。禁止直接调用 `UnrealEditor-Cmd.exe`。
-- 必须显式带超时且不超过 `900000ms`。
+- 必须显式带超时且不超过 `3600000ms`。
 - 用 `-TestPrefix` 只跑新增测试的 Automation 前缀。
 
 ```

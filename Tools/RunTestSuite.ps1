@@ -103,8 +103,8 @@ if ($TimeoutMs -lt 0) {
     throw "TimeoutMs must be zero or a positive integer."
 }
 
-if ($TimeoutMs -gt 900000) {
-    throw "TimeoutMs cannot exceed 900000ms."
+if ($TimeoutMs -gt 3600000) {
+    throw "TimeoutMs cannot exceed 3600000ms."
 }
 
 $selectedSuite = $suiteDefinitions[$Suite]

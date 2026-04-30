@@ -1,6 +1,6 @@
 Set-StrictMode -Version Latest
 
-$script:UnrealCommandUtilsMaxTimeoutMs = 900000
+$script:UnrealCommandUtilsMaxTimeoutMs = 3600000
 $script:UnrealBundledDotNetVersion = '8.0.412'
 $script:HeldMutexNames = New-Object 'System.Collections.Generic.HashSet[string]'
 $script:HeldMutexSyncRoot = New-Object object

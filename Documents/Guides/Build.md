@@ -4,7 +4,7 @@
 
 - 本仓库的标准构建入口只有 `Tools\RunBuild.ps1`。
 - 不再允许把 `Build.bat`、`RunUBT.bat` 或 `dotnet UnrealBuildTool.dll` 直接写进日常操作指引、Agent 提示词或自动化外壳。
-- 所有构建命令都必须显式带超时，且超时不得超过 `900000ms`。
+- 所有构建命令都必须显式带超时，且超时不得超过 `3600000ms`。
 - 默认构建超时来自 `AgentConfig.ini` 的 `Build.DefaultTimeoutMs`；仓库标准默认值为 `180000ms`。
 - 构建过程必须实时输出；超时或异常退出后，脚本必须清理整棵 UBT 进程树。
 - 每次构建都必须写入自己的独立日志目录；禁止把多个 worktree 的构建日志写到同一个共享文件。
@@ -112,7 +112,7 @@ Tools\RunBuild.ps1 -Label local-log-root -TimeoutMs 180000 -LogRoot "D:\Tmp\Ange
 
 参数说明：
 
-- `-TimeoutMs`：本次构建超时，必须大于 `0` 且不超过 `900000`
+- `-TimeoutMs`：本次构建超时，必须大于 `0` 且不超过 `3600000`
 - `-Label`：输出目录标签
 - `-LogRoot`：自定义输出根目录；脚本会把它当成父目录，再创建独立的 `Build/<Label>/<RunId>/`
 - `-NoXGE`：禁用 XGE / Incredibuild 入口，避免外部分布式执行器容量影响验证结果
@@ -229,7 +229,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Labe
 1. 先读取根目录 `AgentConfig.ini`
 2. 配置缺失时先跑 `Tools\Bootstrap\powershell\BootstrapWorktree.ps1`
 3. 仅通过 `Tools\RunBuild.ps1` 执行构建
-4. 显式传入或继承一个不超过 `900000ms` 的超时
+4. 显式传入或继承一个不超过 `3600000ms` 的超时
 5. 默认使用并发模式；只有确认会写引擎共享输出时才加 `-SerializeByEngine`
 6. 不要使用 `-UniqueBuildEnvironment`；这会触发 worktree 私有的引擎级重编
 7. 不要手写 `Build.bat` / `RunUBT.bat` / `dotnet UnrealBuildTool.dll`
@@ -237,5 +237,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Labe
 ## 推荐提示词
 
 ```text
-请先读取项目根目录的 AgentConfig.ini；如果缺失或 ProjectFile 不属于当前 worktree，先执行 Tools\Bootstrap\powershell\BootstrapWorktree.ps1。构建只能通过 Tools\RunBuild.ps1 进行，并显式带一个不超过 900000ms 的超时。默认保持并发模式；只有确认要写共享引擎输出时才追加 -SerializeByEngine。常用的 -NoXGE 不要再通过 ExtraArgs 透传，直接使用一等参数。不要使用 -UniqueBuildEnvironment，因为它会触发 worktree 私有的引擎级重编。日志必须实时输出，并写入当前 run 的独立目录；不要手写 Build.bat、RunUBT.bat 或 dotnet UnrealBuildTool.dll 命令。
+请先读取项目根目录的 AgentConfig.ini；如果缺失或 ProjectFile 不属于当前 worktree，先执行 Tools\Bootstrap\powershell\BootstrapWorktree.ps1。构建只能通过 Tools\RunBuild.ps1 进行，并显式带一个不超过 3600000ms 的超时。默认保持并发模式；只有确认要写共享引擎输出时才追加 -SerializeByEngine。常用的 -NoXGE 不要再通过 ExtraArgs 透传，直接使用一等参数。不要使用 -UniqueBuildEnvironment，因为它会触发 worktree 私有的引擎级重编。日志必须实时输出，并写入当前 run 的独立目录；不要手写 Build.bat、RunUBT.bat 或 dotnet UnrealBuildTool.dll 命令。
 ```

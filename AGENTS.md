@@ -269,6 +269,7 @@ Build output goes to `Saved/Build/<Label>/<RunId>/`; test output goes to `Saved/
 | `Documents/Guides/BindGapAuditMatrix.md` | Binding gap audit matrix |
 | `Documents/Guides/UE_Search_Guide.md` | UE knowledge lookup guide |
 | `Documents/Rules/GitCommitRule.md` | English commit conventions |
+| `Documents/Rules/ASInlineFormattingRule.md` | Inline AngelScript code formatting rule for C++ test files |
 | `Documents/Plans/Plan.md` | Plan document writing rules |
 | `Documents/Plans/Archives/README.md` | Archived plan index and summaries |
 | `Documents/Tools/Tool.md` | Internal tool documentation |
