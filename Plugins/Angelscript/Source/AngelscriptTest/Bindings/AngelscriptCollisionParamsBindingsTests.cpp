@@ -26,7 +26,6 @@
 #include "CollisionQueryParams.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/Actor.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "Templates/Function.h"
 

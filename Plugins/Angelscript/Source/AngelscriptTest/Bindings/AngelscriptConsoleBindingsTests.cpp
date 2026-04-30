@@ -1,5 +1,6 @@
 #include "AngelscriptConsoleBindingsSections.h"
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
@@ -887,100 +888,62 @@ void Trigger()
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleVariableBindingsTest,
-	"Angelscript.TestModule.Bindings.ConsoleVariableCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptConsoleBindingsTest,
+	"Angelscript.TestModule.Bindings.Console",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleVariableExistingBindingsTest,
-	"Angelscript.TestModule.Bindings.ConsoleVariableExistingCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleCommandBindingsTest,
-	"Angelscript.TestModule.Bindings.ConsoleCommandCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleCommandReplacementBindingsTest,
-	"Angelscript.TestModule.Bindings.ConsoleCommandReplacementCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleCommandSignatureBindingsTest,
-	"Angelscript.TestModule.Bindings.ConsoleCommandSignatureCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleLeakSelfCheckBindingsTest,
-	"Angelscript.TestModule.Bindings.Console.LeakSelfCheck",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptConsoleVariableBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleVariableTypesSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-bool FAngelscriptConsoleVariableExistingBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleVariableExistingSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-bool FAngelscriptConsoleCommandBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleCommandBasicSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ConsoleVariableCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleVariableTypesSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
 
-bool FAngelscriptConsoleCommandReplacementBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleCommandReplacementSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ConsoleVariableExistingCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleVariableExistingSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
 
-bool FAngelscriptConsoleCommandSignatureBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleCommandWrongSignatureSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ConsoleCommandCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleCommandBasicSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
 
-bool FAngelscriptConsoleLeakSelfCheckBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleLeakSelfCheckSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ConsoleCommandReplacementCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleCommandReplacementSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
+
+	TEST_METHOD(ConsoleCommandSignatureCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleCommandWrongSignatureSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
+
+	TEST_METHOD(LeakSelfCheck)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleLeakSelfCheckSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
+};
 
 #endif

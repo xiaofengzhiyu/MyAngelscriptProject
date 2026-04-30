@@ -21,6 +21,7 @@
 //   - Angelscript.TestModule.Bindings.UObject.LogAndDiagnostics
 // ============================================================================
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
@@ -2300,219 +2301,127 @@ int LogConcatTypes()
 }
 
 // ============================================================================
-// Automation ID registrations (13 tests)
+// Test class
 // ============================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectCreateIdentityTest,
-	"Angelscript.TestModule.Bindings.UObject.CreateAndIdentity",
+TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
+	"Angelscript.TestModule.Bindings.UObject",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectHierarchyTest,
-	"Angelscript.TestModule.Bindings.UObject.HierarchyAndOuter",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectTypeQueryTest,
-	"Angelscript.TestModule.Bindings.UObject.TypeQueryAndCast",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectFindLookupTest,
-	"Angelscript.TestModule.Bindings.UObject.FindAndLookup",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectRootLifecycleTest,
-	"Angelscript.TestModule.Bindings.UObject.RootLifecycle",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectFlagMutationTest,
-	"Angelscript.TestModule.Bindings.UObject.FlagMutation",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectNullIsValidTest,
-	"Angelscript.TestModule.Bindings.UObject.NullAndIsValid",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectNewObjectVariantsTest,
-	"Angelscript.TestModule.Bindings.UObject.NewObjectVariants",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectClassReflectionTest,
-	"Angelscript.TestModule.Bindings.UObject.ClassReflection",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectReturnValueCrossCheckTest,
-	"Angelscript.TestModule.Bindings.UObject.ReturnValueCrossCheck",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectCppToScriptPassthroughTest,
-	"Angelscript.TestModule.Bindings.UObject.CppToScriptPassthrough",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectObjectChainAndNestingTest,
-	"Angelscript.TestModule.Bindings.UObject.ObjectChainAndNesting",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUObjectLogDiagnosticsTest,
-	"Angelscript.TestModule.Bindings.UObject.LogAndDiagnostics",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-// ============================================================================
-// RunTest implementations
-// ============================================================================
-
-bool FAngelscriptUObjectCreateIdentityTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunCreateAndIdentitySection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-bool FAngelscriptUObjectHierarchyTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunHierarchyAndOuterSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-bool FAngelscriptUObjectTypeQueryTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunTypeQueryAndCastSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(CreateAndIdentity)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunCreateAndIdentitySection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectFindLookupTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunFindAndLookupSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(HierarchyAndOuter)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunHierarchyAndOuterSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectRootLifecycleTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunRootLifecycleSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(TypeQueryAndCast)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunTypeQueryAndCastSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectFlagMutationTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunFlagMutationSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(FindAndLookup)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunFindAndLookupSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectNullIsValidTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunNullAndIsValidSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(RootLifecycle)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunRootLifecycleSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectNewObjectVariantsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunNewObjectVariantsSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(FlagMutation)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunFlagMutationSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectClassReflectionTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunClassReflectionSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(NullAndIsValid)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunNullAndIsValidSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectReturnValueCrossCheckTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunReturnValueCrossCheckSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(NewObjectVariants)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunNewObjectVariantsSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectCppToScriptPassthroughTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunCppToScriptPassthroughSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ClassReflection)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunClassReflectionSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectObjectChainAndNestingTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunObjectChainAndNestingSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ReturnValueCrossCheck)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunReturnValueCrossCheckSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptUObjectLogDiagnosticsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunLogAndDiagnosticsSection(*this, Engine, GUObjectProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(CppToScriptPassthrough)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunCppToScriptPassthroughSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
+
+	TEST_METHOD(ObjectChainAndNesting)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunObjectChainAndNestingSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
+
+	TEST_METHOD(LogAndDiagnostics)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunLogAndDiagnosticsSection(*TestRunner, Engine, GUObjectProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -1,23 +1,22 @@
 // ============================================================================
 // AngelscriptMapBindingsTests.cpp
 //
-// TMap binding coverage — 2 Automation IDs:
-//   - Angelscript.TestModule.Bindings.Container.MapCompat
-//   - Angelscript.TestModule.Bindings.Container.MapFindFailureAndFindOrAddRefCompat
+// TMap binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Container.Map.FAngelscriptMapBindingsTest.*
 //
-// Refactored from AngelscriptContainerBindingsTests.cpp using the
-// Shared/ Coverage Section base layer.
+// Sections:
+//   MapCompat                          — FName→int / FName→FName baseline,
+//                                        type matrix, API coverage, return types,
+//                                        log diagnostic
+//   MapFindFailureAndFindOrAddRefCompat — Find failure + FindOrAdd ref semantics
 //
-// Coverage matrix for MapCompat (host for multiple sections):
-//   - RunMapSection             : FName→int / FName→FName baseline (16 cases)
-//   - RunMapTypeMatrixSection   : int→FString, FString→int, FName→FVector,
-//                                 int→UObject (10 cases)
-//   - RunMapApiCoverageSection  : opIndex (r/w), RemoveAndCopyValue,
-//                                 GetKeys, GetValues, Empty(slack),
-//                                 opEquals, opAssign (10 cases)
-// MapFindFailureAndFindOrAddRefCompat hosts the existing FindFailure section.
+// CQTest adaptation notes:
+//   Two IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   Each RunTest shell becomes a TEST_METHOD calling the corresponding
+//   sub-section runner functions.
 // ============================================================================
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
@@ -1091,51 +1090,41 @@ int MapLog_Types()
 }
 
 // ----------------------------------------------------------------------------
-// Automation ID: MapCompat
+// Test class
 // ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMapBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.MapCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptMapBindingsTest,
+	"Angelscript.TestModule.Bindings.Container.Map",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptMapBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	bPassed &= RunMapSection(*this, Engine, GMapProfile);
-	bPassed &= RunMapTypeMatrixSection(*this, Engine, GMapProfile);
-	bPassed &= RunMapApiCoverageSection(*this, Engine, GMapProfile);
-	bPassed &= RunMapReturnTypeSection(*this, Engine, GMapProfile);
-	bPassed &= RunMapLogDiagnosticSection(*this, Engine, GMapProfile);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(MapCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunMapSection(*TestRunner, Engine, GMapProfile);
+		RunMapTypeMatrixSection(*TestRunner, Engine, GMapProfile);
+		RunMapApiCoverageSection(*TestRunner, Engine, GMapProfile);
+		RunMapReturnTypeSection(*TestRunner, Engine, GMapProfile);
+		RunMapLogDiagnosticSection(*TestRunner, Engine, GMapProfile);
+	}
 
-// ----------------------------------------------------------------------------
-// Automation ID: MapFindFailureAndFindOrAddRefCompat
-// ----------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMapFindFailureBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.MapFindFailureAndFindOrAddRefCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptMapFindFailureBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-
-	bPassed &= RunMapFindFailureSection(*this, Engine, GMapProfile);
-
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(MapFindFailureAndFindOrAddRefCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunMapFindFailureSection(*TestRunner, Engine, GMapProfile);
+	}
+};
 
 #endif // WITH_DEV_AUTOMATION_TESTS

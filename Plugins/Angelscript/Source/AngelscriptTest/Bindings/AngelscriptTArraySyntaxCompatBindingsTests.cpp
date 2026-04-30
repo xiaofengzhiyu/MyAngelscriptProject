@@ -1,3 +1,4 @@
+#include "CQTest.h"
 #include "Shared/AngelscriptGlobalFunctionInvoker.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestUtilities.h"
@@ -12,11 +13,6 @@
 
 using namespace AngelscriptTestSupport;
 using namespace AngelscriptReflectiveAccess;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTArraySyntaxCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.TArraySyntaxCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 namespace AngelscriptTest_Bindings_AngelscriptTArraySyntaxCompatBindingsTests_Private
 {
@@ -1904,42 +1900,57 @@ int Entry()
 	return bPassed;
 }
 
-bool FAngelscriptTArraySyntaxCompatBindingsTest::RunTest(const FString& Parameters)
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptTArraySyntaxCompatBindingsTest,
+	"Angelscript.TestModule.Bindings.Container.TArraySyntaxCompat",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		ResetSharedCloneEngine(Engine);
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	AddInfo(TEXT("TArraySyntaxCompat.MutationCompat: begin"));
-	bPassed &= RunIntArrayMutationCompatSection(*this, Engine);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	AddInfo(TEXT("TArraySyntaxCompat.IteratorCompat: begin"));
-	bPassed &= RunIntArrayIteratorCompatSection(*this, Engine);
+	TEST_METHOD(TArraySyntaxCompat)
+	{
+		using namespace AngelscriptTest_Bindings_AngelscriptTArraySyntaxCompatBindingsTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	AddInfo(TEXT("TArraySyntaxCompat.Operations: begin"));
-	bPassed &= RunIntArrayOperationsSection(*this, Engine);
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.MutationCompat: begin"));
+		RunIntArrayMutationCompatSection(*TestRunner, Engine);
 
-	AddInfo(TEXT("TArraySyntaxCompat.TypeMatrix: begin"));
-	bPassed &= RunSyntaxTypeMatrixSection(*this, Engine);
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.IteratorCompat: begin"));
+		RunIntArrayIteratorCompatSection(*TestRunner, Engine);
 
-	AddInfo(TEXT("TArraySyntaxCompat.ReturnValues: begin"));
-	bPassed &= RunSyntaxReturnValuesSection(*this, Engine);
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.Operations: begin"));
+		RunIntArrayOperationsSection(*TestRunner, Engine);
 
-	AddInfo(TEXT("TArraySyntaxCompat.ErrorPaths: begin"));
-	bPassed &= RunSyntaxErrorPathsSection(*this, Engine);
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.TypeMatrix: begin"));
+		RunSyntaxTypeMatrixSection(*TestRunner, Engine);
 
-	AddInfo(TEXT("TArraySyntaxCompat.NestedContainerRejection: begin"));
-	bPassed &= RunSyntaxNestedContainerRejectionSection(*this, Engine);
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.ReturnValues: begin"));
+		RunSyntaxReturnValuesSection(*TestRunner, Engine);
 
-	AddInfo(TEXT("TArraySyntaxCompat.ObjectArraySyntaxBoundary: begin"));
-	bPassed &= RunObjectArraySyntaxBoundarySection(*this, Engine);
-	ASTEST_END_SHARE_CLEAN
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.ErrorPaths: begin"));
+		RunSyntaxErrorPathsSection(*TestRunner, Engine);
 
-	return bPassed;
-}
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.NestedContainerRejection: begin"));
+		RunSyntaxNestedContainerRejectionSection(*TestRunner, Engine);
+
+		TestRunner->AddInfo(TEXT("TArraySyntaxCompat.ObjectArraySyntaxBoundary: begin"));
+		RunObjectArraySyntaxBoundarySection(*TestRunner, Engine);
+
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

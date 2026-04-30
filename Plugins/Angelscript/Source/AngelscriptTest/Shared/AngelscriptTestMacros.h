@@ -189,6 +189,7 @@
 		ON_SCOPE_EXIT { BareEngine->ShutDownAndRelease(); };
 
 // CQTest-compatible version (TEST_METHOD is void, uses TestRunner->)
+// DEPRECATED: Prefer inlining the null-check directly in TEST_METHOD for better debuggability.
 #define ASTEST_BEGIN_BARE_VOID \
 	if (BareEngine == nullptr) \
 	{ \

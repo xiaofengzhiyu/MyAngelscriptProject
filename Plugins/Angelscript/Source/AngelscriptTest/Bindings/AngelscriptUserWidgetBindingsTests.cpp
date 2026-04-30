@@ -1,3 +1,4 @@
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
@@ -9,7 +10,6 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -287,36 +287,40 @@ int MissingTreeRemoveReturnsFalse() { UUserWidget Widget = WithoutTreeWidget(); 
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUserWidgetTreeCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.UserWidgetTreeCompat",
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptUserWidgetBindingsTest,
+	"Angelscript.TestModule.Bindings.UserWidget",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUserWidgetTreeErrorPathsBindingsTest,
-	"Angelscript.TestModule.Bindings.UserWidgetTreeErrorPaths",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptUserWidgetTreeCompatBindingsTest::RunTest(const FString& Parameters)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunWidgetTreeBasicSection(*this, Engine, GUserWidgetProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-bool FAngelscriptUserWidgetTreeErrorPathsBindingsTest::RunTest(const FString& Parameters)
-{
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunWidgetTreeErrorSection(*this, Engine, GUserWidgetProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	TEST_METHOD(UserWidgetTreeCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunWidgetTreeBasicSection(*TestRunner, Engine, GUserWidgetProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
+
+	TEST_METHOD(UserWidgetTreeErrorPaths)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+		RunWidgetTreeErrorSection(*TestRunner, Engine, GUserWidgetProfile);
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

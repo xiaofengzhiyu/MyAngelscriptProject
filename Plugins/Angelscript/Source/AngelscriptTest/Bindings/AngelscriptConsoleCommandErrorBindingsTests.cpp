@@ -1,9 +1,9 @@
 #include "AngelscriptConsoleBindingsSections.h"
 
+#include "CQTest.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -11,20 +11,27 @@
 using namespace AngelscriptTestSupport;
 using namespace AngelscriptTestBindings;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptConsoleCommandMissingHandlerBindingsTest,
-	"Angelscript.TestModule.Bindings.ConsoleCommandMissingHandlerCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptConsoleCommandErrorBindingsTest,
+	"Angelscript.TestModule.Bindings.ConsoleCommandMissingHandler",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptConsoleCommandMissingHandlerBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunConsoleCommandMissingHandlerSection(*this, Engine, GetConsoleBindingsProfile());
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	TEST_METHOD(MissingHandlerCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunConsoleCommandMissingHandlerSection(*TestRunner, Engine, GetConsoleBindingsProfile());
+	}
+};
 
 #endif

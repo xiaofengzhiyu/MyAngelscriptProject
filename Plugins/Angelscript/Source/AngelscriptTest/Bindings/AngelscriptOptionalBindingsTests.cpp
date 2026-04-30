@@ -2,12 +2,11 @@
 // AngelscriptOptionalBindingsTests.cpp
 //
 // TOptional binding coverage. Automation IDs:
-//   - Angelscript.TestModule.Bindings.Container.OptionalCompat
-//       hosts: Compat / TypeMatrix / ApiCoverage sections
-//   - Angelscript.TestModule.Bindings.Container.OptionalGetValueUnsetError
-//       hosts: GetValueUnsetError section (negative path)
+//   - Angelscript.TestModule.Bindings.Container.Optional.OptionalCompat
+//   - Angelscript.TestModule.Bindings.Container.Optional.OptionalGetValueUnsetError
 // ============================================================================
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
@@ -607,18 +606,16 @@ int OptRet_VerifyOptionalVector_X()
 		}
 		asIScriptModule& Module = ModuleScope.GetModule();
 
-		bool bPassed = true;
-
 		// Direct bool return assertions
-		bPassed &= ExpectGlobalReturnBool(Test, Engine, Module, Profile,
+		ExpectGlobalReturnBool(Test, Engine, Module, Profile,
 			TEXT("bool OptRet_Bool_IsSet()"), TEXT("bool return: set Optional.IsSet() should be true"), true);
-		bPassed &= ExpectGlobalReturnBool(Test, Engine, Module, Profile,
+		ExpectGlobalReturnBool(Test, Engine, Module, Profile,
 			TEXT("bool OptRet_Bool_IsSetEmpty()"), TEXT("bool return: empty Optional.IsSet() should be false"), false);
 
 		// Direct float return assertions
-		bPassed &= ExpectGlobalReturnFloat(Test, Engine, Module, Profile,
+		ExpectGlobalReturnFloat(Test, Engine, Module, Profile,
 			TEXT("float OptRet_Float_GetValue()"), TEXT("float return: GetValue should be 3.5"), 3.5f);
-		bPassed &= ExpectGlobalReturnFloat(Test, Engine, Module, Profile,
+		ExpectGlobalReturnFloat(Test, Engine, Module, Profile,
 			TEXT("float OptRet_Float_GetFallback()"), TEXT("float return: Get fallback should be 7.25"), 7.25f);
 
 		// FString / FVector returns verified via script-side int wrappers
@@ -636,9 +633,9 @@ int OptRet_VerifyOptionalVector_X()
 			{ TEXT("int OptRet_VerifyOptionalVector_IsSet()"),    TEXT("TOptional<FVector> return: should be set"),              1 },
 			{ TEXT("int OptRet_VerifyOptionalVector_X()"),        TEXT("TOptional<FVector> return: X should be ~10"),            1 },
 		};
-		bPassed &= ExpectGlobalInts(Test, Engine, Module, Profile, IntCases);
+		ExpectGlobalInts(Test, Engine, Module, Profile, IntCases);
 
-		return bPassed;
+		return true;
 	}
 
 	// -----------------------------------------------------------------------
@@ -690,51 +687,47 @@ int OptLog_IntAndString()
 }
 
 // ----------------------------------------------------------------------------
-// Automation ID: OptionalCompat
+// Test class
 // ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptOptionalBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.OptionalCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptOptionalBindingsTest,
+	"Angelscript.TestModule.Bindings.Container.Optional",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptOptionalBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	bPassed &= RunOptionalSection(*this, Engine, GOptionalProfile);
-	bPassed &= RunOptionalTypeMatrixSection(*this, Engine, GOptionalProfile);
-	bPassed &= RunOptionalApiCoverageSection(*this, Engine, GOptionalProfile);
-	bPassed &= RunOptionalReturnTypeSection(*this, Engine, GOptionalProfile);
-	bPassed &= RunOptionalLogDiagnosticSection(*this, Engine, GOptionalProfile);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(OptionalCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-// ----------------------------------------------------------------------------
-// Automation ID: OptionalGetValueUnsetError
-// ----------------------------------------------------------------------------
+		RunOptionalSection(*TestRunner, Engine, GOptionalProfile);
+		RunOptionalTypeMatrixSection(*TestRunner, Engine, GOptionalProfile);
+		RunOptionalApiCoverageSection(*TestRunner, Engine, GOptionalProfile);
+		RunOptionalReturnTypeSection(*TestRunner, Engine, GOptionalProfile);
+		RunOptionalLogDiagnosticSection(*TestRunner, Engine, GOptionalProfile);
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptOptionalGetValueUnsetErrorBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.OptionalGetValueUnsetError",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+		ASTEST_END_SHARE_CLEAN
+	}
 
-bool FAngelscriptOptionalGetValueUnsetErrorBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	TEST_METHOD(OptionalGetValueUnsetError)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	bPassed &= RunOptionalErrorSection(*this, Engine, GOptionalProfile);
+		RunOptionalErrorSection(*TestRunner, Engine, GOptionalProfile);
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif // WITH_DEV_AUTOMATION_TESTS

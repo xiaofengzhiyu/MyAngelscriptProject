@@ -18,6 +18,7 @@
 //   - Angelscript.TestModule.Bindings.Class.ClassReturnTypeAndLogDiag
 // ============================================================================
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
@@ -1094,172 +1095,97 @@ int ClassLog_Types()
 }
 
 // ============================================================================
-// Automation ID registrations (10 IDs under Class. prefix)
+// Test class
 // ============================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptClassLookupBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.ClassLookupCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptClassBindingsTest,
+	"Angelscript.TestModule.Bindings.Class",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSubclassOfBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.TSubclassOfCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.TSubclassOfRejectsUnrelatedClass",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSoftClassPtrBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.TSoftClassPtrCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptStaticClassCompatBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.StaticClassCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNativeStaticClassNamespaceBindingTest,
-	"Angelscript.TestModule.Bindings.Class.NativeStaticClassNamespace",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptNativeStaticTypeGlobalBindingTest,
-	"Angelscript.TestModule.Bindings.Class.NativeStaticTypeGlobal",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptUClassReflectionBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.UClassReflectionCompat",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTSoftClassPtrRejectsUnrelatedClassBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.TSoftClassPtrRejectsUnrelatedClass",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptClassReturnTypeAndLogDiagBindingsTest,
-	"Angelscript.TestModule.Bindings.Class.ClassReturnTypeAndLogDiag",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-// ============================================================================
-
-bool FAngelscriptClassLookupBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunClassLookupSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptTSubclassOfBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunTSubclassOfSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptTSubclassOfRejectsUnrelatedClassBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunTSubclassOfRejectSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptTSoftClassPtrBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunTSoftClassPtrSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptStaticClassCompatBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunStaticClassSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptNativeStaticClassNamespaceBindingTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunNativeStaticClassNamespaceSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptNativeStaticTypeGlobalBindingTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunNativeStaticTypeGlobalSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptUClassReflectionBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunUClassReflectionSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptTSoftClassPtrRejectsUnrelatedClassBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunTSoftClassPtrRejectSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
-
-bool FAngelscriptClassReturnTypeAndLogDiagBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	if (!RunClassReturnTypeSection(*this, Engine, GClassProfile))
+	BEFORE_ALL()
 	{
-		return false;
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
 	}
-	bPassed &= RunClassLogDiagnosticSection(*this, Engine, GClassProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
+
+	TEST_METHOD(ClassLookupCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunClassLookupSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(TSubclassOfCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunTSubclassOfSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(TSubclassOfRejectsUnrelatedClass)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunTSubclassOfRejectSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(TSoftClassPtrCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunTSoftClassPtrSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(StaticClassCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunStaticClassSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(NativeStaticClassNamespace)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunNativeStaticClassNamespaceSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(NativeStaticTypeGlobal)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunNativeStaticTypeGlobalSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(UClassReflectionCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunUClassReflectionSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(TSoftClassPtrRejectsUnrelatedClass)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunTSoftClassPtrRejectSection(*TestRunner, Engine, GClassProfile);
+	}
+
+	TEST_METHOD(ClassReturnTypeAndLogDiag)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		if (!RunClassReturnTypeSection(*TestRunner, Engine, GClassProfile))
+		{
+			return;
+		}
+		RunClassLogDiagnosticSection(*TestRunner, Engine, GClassProfile);
+	}
+};
 
 #endif // WITH_DEV_AUTOMATION_TESTS

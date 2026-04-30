@@ -16,6 +16,7 @@
 //                                explicit Iterator() walk (8 cases)
 // ============================================================================
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
@@ -816,29 +817,37 @@ int SetLog_Types()
 }
 
 // ----------------------------------------------------------------------------
-// Automation ID: SetCompat
+// Test class
 // ----------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptSetBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.SetCompat",
+TEST_CLASS_WITH_FLAGS(FAngelscriptSetBindingsTest,
+	"Angelscript.TestModule.Bindings.Container.Set",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptSetBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	bPassed &= RunSetSection(*this, Engine, GSetProfile);
-	bPassed &= RunSetTypeMatrixSection(*this, Engine, GSetProfile);
-	bPassed &= RunSetApiCoverageSection(*this, Engine, GSetProfile);
-	bPassed &= RunSetReturnTypeSection(*this, Engine, GSetProfile);
-	bPassed &= RunSetLogDiagnosticSection(*this, Engine, GSetProfile);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(SetCompat)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
+
+		RunSetSection(*TestRunner, Engine, GSetProfile);
+		RunSetTypeMatrixSection(*TestRunner, Engine, GSetProfile);
+		RunSetApiCoverageSection(*TestRunner, Engine, GSetProfile);
+		RunSetReturnTypeSection(*TestRunner, Engine, GSetProfile);
+		RunSetLogDiagnosticSection(*TestRunner, Engine, GSetProfile);
+
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif // WITH_DEV_AUTOMATION_TESTS

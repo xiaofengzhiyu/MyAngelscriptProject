@@ -1,21 +1,27 @@
 // ============================================================================
 // AngelscriptForeachBindingsTests.cpp
 //
-// foreach syntax binding coverage — 9 Automation IDs:
-//   - Angelscript.TestModule.Bindings.Container.ArrayForeach
-//   - Angelscript.TestModule.Bindings.Container.SetForeach
-//   - Angelscript.TestModule.Bindings.Container.SetForeachExactVisit
-//   - Angelscript.TestModule.Bindings.Container.MapForeach
-//   - Angelscript.TestModule.Bindings.Container.MapForeachKeyValuePairing
-//   - Angelscript.TestModule.Bindings.Container.ForeachNestedArrayMap
-//   - Angelscript.TestModule.Bindings.Container.ForeachEmptyContainerSkipsBody
-//   - Angelscript.TestModule.Bindings.Container.ForeachUObjectArrayCompiles
-//   - Angelscript.TestModule.Bindings.Container.ForeachConstRefPreservesOriginal
+// foreach syntax binding coverage — CQTest refactor. Automation IDs:
+//   Angelscript.TestModule.Bindings.Container.Foreach.FAngelscriptForeachBindingsTest.*
 //
-// Refactored from AngelscriptContainerBindingsTests.cpp using the
-// Shared/ Coverage Section base layer.
+// Sections:
+//   ArrayForeach                   — TArray foreach value/index sum, break/continue, FString
+//   SetForeach                     — TSet foreach sum, FString length, FName sentinel
+//   SetForeachExactVisit           — empty skip, exact visit count, all elements
+//   MapForeach                     — TMap foreach value sum, key count, type diversification
+//   MapForeachKeyValuePairing      — empty skip, exact pairing, visit/seen counts
+//   ForeachNestedArrayMap          — nested outer TArray + inner TMap
+//   ForeachEmptyContainerSkipsBody — empty TArray/TSet/TMap skip
+//   ForeachUObjectArrayCompiles    — UObject/FString/FName array foreach
+//   ForeachConstRefPreservesOriginal — FVector/FRotator const-ref preservation
+//
+// CQTest adaptation notes:
+//   Nine IMPLEMENT_SIMPLE_AUTOMATION_TEST merged into one TEST_CLASS.
+//   Each RunTest shell becomes a TEST_METHOD calling the corresponding
+//   sub-section runner function.
 // ============================================================================
 
+#include "CQTest.h"
 #include "Shared/AngelscriptBindingsCoverage.h"
 #include "Shared/AngelscriptBindingsModuleBuilder.h"
 #include "Shared/AngelscriptBindingsAssertions.h"
@@ -968,157 +974,88 @@ int ForeachLog_Types()
 }
 
 // ============================================================================
-// Automation ID registrations (9 IDs)
+// Test class
 // ============================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptArrayForeachBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.ArrayForeach",
+TEST_CLASS_WITH_FLAGS(FAngelscriptForeachBindingsTest,
+	"Angelscript.TestModule.Bindings.Container.Foreach",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptSetForeachBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.SetForeach",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptSetForeachExactVisitBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.SetForeachExactVisit",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMapForeachBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.MapForeach",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptMapForeachKeyValuePairingBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.MapForeachKeyValuePairing",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptForeachNestedArrayMapTest,
-	"Angelscript.TestModule.Bindings.Container.ForeachNestedArrayMap",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptForeachEmptyContainerTest,
-	"Angelscript.TestModule.Bindings.Container.ForeachEmptyContainerSkipsBody",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptForeachUObjectArrayTest,
-	"Angelscript.TestModule.Bindings.Container.ForeachUObjectArrayCompiles",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptForeachConstRefPreservesTest,
-	"Angelscript.TestModule.Bindings.Container.ForeachConstRefPreservesOriginal",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-// ============================================================================
-// RunTest implementations — thin shells calling sub-Section runners
-// ============================================================================
-
-bool FAngelscriptArrayForeachBindingsTest::RunTest(const FString& Parameters)
 {
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachArraySection(*this, Engine, GForeachProfile);
-	bPassed &= RunForeachReturnTypeSection(*this, Engine, GForeachProfile);
-	bPassed &= RunForeachLogDiagnosticSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	BEFORE_ALL()
+	{
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-bool FAngelscriptSetForeachBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachSetSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-bool FAngelscriptSetForeachExactVisitBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachSetExactVisitSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ArrayForeach)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachArraySection(*TestRunner, Engine, GForeachProfile);
+		RunForeachReturnTypeSection(*TestRunner, Engine, GForeachProfile);
+		RunForeachLogDiagnosticSection(*TestRunner, Engine, GForeachProfile);
+	}
 
-bool FAngelscriptMapForeachBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachMapSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(SetForeach)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachSetSection(*TestRunner, Engine, GForeachProfile);
+	}
 
-bool FAngelscriptMapForeachKeyValuePairingBindingsTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachMapKeyValueSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(SetForeachExactVisit)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachSetExactVisitSection(*TestRunner, Engine, GForeachProfile);
+	}
 
-bool FAngelscriptForeachNestedArrayMapTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachNestedSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(MapForeach)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachMapSection(*TestRunner, Engine, GForeachProfile);
+	}
 
-bool FAngelscriptForeachEmptyContainerTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachEmptySection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(MapForeachKeyValuePairing)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachMapKeyValueSection(*TestRunner, Engine, GForeachProfile);
+	}
 
-bool FAngelscriptForeachUObjectArrayTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachUObjectSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ForeachNestedArrayMap)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachNestedSection(*TestRunner, Engine, GForeachProfile);
+	}
 
-bool FAngelscriptForeachConstRefPreservesTest::RunTest(const FString& Parameters)
-{
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	bool bPassed = true;
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
-	bPassed &= RunForeachConstRefSection(*this, Engine, GForeachProfile);
-	ASTEST_END_SHARE_CLEAN
-	return bPassed;
-}
+	TEST_METHOD(ForeachEmptyContainerSkipsBody)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachEmptySection(*TestRunner, Engine, GForeachProfile);
+	}
+
+	TEST_METHOD(ForeachUObjectArrayCompiles)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachUObjectSection(*TestRunner, Engine, GForeachProfile);
+	}
+
+	TEST_METHOD(ForeachConstRefPreservesOriginal)
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		FAngelscriptEngineScope Scope(Engine);
+		RunForeachConstRefSection(*TestRunner, Engine, GForeachProfile);
+	}
+};
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -1,3 +1,4 @@
+#include "CQTest.h"
 #include "Shared/AngelscriptGlobalFunctionInvoker.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 #include "Shared/AngelscriptTestUtilities.h"
@@ -12,11 +13,6 @@
 
 using namespace AngelscriptTestSupport;
 using namespace AngelscriptReflectiveAccess;
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptTArrayBindingsTest,
-	"Angelscript.TestModule.Bindings.Container.TArray",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private
 {
@@ -2111,42 +2107,57 @@ int Entry()
 	return bPassed;
 }
 
-bool FAngelscriptTArrayBindingsTest::RunTest(const FString& Parameters)
+// ----------------------------------------------------------------------------
+// Test class
+// ----------------------------------------------------------------------------
+
+TEST_CLASS_WITH_FLAGS(FAngelscriptTArrayBindingsTest,
+	"Angelscript.TestModule.Bindings.Container.TArray",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	bool bPassed = true;
-	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE_CLEAN();
-	ASTEST_BEGIN_SHARE_CLEAN
-	ON_SCOPE_EXIT
+	BEFORE_ALL()
 	{
-		ResetSharedCloneEngine(Engine);
-	};
+		ASTEST_CREATE_ENGINE_SHARE_CLEAN();
+	}
 
-	AddInfo(FString::Printf(TEXT("%s.MutationCompat: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayMutationCompatSection(*this, Engine, TArrayProfile);
+	AFTER_ALL()
+	{
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	}
 
-	AddInfo(FString::Printf(TEXT("%s.IteratorCompat: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayIteratorCompatSection(*this, Engine, TArrayProfile);
+	TEST_METHOD(TArrayCompat)
+	{
+		using namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_SHARE();
+		ASTEST_BEGIN_SHARE_CLEAN
 
-	AddInfo(FString::Printf(TEXT("%s.Operations: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayOperationsSection(*this, Engine, TArrayProfile);
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.MutationCompat: begin"), TArrayProfile.CasePrefix));
+		RunTArrayMutationCompatSection(*TestRunner, Engine, TArrayProfile);
 
-	AddInfo(FString::Printf(TEXT("%s.TypeMatrix: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayTypeMatrixSection(*this, Engine, TArrayProfile);
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.IteratorCompat: begin"), TArrayProfile.CasePrefix));
+		RunTArrayIteratorCompatSection(*TestRunner, Engine, TArrayProfile);
 
-	AddInfo(FString::Printf(TEXT("%s.ObjectTypes: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayObjectTypesSection(*this, Engine, TArrayProfile);
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.Operations: begin"), TArrayProfile.CasePrefix));
+		RunTArrayOperationsSection(*TestRunner, Engine, TArrayProfile);
 
-	AddInfo(FString::Printf(TEXT("%s.ReturnValues: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayReturnValuesSection(*this, Engine, TArrayProfile);
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.TypeMatrix: begin"), TArrayProfile.CasePrefix));
+		RunTArrayTypeMatrixSection(*TestRunner, Engine, TArrayProfile);
 
-	AddInfo(FString::Printf(TEXT("%s.ErrorPaths: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayErrorPathsSection(*this, Engine, TArrayProfile);
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.ObjectTypes: begin"), TArrayProfile.CasePrefix));
+		RunTArrayObjectTypesSection(*TestRunner, Engine, TArrayProfile);
 
-	AddInfo(FString::Printf(TEXT("%s.NestedContainerRejection: begin"), TArrayProfile.CasePrefix));
-	bPassed &= RunTArrayNestedContainerRejectionSection(*this, Engine, TArrayProfile);
-	ASTEST_END_SHARE_CLEAN
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.ReturnValues: begin"), TArrayProfile.CasePrefix));
+		RunTArrayReturnValuesSection(*TestRunner, Engine, TArrayProfile);
 
-	return bPassed;
-}
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.ErrorPaths: begin"), TArrayProfile.CasePrefix));
+		RunTArrayErrorPathsSection(*TestRunner, Engine, TArrayProfile);
+
+		TestRunner->AddInfo(FString::Printf(TEXT("%s.NestedContainerRejection: begin"), TArrayProfile.CasePrefix));
+		RunTArrayNestedContainerRejectionSection(*TestRunner, Engine, TArrayProfile);
+
+		ASTEST_END_SHARE_CLEAN
+	}
+};
 
 #endif

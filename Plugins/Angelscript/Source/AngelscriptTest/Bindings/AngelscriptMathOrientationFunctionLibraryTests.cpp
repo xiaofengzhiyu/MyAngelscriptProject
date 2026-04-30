@@ -26,7 +26,6 @@
 
 #include "Math/Quat.h"
 #include "Math/RotationMatrix.h"
-#include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
