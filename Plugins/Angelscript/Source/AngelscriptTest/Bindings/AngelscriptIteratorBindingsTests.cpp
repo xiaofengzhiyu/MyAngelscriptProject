@@ -55,11 +55,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptIteratorBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: SetIterator
@@ -67,7 +63,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptIteratorBindingsTest,
 
 	TEST_METHOD(SetIterator)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIteratorProfile, TEXT("SetIter"), TEXT(R"(
@@ -99,7 +95,7 @@ int SetIter_SumElements()
 
 	TEST_METHOD(MapIterator)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIteratorProfile, TEXT("MapIter"), TEXT(R"(
@@ -135,7 +131,7 @@ int MapIter_SumValuesAndCountKeys()
 
 	TEST_METHOD(MapIteratorPairing)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIteratorProfile, TEXT("MapIterPair"), TEXT(R"(

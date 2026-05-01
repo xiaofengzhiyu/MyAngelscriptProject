@@ -300,15 +300,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUserWidgetBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(UserWidgetTreeCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunWidgetTreeBasicSection(*TestRunner, Engine, GUserWidgetProfile);
 		}
@@ -316,7 +312,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUserWidgetBindingsTest,
 
 	TEST_METHOD(UserWidgetTreeErrorPaths)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunWidgetTreeErrorSection(*TestRunner, Engine, GUserWidgetProfile);
 		}

@@ -44,11 +44,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxPropertyAccessorTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Property Accessors — Positive
@@ -56,7 +52,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxPropertyAccessorTest,
 
 	TEST_METHOD(Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// DISABLED(#as-engine-behavior): feature-not-supported — AS 2.33 fork 不支持 property accessor (get_/set_) 语法
@@ -151,7 +147,7 @@ class AActorPAFloat : AActor
 
 	TEST_METHOD(Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Getter with wrong return type (void)

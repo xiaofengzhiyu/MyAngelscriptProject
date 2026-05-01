@@ -44,11 +44,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxFStringTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Literals — Positive
@@ -56,7 +52,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxFStringTest,
 
 	TEST_METHOD(Literals_Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// String literal assignment
@@ -125,7 +121,7 @@ void Test() { int A = 1; float B = 2.5f; FString S = f"{A} and {B}"; }
 
 	TEST_METHOD(Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Unterminated string
@@ -219,7 +215,7 @@ void Test() { FString A = "Hello"; auto X = A & "World"; }
 
 	TEST_METHOD(Methods_Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("ASSyntaxStr_Len"),
@@ -259,7 +255,7 @@ void Test() { FString A = "abc"; FString B = "def"; bool NotEqual = (A != B); }
 
 	TEST_METHOD(FName_Mixed)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Positive: FName literal with n prefix

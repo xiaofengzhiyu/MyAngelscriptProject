@@ -183,11 +183,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGameInstanceLocalPlayerBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: Compat

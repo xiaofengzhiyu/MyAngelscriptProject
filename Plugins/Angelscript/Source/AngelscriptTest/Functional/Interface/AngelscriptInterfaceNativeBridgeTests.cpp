@@ -87,11 +87,11 @@ namespace InterfaceNativeBridgeTests
 TEST_CLASS_WITH_FLAGS(FAngelscriptInterfaceNativeBridgeTest, "Angelscript.TestModule.Interface.NativeBridge", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }
-	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE(); AngelscriptTestSupport::ResetSharedCloneEngine(Engine); }
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(CppImplementerScriptCall)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -99,7 +99,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptInterfaceNativeBridgeTest, "Angelscript.TestMo
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*InterfaceNativeBridgeTests::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(

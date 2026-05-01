@@ -54,7 +54,7 @@ namespace AngelscriptTest_Learning_Runtime_AngelscriptLearningReloadAndClassAnal
 	FLearningReloadOutcome RunReloadTestCase(FAngelscriptEngine& Engine, const FLearningReloadTestCase& TestCase)
 	{
 		FLearningReloadOutcome Outcome;
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 		Outcome.bBaselineCompiled = CompileAnnotatedModuleFromMemory(&Engine, TestCase.ModuleName, TestCase.Filename, TestCase.BaselineScript);
 		if (!Outcome.bBaselineCompiled)
 		{
@@ -96,10 +96,10 @@ bool FAngelscriptLearningReloadAndClassAnalysisTest::RunTest(const FString& Para
 	using namespace AngelscriptTest_Learning_Runtime_AngelscriptLearningReloadAndClassAnalysisTests_Private;
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
 	{ FAngelscriptEngineScope _AutoEngineScope(Engine);
-	ResetSharedCloneEngine(Engine);
+	ASTEST_RESET_ENGINE(Engine);
 	ON_SCOPE_EXIT
 	{
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	FAngelscriptLearningTraceSinkConfig SinkConfig;

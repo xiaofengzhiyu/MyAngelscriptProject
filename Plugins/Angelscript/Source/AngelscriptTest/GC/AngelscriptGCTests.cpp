@@ -101,7 +101,7 @@ bool FAngelscriptTestGCActorDestroyTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(
@@ -154,7 +154,7 @@ bool FAngelscriptTestGCComponentDestroyTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ComponentClass = CompileScriptModule(
@@ -207,7 +207,7 @@ bool FAngelscriptTestGCWorldTeardownTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ActorClass = CompileScriptModule(

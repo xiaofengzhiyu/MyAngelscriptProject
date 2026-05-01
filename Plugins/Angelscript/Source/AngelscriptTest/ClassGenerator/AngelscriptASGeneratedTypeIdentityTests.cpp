@@ -112,7 +112,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASGeneratedTypeIdentityTests,
 		{
 			Engine.DiscardModule(*ASGeneratedTypeIdentityTest::StructModuleName.ToString());
 			IFileManager::Get().Delete(*ASGeneratedTypeIdentityTest::GetScriptAbsoluteFilename(), false, true, true);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptV1 = TEXT(R"AS(

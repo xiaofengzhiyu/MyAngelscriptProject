@@ -452,7 +452,7 @@ class %s : UObject
 		CaptureGeneratedClassBeforeReset(Engine, Workload, RunSuffix, CycleIndex, Sample, WeakGeneratedClass);
 
 		const double ResetStartTime = FPlatformTime::Seconds();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 		Sample.ResetSeconds = FPlatformTime::Seconds() - ResetStartTime;
 		Sample.ResetActiveModuleCount = Engine.GetActiveModules().Num();
 		CaptureGeneratedClassAfterReset(Sample, WeakGeneratedClass);

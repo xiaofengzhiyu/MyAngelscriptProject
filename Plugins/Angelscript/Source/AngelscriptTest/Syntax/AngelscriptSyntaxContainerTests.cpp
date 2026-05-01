@@ -45,11 +45,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxContainerTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// TArray — Positive
@@ -57,7 +53,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxContainerTest,
 
 	TEST_METHOD(TArray_Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("ASSyntaxCon_ArrDecl"),
@@ -127,7 +123,7 @@ void Test() { TArray<int> Arr; Arr.Add(5); bool B = Arr.Contains(5); }
 
 	TEST_METHOD(TArray_Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
@@ -196,7 +192,7 @@ void Test() { TArray<int> A; TArray<FString> B; A = B; }
 
 	TEST_METHOD(TMap_Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("ASSyntaxCon_MapDecl"),
@@ -246,7 +242,7 @@ void Test() { TMap<FString, int> Map; int N = Map.Num(); }
 
 	TEST_METHOD(TMap_Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
@@ -298,7 +294,7 @@ void Test() { TMap<FString, void> Map; }
 
 	TEST_METHOD(TSet_Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("ASSyntaxCon_SetDecl"),
@@ -332,7 +328,7 @@ void Test() { TSet<int> S; S.Add(1); S.Remove(1); }
 
 	TEST_METHOD(TSet_Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine,
@@ -363,7 +359,7 @@ void Test() { TSet<NonExistent> S; }
 
 	TEST_METHOD(TOptional_Mixed)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Positive: Declaration

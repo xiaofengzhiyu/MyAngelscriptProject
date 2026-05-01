@@ -116,7 +116,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptComponentProcessEventTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ProcessEventModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(

@@ -28,7 +28,7 @@ bool FAngelscriptLearningGCTraceTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptSource = TEXT(R"AS(

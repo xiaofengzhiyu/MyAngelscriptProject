@@ -110,11 +110,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptStringTableBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: LocTableCompat
@@ -123,7 +119,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptStringTableBindingsTest,
 	TEST_METHOD(LocTableCompat)
 	{
 		using namespace AngelscriptStringTableBindingsTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FName TableId = MakeUniqueStringTableId();

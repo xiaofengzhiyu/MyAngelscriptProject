@@ -40,7 +40,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptScriptClassStructureTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		static const FString ScriptSource = TEXT(R"AS(

@@ -43,7 +43,7 @@ bool FAngelscriptHotReloadDoesNotReplayBeginPlayOnLiveActorTest::RunTest(const F
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*LifecycleModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(

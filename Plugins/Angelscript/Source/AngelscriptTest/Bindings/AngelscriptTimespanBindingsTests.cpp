@@ -120,11 +120,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTimespanBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: Construction
@@ -132,7 +128,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTimespanBindingsTest,
 
 	TEST_METHOD(Construction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FTimespan TicksBased(900000000);
@@ -179,7 +175,7 @@ int Timespan_DetailedCtor_Ticks()
 
 	TEST_METHOD(ComponentAccess)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FTimespan TicksBased(900000000);
@@ -243,7 +239,7 @@ int Timespan_Detailed_Totals()
 
 	TEST_METHOD(Formatting)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FTimespan TicksBased(900000000);
@@ -289,7 +285,7 @@ int Timespan_Detailed_FormattedString()
 
 	TEST_METHOD(Arithmetic)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FTimespan Dividend = FTimespan::FromMinutes(95.0);
@@ -341,7 +337,7 @@ int Timespan_Ratio()
 
 	TEST_METHOD(MutableOperators)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Compute native baselines for the mutable chain
@@ -427,7 +423,7 @@ int Timespan_MutMod()
 
 	TEST_METHOD(Comparison)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GTimespanProfile, TEXT("Comparison"), TEXT(R"(

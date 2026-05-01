@@ -1,5 +1,6 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 
+#include "Shared/AngelscriptTestMacros.h"
 #include "CQTest.h"
 #include "ClassGenerator/ASClass.h"
 #include "Components/ActorTestSpawner.h"
@@ -45,7 +46,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptScriptClassShapeTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		static const FString ScriptSource = TEXT(R"AS(
@@ -136,7 +137,7 @@ class ATestScriptInheritanceChild : ATestScriptInheritanceParent
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, ModuleName,

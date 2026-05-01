@@ -100,7 +100,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptComponentTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -149,7 +149,7 @@ class UTestComponentBeginPlay : UAngelscriptComponent
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -201,7 +201,7 @@ class UTestComponentTick : UAngelscriptComponent
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -252,7 +252,7 @@ class UTestComponentReceiveEndPlay : UAngelscriptComponent
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* OwnerActorClass = CompileScriptModule(
@@ -500,7 +500,7 @@ class ATestDefaultComponentNativeTypes : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DeepAttachChainTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -546,7 +546,7 @@ class ADeepAttachActor : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*OverrideMultiLayerTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -598,7 +598,7 @@ class ATopLayerActor : AMidLayerActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*NativeActorExtraComponentTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -633,7 +633,7 @@ class AExtendedCharacter : ACharacter
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*OverrideMetadataMultiLayerTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;

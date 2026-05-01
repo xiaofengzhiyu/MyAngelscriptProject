@@ -125,7 +125,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptScriptClassCreationTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -175,7 +175,7 @@ class ATestScriptClassCompilesToUClass : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -231,7 +231,7 @@ class ATestScriptClassCanSpawnInTestWorld : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -281,7 +281,7 @@ class ATestScriptClassMultiSpawnKeepsStateIsolation : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
@@ -335,7 +335,7 @@ class ATestScriptClassBlueprintChildCompiles : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
@@ -393,7 +393,7 @@ class ATestScriptClassCDOHasExpectedDefaults : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* InitialClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
@@ -455,7 +455,7 @@ class ATestScriptClassRecompileDoesNotCrashClassSwitch : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* NonActorClass = CompileScriptModule(*TestRunner, Engine, ModuleName,

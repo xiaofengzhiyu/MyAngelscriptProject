@@ -155,7 +155,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptScriptStructHotReloadTests,
 		{
 			Engine.DiscardModule(*ScriptStructHotReloadTest::ModuleName.ToString());
 			IFileManager::Get().Delete(*ScriptStructHotReloadTest::GetScriptAbsoluteFilename(), false, true, true);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptV1 = TEXT(R"AS(
@@ -256,7 +256,7 @@ struct FScriptStructHotReloadVersionChain
 			Engine.DiscardModule(*ScriptStructCustomGuidTest::DifferentModuleName.ToString());
 			IFileManager::Get().Delete(*ScriptStructCustomGuidTest::GetStableScriptAbsoluteFilename(), false, true, true);
 			IFileManager::Get().Delete(*ScriptStructCustomGuidTest::GetDifferentScriptAbsoluteFilename(), false, true, true);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString StableScriptV1 = TEXT(R"AS(
@@ -332,7 +332,7 @@ struct FDifferentGuidStruct
 		{
 			Engine.DiscardModule(*ScriptStructCapabilityReloadTest::ModuleName.ToString());
 			IFileManager::Get().Delete(*ScriptStructCapabilityReloadTest::GetScriptAbsoluteFilename(), false, true, true);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptV1 = TEXT(R"AS(

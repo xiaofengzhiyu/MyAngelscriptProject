@@ -1,4 +1,5 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptTestUtilities.h"
 
 #include "Engine/Blueprint.h"
@@ -125,7 +126,7 @@ bool FAngelscriptTemplateBlueprintScriptParentTest::RunTest(const FString& Param
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(

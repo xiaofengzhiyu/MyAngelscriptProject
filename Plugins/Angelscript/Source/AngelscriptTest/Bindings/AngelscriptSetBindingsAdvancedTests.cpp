@@ -42,11 +42,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSetAdvancedBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: AppendFromArrayAndSet
@@ -54,7 +50,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSetAdvancedBindingsTest,
 
 	TEST_METHOD(AppendFromArrayAndSet)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GSetAdvProfile, TEXT("AppendArraySet"), TEXT(R"(
@@ -145,7 +141,7 @@ int AppendSet_MergeContainsAll()
 
 	TEST_METHOD(CopyIsolation)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GSetAdvProfile, TEXT("CopyIsolation"), TEXT(R"(
@@ -218,7 +214,7 @@ int Copy_OriginalUnchangedContent()
 
 	TEST_METHOD(AssignmentAndEmpty)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GSetAdvProfile, TEXT("AssignEmpty"), TEXT(R"(

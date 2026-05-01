@@ -13,6 +13,7 @@
 // ============================================================================
 
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Preprocessor/AngelscriptPreprocessorTestHelpers.h"
 
 #include "Misc/ScopeExit.h"
@@ -320,7 +321,7 @@ int Entry()
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(TEXT("ASLiteralAssetMissingType"));
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
@@ -351,7 +352,7 @@ int Entry()
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(TEXT("ASLiteralAssetInsideFunction"));
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);

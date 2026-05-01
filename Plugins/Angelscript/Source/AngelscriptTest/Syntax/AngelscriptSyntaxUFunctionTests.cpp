@@ -44,11 +44,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxUFunctionTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Specifiers — Positive
@@ -56,7 +52,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxUFunctionTest,
 
 	TEST_METHOD(Specifiers_Positive)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Basic UFUNCTION
@@ -201,7 +197,7 @@ class AUFuncParamsActor : AActor
 
 	TEST_METHOD(Specifiers_Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Invalid specifier
@@ -371,7 +367,7 @@ class AUFuncCtorActor : AActor
 
 	TEST_METHOD(Params_Negative)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Non-existent parameter type

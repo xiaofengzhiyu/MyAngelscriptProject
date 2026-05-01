@@ -120,7 +120,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassConstructionContextTests,
 		{
 			ASClassConstructionContextTest::ResetProbeState();
 			Engine.DiscardModule(*ASClassConstructionContextTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 			CollectGarbage(RF_NoFlags, true);
 		};
 

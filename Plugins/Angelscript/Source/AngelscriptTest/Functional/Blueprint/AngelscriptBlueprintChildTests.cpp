@@ -1,4 +1,5 @@
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Functional/Blueprint/AngelscriptBlueprintTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -23,11 +24,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptBlueprintChildTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// =================================================================
 	// 1. InheritsBeginPlay
@@ -35,7 +32,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptBlueprintChildTest,
 
 	TEST_METHOD(InheritsBeginPlay)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildInheritsBeginPlay"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -83,7 +80,7 @@ class ATestBPChildInheritsBeginPlayParent : AActor
 
 	TEST_METHOD(InheritsTick)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildInheritsTick"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -134,7 +131,7 @@ class ATestBPChildInheritsTickParent : AActor
 
 	TEST_METHOD(ScriptUFunctionCallable)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildScriptUFunctionCallable"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -190,7 +187,7 @@ class ATestBPChildScriptUFunctionCallableParent : AActor
 
 	TEST_METHOD(RecreateDoesNotLeakState)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildRecreateNoLeak"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -267,7 +264,7 @@ class ATestBPChildRecreateNoLeakParent : AActor
 
 	TEST_METHOD(DefaultPreservation)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildDefaultPreservation"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -336,7 +333,7 @@ class ATestBPChildDefaultPreservationParent : AActor
 
 	TEST_METHOD(OverrideChain)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildOverrideChain"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -450,7 +447,7 @@ class ATestBPChildOverrideChainScriptChild : ATestBPChildOverrideChainParent
 
 	TEST_METHOD(MultiLevelScriptInheritance)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildMultiLevel"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -549,7 +546,7 @@ class ATestBPMultiLevelParent : ATestBPMultiLevelGrandParent
 
 	TEST_METHOD(ScriptInterfaceInheritance)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestBPChildScriptInterface"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };

@@ -131,7 +131,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerValueTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 			CollectGarbage(RF_NoFlags, true);
 		};
 
@@ -245,7 +245,7 @@ class ADebuggerValueGetterProbe : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 			CollectGarbage(RF_NoFlags, true);
 		};
 
@@ -411,7 +411,7 @@ class UDebuggerValueGuardProbe : UObject
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 			CollectGarbage(RF_NoFlags, true);
 		};
 

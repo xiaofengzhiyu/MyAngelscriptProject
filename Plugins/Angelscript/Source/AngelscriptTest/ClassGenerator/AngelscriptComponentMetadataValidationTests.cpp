@@ -95,7 +95,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptComponentMetadataValidationTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ComponentMetadataValidationModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		FAngelscriptCompileTraceSummary Summary;
@@ -127,7 +127,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptComponentMetadataValidationTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*MissingOverrideTargetModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		FAngelscriptCompileTraceSummary Summary;

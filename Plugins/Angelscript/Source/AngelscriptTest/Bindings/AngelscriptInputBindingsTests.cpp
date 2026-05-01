@@ -22,11 +22,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptInputBindingsTest,
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }
-	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_CREATE_ENGINE(); AngelscriptTestSupport::ResetSharedCloneEngine(E); }
+	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(E); }
 
 	TEST_METHOD(FInputActionValue)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GInputProfile, TEXT("ActionValue"), TEXT(R"(
 int InputActionValue_DefaultZero()
@@ -42,7 +42,7 @@ int InputActionValue_DefaultZero()
 
 	TEST_METHOD(FKeyConstruction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GInputProfile, TEXT("Key"), TEXT(R"(
 int Key_IsValid()

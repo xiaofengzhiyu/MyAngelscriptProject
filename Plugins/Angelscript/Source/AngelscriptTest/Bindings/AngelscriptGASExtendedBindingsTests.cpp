@@ -23,11 +23,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGASExtendedBindingsTest,
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }
-	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_CREATE_ENGINE(); AngelscriptTestSupport::ResetSharedCloneEngine(E); }
+	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(E); }
 
 	TEST_METHOD(FGameplayAttributeDefault)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGASExtProfile, TEXT("Attribute"), TEXT(R"(
 int Attribute_DefaultInvalid()
@@ -47,7 +47,7 @@ int Attribute_DefaultInvalid()
 
 	TEST_METHOD(FGameplayAbilitySpecDefault)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGASExtProfile, TEXT("AbilitySpec"), TEXT(R"(
 int AbilitySpec_DefaultLevel()

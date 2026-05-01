@@ -1,4 +1,5 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptReflectiveAccess.h"
 #include "Shared/AngelscriptTestUtilities.h"
 #include "Shared/AngelscriptTestWorld.h"
@@ -58,7 +59,7 @@ bool FAngelscriptTemplateGameLifetimeScriptActorTest::RunTest(const FString& Par
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(

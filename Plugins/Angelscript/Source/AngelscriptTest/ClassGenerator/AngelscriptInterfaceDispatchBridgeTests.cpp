@@ -79,7 +79,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptInterfaceDispatchBridgeTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*InterfaceDispatchBridgeTests::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(

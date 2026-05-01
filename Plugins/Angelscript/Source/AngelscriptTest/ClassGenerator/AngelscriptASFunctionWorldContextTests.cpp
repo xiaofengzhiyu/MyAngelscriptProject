@@ -39,7 +39,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionWorldContextTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*WorldContextModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		FActorTestSpawner Spawner;

@@ -71,7 +71,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDefaultStatementSafetyTests,
 			Engine.DiscardModule(TEXT("ASUnsafeDefault"));
 			Engine.DiscardModule(TEXT("ASUnsafeConstructor"));
 			Engine.DiscardModule(TEXT("ASUnsafeOrdinary"));
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString UnsafeDefaultScript = TEXT(R"AS(
@@ -159,7 +159,7 @@ class UUnsafeOrdinaryTarget : UObject
 		{
 			Engine.DiscardModule(TEXT("ASDefaultsOnlyOk"));
 			Engine.DiscardModule(TEXT("ASDefaultsOnlyReject"));
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString DefaultsOnlyOkScript = TEXT(R"AS(

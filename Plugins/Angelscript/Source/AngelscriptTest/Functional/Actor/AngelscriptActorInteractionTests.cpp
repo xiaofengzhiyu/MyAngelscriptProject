@@ -1,4 +1,5 @@
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Functional/Actor/AngelscriptActorTestHelpers.h"
 
 #include "Kismet/GameplayStatics.h"
@@ -21,13 +22,13 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptActorInteractionTest,
 
 	AFTER_ALL()
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		ResetSharedCloneEngine(Engine);
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
+		ASTEST_RESET_ENGINE(Engine);
 	}
 
 	TEST_METHOD(PointDamage)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorPointDamage"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -96,7 +97,7 @@ class ATestActorPointDamage : AActor
 
 	TEST_METHOD(RadialDamage)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorRadialDamage"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -165,7 +166,7 @@ class ATestActorRadialDamage : AActor
 
 	TEST_METHOD(MultiSpawn)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorMultiSpawn"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -217,7 +218,7 @@ class ATestActorMultiSpawn : AActor
 
 	TEST_METHOD(CrossCall)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorCrossCall"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -281,7 +282,7 @@ class ATestActorCrossCallA : AActor
 
 	TEST_METHOD(AnyDamage)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorAnyDamage"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -335,7 +336,7 @@ class ATestActorAnyDamage : AActor
 
 	TEST_METHOD(ActorBeginOverlap)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorBeginOverlap"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -398,7 +399,7 @@ class ATestOverlapTrigger : AActor
 
 	TEST_METHOD(ActorEndOverlap)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorEndOverlap"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -459,7 +460,7 @@ class ATestEndOverlapTrigger : AActor
 
 	TEST_METHOD(SpawnActorInvalidClassThrowsException)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorSpawnInvalidClass"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -495,7 +496,7 @@ class ATestActorSpawnInvalidClass : AActor
 
 	TEST_METHOD(DelegateBroadcast)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorDelegateBroadcast"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };

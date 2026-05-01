@@ -44,7 +44,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASStructDiscardTests,
 		{
 			Engine.DiscardModule(*ASStructDiscardTest::ModuleName.ToString());
 			IFileManager::Get().Delete(*ASStructDiscardTest::GetScriptAbsoluteFilename(), false, true, true);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptSource = TEXT(R"AS(

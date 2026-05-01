@@ -1,4 +1,5 @@
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Functional/Actor/AngelscriptActorTestHelpers.h"
 
 #include "Misc/StringOutputDevice.h"
@@ -21,8 +22,8 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptActorScriptOverrideTest,
 
 	AFTER_ALL()
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		ResetSharedCloneEngine(Engine);
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
+		ASTEST_RESET_ENGINE(Engine);
 	}
 
 	// --- ScriptSpawned tests (from AngelscriptScriptSpawnedActorOverrideTests.cpp) ---

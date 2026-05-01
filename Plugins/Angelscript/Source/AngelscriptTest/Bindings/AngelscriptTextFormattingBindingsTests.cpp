@@ -86,11 +86,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTextFormattingBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: OrderedFormat
@@ -100,7 +96,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTextFormattingBindingsTest,
 	{
 		using namespace AngelscriptTest_TextFormatting_Private;
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FString OrderedExpected = BuildOrderedExpected();
@@ -143,7 +139,7 @@ int OrderedFormat_Match()
 	{
 		using namespace AngelscriptTest_TextFormatting_Private;
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FString NamedExpected = BuildNamedExpected();

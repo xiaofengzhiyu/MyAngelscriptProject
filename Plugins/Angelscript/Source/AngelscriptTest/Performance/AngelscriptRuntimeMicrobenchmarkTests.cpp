@@ -130,7 +130,7 @@ bool FAngelscriptRuntimePerformanceScriptSelfTest::RunTest(const FString& Parame
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(TEXT("ASRuntimePerformanceScriptSelf"));
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileBenchmarkCarrier(

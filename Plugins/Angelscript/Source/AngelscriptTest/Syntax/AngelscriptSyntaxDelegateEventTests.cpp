@@ -45,11 +45,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxDelegateEventTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Declaration — Positive
@@ -57,7 +53,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptSyntaxDelegateEventTest,
 
 	TEST_METHOD(Declaration_Positive_DelegateVoid)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelDeclBasic"),
@@ -75,7 +71,7 @@ class ADelDeclBasicActor : AActor
 
 	TEST_METHOD(Declaration_Positive_DelegateWithParams)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelDeclParams"),
@@ -93,7 +89,7 @@ class ADelDeclParamActor : AActor
 
 	TEST_METHOD(Declaration_Positive_DelegateWithReturn)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelDeclReturn"),
@@ -111,7 +107,7 @@ class ADelDeclReturnActor : AActor
 
 	TEST_METHOD(Declaration_Positive_EventMulticast)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelDeclEvent"),
@@ -129,7 +125,7 @@ class ADelDeclEventActor : AActor
 
 	TEST_METHOD(Declaration_Positive_EventMultiParam)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelDeclEventMulti"),
@@ -151,7 +147,7 @@ class ADelDeclEventMultiActor : AActor
 
 	TEST_METHOD(Declaration_Negative_WithoutFPrefix)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// DISABLED(#as-engine-behavior): naming-convention-unenforced — AS 不强制 delegate 类型名 F 前缀
@@ -166,7 +162,7 @@ delegate void OnAction();
 
 	TEST_METHOD(Declaration_Negative_NoName)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclNoName"),
@@ -178,7 +174,7 @@ delegate void ();
 
 	TEST_METHOD(Declaration_Negative_InvalidParamType)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclBadParam"),
@@ -190,7 +186,7 @@ delegate void FOnActionBadParam(NonExistentType X);
 
 	TEST_METHOD(Declaration_Negative_EventWithoutFPrefix)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// DISABLED(#as-engine-behavior): naming-convention-unenforced — AS 不强制 event 类型名 F 前缀
@@ -205,7 +201,7 @@ event void OnChanged(int X);
 
 	TEST_METHOD(Declaration_Negative_DuplicateDelegate)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclDup"),
@@ -218,7 +214,7 @@ delegate void FOnActionDup(int X);
 
 	TEST_METHOD(Declaration_Negative_MissingSemicolon)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclNoSemicolon"),
@@ -230,7 +226,7 @@ delegate void FOnActionNoSemi()
 
 	TEST_METHOD(Declaration_Negative_DelegateWithBody)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclWithBody"),
@@ -242,7 +238,7 @@ delegate void FOnActionBody() { }
 
 	TEST_METHOD(Declaration_Negative_NestedDelegate)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclNested"),
@@ -257,7 +253,7 @@ class ADelNestedActor : AActor
 
 	TEST_METHOD(Declaration_Negative_DelegateAsLocalType)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclLocal"),
@@ -275,7 +271,7 @@ class ADelLocalActor : AActor
 
 	TEST_METHOD(Declaration_Negative_VoidDelegateWithReturn)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclEventReturn"),
@@ -287,7 +283,7 @@ event int FOnChangedReturn();
 
 	TEST_METHOD(Declaration_Negative_EventWithInvalidParamType)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclEventBadParam"),
@@ -299,7 +295,7 @@ event void FOnChangedBadParam(NonExistentType X);
 
 	TEST_METHOD(Declaration_Negative_DelegateEmptyParens)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelDeclNoParens"),
@@ -315,7 +311,7 @@ delegate void FOnActionNoParens;
 
 	TEST_METHOD(Binding_Positive_BindUFunction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelBindUFunc"),
@@ -340,7 +336,7 @@ class ADelBindActor : AActor
 
 	TEST_METHOD(Binding_Positive_AddUFunction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelBindAddUFunc"),
@@ -365,7 +361,7 @@ class ADelBindAddActor : AActor
 
 	TEST_METHOD(Binding_Positive_ExecuteIfBound)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelBindExecute"),
@@ -388,7 +384,7 @@ class ADelExecActor : AActor
 
 	TEST_METHOD(Binding_Positive_Broadcast)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertCompiles(*TestRunner, Engine, TEXT("DelBindBroadcast"),
@@ -415,7 +411,7 @@ class ADelBroadcastActor : AActor
 
 	TEST_METHOD(Binding_Negative_WrongArgCountBroadcast)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelBindBadArgCount"),
@@ -438,7 +434,7 @@ class ADelBadArgCntActor : AActor
 
 	TEST_METHOD(Binding_Negative_WrongArgTypeBroadcast)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelBindBadArgType"),
@@ -461,7 +457,7 @@ class ADelBadArgTypeActor : AActor
 
 	TEST_METHOD(Binding_Negative_UndeclaredDelegateType)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		SyntaxTestHelpers::AssertFailsToCompile(*TestRunner, Engine, TEXT("DelBindUndeclared"),
@@ -477,7 +473,7 @@ class ADelUndeclaredActor : AActor
 
 	TEST_METHOD(Binding_Negative_BindToNonExistentFunction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// DISABLED(#as-engine-behavior): structural-validation-absent — AS 的 BindUFunction 是运行时动态绑定，编译期不校验函数名是否存在

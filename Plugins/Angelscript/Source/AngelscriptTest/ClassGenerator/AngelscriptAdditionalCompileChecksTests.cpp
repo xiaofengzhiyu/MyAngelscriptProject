@@ -92,7 +92,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptAdditionalCompileChecksTests,
 			Engine.AdditionalCompileChecks.Remove(UObject::StaticClass());
 			Engine.DiscardModule(*AdditionalChecksModuleName.ToString());
 			Engine.DiscardModule(*AdditionalChecksRejectedModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptV1 = TEXT(R"AS(

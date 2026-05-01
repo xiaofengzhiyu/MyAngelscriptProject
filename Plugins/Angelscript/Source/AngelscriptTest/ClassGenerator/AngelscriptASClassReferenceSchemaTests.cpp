@@ -92,7 +92,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassReferenceSchemaTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ReferenceSchemaModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptSource = TEXT(R"AS(
@@ -178,7 +178,7 @@ class UReferenceSchemaHolder : UObject
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ReferenceSchemaSoftReloadModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		auto MakeScript = [](int32 Version) -> FString

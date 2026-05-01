@@ -46,7 +46,7 @@ bool FAngelscriptHotReloadReloadDelegatesBroadcastEnumCreatedOnFirstCompileTest:
 		FAngelscriptClassGenerator::OnEnumChanged.Remove(EnumChangedHandle);
 		Engine.DiscardModule(*EnumCreatedModuleName.ToString());
 		Engine.DiscardModule(*EnumCreatedWarmupModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString WarmupScript = TEXT(R"AS(

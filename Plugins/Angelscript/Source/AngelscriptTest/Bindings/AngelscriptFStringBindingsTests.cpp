@@ -72,11 +72,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptFStringBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: Construction
@@ -84,7 +80,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptFStringBindingsTest,
 
 	TEST_METHOD(Construction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		// Equivalent to the FAngelscriptEngineScope inside { FAngelscriptEngineScope _AutoEngineScope(Engine);.
 		FAngelscriptEngineScope Scope(Engine);
 
@@ -163,7 +159,7 @@ int Ctor_LongString()
 
 	TEST_METHOD(Operators)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Operators"), TEXT(R"(
@@ -255,7 +251,7 @@ int OpIdx_Write()
 
 	TEST_METHOD(OperatorIndexError)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("IndexErr"), TEXT(R"(
@@ -290,7 +286,7 @@ void TriggerIndexOutOfBounds()
 
 	TEST_METHOD(LengthAndCapacity)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("LenCap"), TEXT(R"(
@@ -380,7 +376,7 @@ int Reset_ThenReuse()
 
 	TEST_METHOD(Substring)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Substr"), TEXT(R"(
@@ -443,7 +439,7 @@ int Compound_LeftThenRight()
 
 	TEST_METHOD(Search)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Search"), TEXT(R"(
@@ -577,7 +573,7 @@ int Equals_EmptyEmpty()       { FString A; FString B; return A.Equals(B) ? 1 : 0
 
 	TEST_METHOD(Mutation)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Mutation"), TEXT(R"(
@@ -788,7 +784,7 @@ int Reverse_Empty()
 
 	TEST_METHOD(MutationExtended)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("MutExt"), TEXT(R"(
@@ -977,7 +973,7 @@ int TrimChar_AllSame()
 
 	TEST_METHOD(CaseAndTrim)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("CaseTrim"), TEXT(R"(
@@ -1106,7 +1102,7 @@ int RightPad_Content()
 
 	TEST_METHOD(Split)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Split"), TEXT(R"(
@@ -1262,7 +1258,7 @@ int ParseMulti_TwoDelims()
 
 	TEST_METHOD(SplitExtended)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("SplitExt"), TEXT(R"(
@@ -1356,7 +1352,7 @@ int ParseWS_OnlyWhitespace()
 
 	TEST_METHOD(Conversion)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Conv"), TEXT(R"(
@@ -1475,7 +1471,7 @@ int ToDisplayName_Bool()
 
 	TEST_METHOD(TypeConcat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("TypeConcat"), TEXT(R"(
@@ -1547,7 +1543,7 @@ int Concat_IntZero()
 		return;
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Format"), TEXT(R"(
@@ -1770,7 +1766,7 @@ FString Format_Ret_FloatPrecision()
 
 	TEST_METHOD(Join)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Join"), TEXT(R"(
@@ -1843,7 +1839,7 @@ int Join_WithEmptyElements()
 
 	TEST_METHOD(StaticConstruction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("StaticCtor"), TEXT(R"(
@@ -1937,7 +1933,7 @@ int ChrN_Zero()
 
 	TEST_METHOD(ApplyFormat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("ApplyFmt"), TEXT(R"(
@@ -2354,7 +2350,7 @@ FString ApplyFmt_Ret_NegSignPlus()
 		return;
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("Logging"), TEXT(R"(
@@ -2439,7 +2435,7 @@ int Log_Format()
 		return;
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("RetStr"), TEXT(R"(
@@ -2613,7 +2609,7 @@ FString Ret_AppendChain()
 	{
 		using namespace AngelscriptReflectiveAccess;
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GFStringProfile, TEXT("PassStr"), TEXT(R"(

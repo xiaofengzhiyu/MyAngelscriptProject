@@ -124,11 +124,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDateTimeBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: ParseIso8601
@@ -153,7 +149,7 @@ int DateTime_ParseIso8601()
 		ScriptSource.ReplaceInline(TEXT("__ISO_INPUT__"), *IsoInput, ESearchCase::CaseSensitive);
 		ReplaceValueTokens(ScriptSource, TEXT("ISO"), IsoBaseline);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Iso"), ScriptSource);
@@ -186,7 +182,7 @@ int DateTime_ParseHttpDate()
 		ScriptSource.ReplaceInline(TEXT("__HTTP_INPUT__"), *HttpInput, ESearchCase::CaseSensitive);
 		ReplaceValueTokens(ScriptSource, TEXT("HTTP"), HttpBaseline);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Http"), ScriptSource);
@@ -219,7 +215,7 @@ int DateTime_ParseGeneric()
 		ScriptSource.ReplaceInline(TEXT("__GENERIC_INPUT__"), *GenericInput, ESearchCase::CaseSensitive);
 		ReplaceValueTokens(ScriptSource, TEXT("GENERIC"), GenericBaseline);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Generic"), ScriptSource);
@@ -274,7 +270,7 @@ int DateTime_ParseInvalidIso()
 		ReplaceValueTokens(ScriptSource, TEXT("INVALID_HTTP"), InvalidHttp);
 		ReplaceValueTokens(ScriptSource, TEXT("INVALID_ISO"), InvalidIso);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Invalid"), ScriptSource);
@@ -327,7 +323,7 @@ int DateTime_ToStringFormatted()
 		ScriptSource.ReplaceInline(TEXT("__CTOR_ISO__"), *ConstructedIso, ESearchCase::CaseSensitive);
 		ScriptSource.ReplaceInline(TEXT("__CTOR_FORMATTED__"), *ConstructedFormatted, ESearchCase::CaseSensitive);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("Ctor"), ScriptSource);
@@ -389,7 +385,7 @@ int DateTime_RoundTripFormatted()
 		ReplaceValueTokens(ScriptSource, TEXT("ISO_RT"), IsoRt);
 		ReplaceValueTokens(ScriptSource, TEXT("FMT_RT"), FormattedRt);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDateTimeProfile, TEXT("RoundTrip"), ScriptSource);

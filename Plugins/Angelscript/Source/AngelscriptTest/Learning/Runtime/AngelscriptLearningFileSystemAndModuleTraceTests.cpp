@@ -55,7 +55,7 @@ bool FAngelscriptLearningFileSystemAndModuleTraceTest::RunTest(const FString& Pa
 	{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 	ON_SCOPE_EXIT
 	{
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 		CleanLearningFileSystemRoot();
 	};
 

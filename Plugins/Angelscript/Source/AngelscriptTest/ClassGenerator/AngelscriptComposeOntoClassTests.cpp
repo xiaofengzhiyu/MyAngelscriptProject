@@ -196,7 +196,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptComposeOntoClassTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*PreparedModuleName);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 
 			if (!PreparedModules.AbsoluteFilename.IsEmpty())
 			{
@@ -281,7 +281,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptComposeOntoClassTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*PreparedModuleName);
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 
 			if (!PreparedModules.AbsoluteFilename.IsEmpty())
 			{

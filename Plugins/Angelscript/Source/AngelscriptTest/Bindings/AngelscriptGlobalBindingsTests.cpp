@@ -48,11 +48,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGlobalBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: GlobalVariables
@@ -60,7 +56,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGlobalBindingsTest,
 
 	TEST_METHOD(GlobalVariables)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGlobalProfile, TEXT("GlobalVar"), TEXT(R"(
@@ -107,7 +103,7 @@ int GlobalVar_EmptyGameplayTagQuery()
 
 	TEST_METHOD(CommandletGlobals)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const bool bExpectedRunningCommandlet = ::IsRunningCommandlet();

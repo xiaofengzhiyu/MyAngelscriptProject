@@ -51,11 +51,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebugBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: Callstack
@@ -63,7 +59,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebugBindingsTest,
 
 	TEST_METHOD(Callstack)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDebugProfile, TEXT("Callstack"), TEXT(R"(
@@ -119,7 +115,7 @@ int Callstack_EntryCallstack()
 		TestRunner->AddExpectedError(TEXT("void Throw_ThrowMiddle()"), EAutomationExpectedErrorFlags::Contains, 1);
 		TestRunner->AddExpectedError(TEXT("int Throw_Entry()"), EAutomationExpectedErrorFlags::Contains, 1);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GDebugProfile, TEXT("Throw"), TEXT(R"(

@@ -122,7 +122,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionOptimizedCallTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASFunctionOptimizedCallTests::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UASClass* ScriptClass = ASFunctionOptimizedCallTests::CompileOptimizedCallTarget(*TestRunner, Engine);

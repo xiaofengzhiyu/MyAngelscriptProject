@@ -56,7 +56,7 @@ bool FAngelscriptHotReloadLiteralAssetBroadcastsReloadedObjectReplacementTest::R
 	{
 		FAngelscriptClassGenerator::OnLiteralAssetReload.Remove(LiteralAssetReloadHandle);
 		Engine.DiscardModule(*LiteralAssetReloadModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(

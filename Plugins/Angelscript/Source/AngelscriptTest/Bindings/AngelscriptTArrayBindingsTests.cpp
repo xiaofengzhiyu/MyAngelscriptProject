@@ -2120,16 +2120,12 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTArrayBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(TArrayCompat)
 	{
 		using namespace AngelscriptTest_Bindings_AngelscriptTArrayBindingsTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 
 		TestRunner->AddInfo(FString::Printf(TEXT("%s.MutationCompat: begin"), TArrayProfile.CasePrefix));

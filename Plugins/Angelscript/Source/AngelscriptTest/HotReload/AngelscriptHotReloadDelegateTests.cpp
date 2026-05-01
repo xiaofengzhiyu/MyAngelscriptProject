@@ -109,7 +109,7 @@ bool FAngelscriptHotReloadReloadDelegatesBroadcastEnumChangeAndFullReloadTest::R
 		FAngelscriptClassGenerator::OnFullReload.Remove(FullReloadHandle);
 		FAngelscriptClassGenerator::OnPostReload.Remove(PostReloadHandle);
 		Engine.DiscardModule(*DelegateReloadModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(
@@ -280,7 +280,7 @@ bool FAngelscriptHotReloadReloadDelegatesBroadcastOldAndNewTypesTest::RunTest(co
 		FAngelscriptClassGenerator::OnStructReload.Remove(StructReloadHandle);
 		FAngelscriptClassGenerator::OnPostReload.Remove(PostReloadHandle);
 		Engine.DiscardModule(*TypeReloadModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	// Keep class and struct independent so this test exercises delegate payloads,
@@ -438,7 +438,7 @@ bool FAngelscriptHotReloadReloadDelegatesBroadcastDelegateSignatureSwapTest::Run
 	{
 		FAngelscriptClassGenerator::OnDelegateReload.Remove(DelegateReloadHandle);
 		Engine.DiscardModule(*SignatureReloadModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(delegate void FHotReloadSignal(int Value); UCLASS() class UHotReloadDelegateSignatureCarrier : UObject { UPROPERTY() FHotReloadSignal Signal; })AS");

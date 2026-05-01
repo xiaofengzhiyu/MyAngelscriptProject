@@ -34,11 +34,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPlatformMiscBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(CoreGlobals)
 	{
@@ -48,7 +44,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPlatformMiscBindingsTest,
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPlatformMiscProfile, TEXT("CoreGlobals"), TEXT(R"(
@@ -81,7 +77,7 @@ int IsRunningCommandlet()
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPlatformMiscProfile, TEXT("PlatMisc"), TEXT(R"(
@@ -117,7 +113,7 @@ int GetNumCoresIncludingHyperthreads()
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPlatformMiscProfile, TEXT("Timers"), TEXT(R"(

@@ -76,7 +76,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionMetadataTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*NetValidateModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, NetValidateModuleName, NetValidateFilename,

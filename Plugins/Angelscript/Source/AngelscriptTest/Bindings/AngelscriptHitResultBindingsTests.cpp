@@ -22,11 +22,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptHitResultBindingsTest,
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }
-	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_CREATE_ENGINE(); AngelscriptTestSupport::ResetSharedCloneEngine(E); }
+	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(E); }
 
 	TEST_METHOD(FHitResultDefault)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GHitResultProfile, TEXT("Default"), TEXT(R"(
 int HitResult_DefaultNoBlock()
@@ -47,7 +47,7 @@ int HitResult_DefaultNoBlock()
 
 	TEST_METHOD(FHitResultDistance)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GHitResultProfile, TEXT("Distance"), TEXT(R"(
 int HitResult_DefaultDistance()
@@ -68,7 +68,7 @@ int HitResult_DefaultDistance()
 
 	TEST_METHOD(FOverlapResultDefault)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GHitResultProfile, TEXT("Overlap"), TEXT(R"(
 int OverlapResult_DefaultNoOverlap()

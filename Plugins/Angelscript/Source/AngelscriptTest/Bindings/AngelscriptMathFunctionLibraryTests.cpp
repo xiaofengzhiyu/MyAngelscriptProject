@@ -226,11 +226,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptMathFunctionLibraryTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: ShortestPathAndTransformSemantics
@@ -239,7 +235,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptMathFunctionLibraryTest,
 	TEST_METHOD(ShortestPathAndTransformSemantics)
 	{
 		using namespace AngelscriptTest_Bindings_AngelscriptMathFunctionLibraryTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GMathFuncLibProfile, TEXT("ShortestPath"), TEXT(R"(
@@ -392,7 +388,7 @@ FVector GetMoveLargeStep()
 	TEST_METHOD(PlanarProjectionAndColorFormatting)
 	{
 		using namespace AngelscriptTest_Bindings_AngelscriptMathFunctionLibraryTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GMathFuncLibProfile, TEXT("PlanarProjection"), TEXT(R"AS(

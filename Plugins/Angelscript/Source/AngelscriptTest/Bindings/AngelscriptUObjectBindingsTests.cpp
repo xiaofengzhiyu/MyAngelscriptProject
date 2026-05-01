@@ -2313,15 +2313,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(CreateAndIdentity)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunCreateAndIdentitySection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2329,7 +2325,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(HierarchyAndOuter)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunHierarchyAndOuterSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2337,7 +2333,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(TypeQueryAndCast)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunTypeQueryAndCastSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2345,7 +2341,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(FindAndLookup)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunFindAndLookupSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2353,7 +2349,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(RootLifecycle)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunRootLifecycleSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2361,7 +2357,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(FlagMutation)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunFlagMutationSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2369,7 +2365,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(NullAndIsValid)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunNullAndIsValidSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2377,7 +2373,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(NewObjectVariants)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunNewObjectVariantsSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2385,7 +2381,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(ClassReflection)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunClassReflectionSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2393,7 +2389,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(ReturnValueCrossCheck)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunReturnValueCrossCheckSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2401,7 +2397,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(CppToScriptPassthrough)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunCppToScriptPassthroughSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2409,7 +2405,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(ObjectChainAndNesting)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunObjectChainAndNestingSection(*TestRunner, Engine, GUObjectProfile);
 		}
@@ -2417,7 +2413,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptUObjectBindingsTest,
 
 	TEST_METHOD(LogAndDiagnostics)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 		RunLogAndDiagnosticsSection(*TestRunner, Engine, GUObjectProfile);
 		}

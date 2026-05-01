@@ -75,11 +75,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDataTableBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: RowHandleCompat
@@ -87,7 +83,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDataTableBindingsTest,
 
 	TEST_METHOD(RowHandleCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		ON_SCOPE_EXIT
 		{
@@ -275,7 +271,7 @@ int Entry()
 
 	TEST_METHOD(ErrorPaths)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		ON_SCOPE_EXIT
 		{

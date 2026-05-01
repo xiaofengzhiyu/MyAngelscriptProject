@@ -48,11 +48,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptJsonObjectConverterBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: RoundTrip
@@ -60,7 +56,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptJsonObjectConverterBindingsTest,
 
 	TEST_METHOD(RoundTrip)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GJsonConvProfile, TEXT("RoundTrip"), TEXT(R"(
@@ -139,7 +135,7 @@ int RoundTrip_AppendedFieldParity()
 
 	TEST_METHOD(ErrorPaths)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GJsonConvProfile, TEXT("ErrorPaths"), TEXT(R"(

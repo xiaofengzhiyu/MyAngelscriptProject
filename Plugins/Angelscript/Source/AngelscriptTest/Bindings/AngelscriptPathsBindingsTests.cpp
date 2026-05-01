@@ -22,11 +22,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptPathsBindingsTest,
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }
-	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_CREATE_ENGINE(); AngelscriptTestSupport::ResetSharedCloneEngine(E); }
+	AFTER_ALL() { FAngelscriptEngine& E = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(E); }
 
 	TEST_METHOD(FPathsProjectDir)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPathsProfile, TEXT("ProjectDir"), TEXT(R"(
 int Paths_ProjectDirNonEmpty()
@@ -50,7 +50,7 @@ int Paths_ProjectDirNonEmpty()
 
 	TEST_METHOD(FPathsGetExtension)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPathsProfile, TEXT("Extension"), TEXT(R"(
 int Paths_GetExtensionLen()
@@ -80,7 +80,7 @@ int Paths_GetExtensionLen()
 
 #if 0 // Disabled: binding gap — re-enable when binding is added
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPathsProfile, TEXT("AppName"), TEXT(R"(
 int App_GetNameNonEmpty()
@@ -102,7 +102,7 @@ int App_GetNameNonEmpty()
 
 	TEST_METHOD(FCommandLineGet)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		FCoverageModuleScope Mod(*TestRunner, Engine, GPathsProfile, TEXT("CmdLine"), TEXT(R"(
 int CommandLine_GetExists()

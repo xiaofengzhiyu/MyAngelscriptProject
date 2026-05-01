@@ -38,7 +38,7 @@ bool FAngelscriptNetworkServerRPCCompileTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*AngelscriptNetworkRPCTest::ServerRPCModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	ECompileResult CompileResult = ECompileResult::Error;
@@ -109,7 +109,7 @@ bool FAngelscriptNetworkClientRPCCompileTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*AngelscriptNetworkRPCTest::ClientRPCModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	ECompileResult CompileResult = ECompileResult::Error;
@@ -177,7 +177,7 @@ bool FAngelscriptNetworkMulticastRPCCompileTest::RunTest(const FString& Paramete
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*AngelscriptNetworkRPCTest::MulticastRPCModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	ECompileResult CompileResult = ECompileResult::Error;
@@ -245,7 +245,7 @@ bool FAngelscriptNetworkValidationRPCCompileTest::RunTest(const FString& Paramet
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*AngelscriptNetworkRPCTest::ValidationRPCModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	ECompileResult CompileResult = ECompileResult::Error;
@@ -319,7 +319,7 @@ bool FAngelscriptNetworkUnreliableRPCCompileTest::RunTest(const FString& Paramet
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*AngelscriptNetworkRPCTest::UnreliableRPCModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	ECompileResult CompileResult = ECompileResult::Error;
@@ -387,7 +387,7 @@ bool FAngelscriptNetworkMixedRPCCompileTest::RunTest(const FString& Parameters)
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*AngelscriptNetworkRPCTest::MixedRPCModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	ECompileResult CompileResult = ECompileResult::Error;

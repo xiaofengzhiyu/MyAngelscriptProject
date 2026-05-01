@@ -52,7 +52,7 @@ bool FAngelscriptHotReloadFullReloadVersionChainAndCDOConsistencyTest::RunTest(c
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*VersionChainModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(
@@ -239,7 +239,7 @@ bool FAngelscriptHotReloadSoftReloadCDOAndInstanceConsistencyTest::RunTest(const
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*SoftReloadConsistencyModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(

@@ -78,11 +78,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptHitResultFunctionLibraryTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: Accessors
@@ -90,7 +86,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptHitResultFunctionLibraryTest,
 
 	TEST_METHOD(Accessors)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GHitResultFunctionLibraryProfile, TEXT("Accessors"), TEXT(R"(

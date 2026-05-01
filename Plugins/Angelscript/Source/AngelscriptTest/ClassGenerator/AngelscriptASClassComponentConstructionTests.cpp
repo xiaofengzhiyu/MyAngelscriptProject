@@ -198,7 +198,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassComponentConstructionTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASClassComponentConstructionTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 			CollectGarbage(RF_NoFlags, true);
 		};
 

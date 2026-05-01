@@ -105,11 +105,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTemplateCQTest,
 	// Resets the shared engine to leave a clean state for subsequent
 	// test classes that share the same process-level engine singleton.
 	// -----------------------------------------------------------------
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// =================================================================
 	// 1. BasicCompileAndRun
@@ -120,7 +116,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTemplateCQTest,
 
 	TEST_METHOD(BasicCompileAndRun)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GTemplateProfile, TEXT("Basic"), TEXT(R"(
@@ -149,7 +145,7 @@ int GetFortyTwo()
 
 	TEST_METHOD(MultipleAssertions)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GTemplateProfile, TEXT("Multi"), TEXT(R"(
@@ -183,7 +179,7 @@ int Modulo()   { return 17 % 5; }
 
 	TEST_METHOD(ReturnStruct)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GTemplateProfile, TEXT("RetStruct"), TEXT(R"(
@@ -246,7 +242,7 @@ FString FormatValue()
 
 	TEST_METHOD(PassArguments)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GTemplateProfile, TEXT("PassArgs"), TEXT(R"(
@@ -324,7 +320,7 @@ int StringLen(const FString& in S)
 
 	TEST_METHOD(NegativePath)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Register expected errors BEFORE module compilation so patterns
@@ -379,7 +375,7 @@ void StringIndexOOB()
 
 	TEST_METHOD(AssertThatEarlyReturn)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GTemplateProfile, TEXT("AssertThat"), TEXT(R"(

@@ -1,4 +1,5 @@
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Functional/Actor/AngelscriptActorTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -19,13 +20,13 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptActorComponentTest,
 
 	AFTER_ALL()
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		ResetSharedCloneEngine(Engine);
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
+		ASTEST_RESET_ENGINE(Engine);
 	}
 
 	TEST_METHOD(CreateComponent)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorCreateComponent"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -73,7 +74,7 @@ class ATestActorCreateComponent : AActor
 
 	TEST_METHOD(GetComponent)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorGetComponent"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -123,7 +124,7 @@ class ATestActorGetComponent : AActor
 
 	TEST_METHOD(GetOrCreateComponent)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorGetOrCreateComponent"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -171,7 +172,7 @@ class ATestActorGetOrCreateComponent : AActor
 
 	TEST_METHOD(GetAllComponents)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorGetAllComponents"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };

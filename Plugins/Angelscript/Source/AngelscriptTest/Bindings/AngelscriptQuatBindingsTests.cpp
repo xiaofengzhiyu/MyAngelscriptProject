@@ -55,11 +55,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptQuatBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: Identity
@@ -67,7 +63,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptQuatBindingsTest,
 
 	TEST_METHOD(Identity)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GQuatProfile, TEXT("Identity"), TEXT(R"(
@@ -95,7 +91,7 @@ int Quat_IsIdentity()
 
 	TEST_METHOD(NormalizeOps)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GQuatProfile, TEXT("NormalizeOps"), TEXT(R"(
@@ -126,7 +122,7 @@ int Quat_IsNormalizedAfterNormalize()
 
 	TEST_METHOD(RotateVector)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GQuatProfile, TEXT("RotateVector"), TEXT(R"(
@@ -158,7 +154,7 @@ int Quat_UnrotateVectorRecoversOriginal()
 
 	TEST_METHOD(InverseAndDecomp)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GQuatProfile, TEXT("InverseAndDecomp"), TEXT(R"(
@@ -198,7 +194,7 @@ int Quat_ToAxisAndAngle_Angle()
 
 	TEST_METHOD(Conversions)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GQuatProfile, TEXT("Conversions"), TEXT(R"(
@@ -228,7 +224,7 @@ int Quat_MakeFromEulerRotator()
 
 	TEST_METHOD(Interpolation)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GQuatProfile, TEXT("Interpolation"), TEXT(R"(

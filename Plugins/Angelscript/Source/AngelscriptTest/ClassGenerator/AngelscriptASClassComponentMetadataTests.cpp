@@ -134,7 +134,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassComponentMetadataTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASClassComponentMetadataModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptSource = TEXT(R"AS(
@@ -218,7 +218,7 @@ class AMetadataDerivedActor : AMetadataBaseActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASClassComponentMetadataSoftReloadModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptV1 = TEXT(R"AS(

@@ -1,4 +1,5 @@
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Functional/Actor/AngelscriptActorTestHelpers.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -19,13 +20,13 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptActorMixinTest,
 
 	AFTER_ALL()
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		ResetSharedCloneEngine(Engine);
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
+		ASTEST_RESET_ENGINE(Engine);
 	}
 
 	TEST_METHOD(SetActorQuat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorMixinSetQuat"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -77,7 +78,7 @@ class ATestActorMixinSetQuat : AActor
 
 	TEST_METHOD(SetActorLocationSweep)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorMixinSetLocSweep"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -133,7 +134,7 @@ class ATestActorMixinSetLocSweep : AActor
 
 	TEST_METHOD(SetActorLocationAndRotation)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorMixinSetLocAndRot"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -188,7 +189,7 @@ class ATestActorMixinSetLocAndRot : AActor
 
 	TEST_METHOD(GetAttachedActors)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorMixinGetAttached"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };

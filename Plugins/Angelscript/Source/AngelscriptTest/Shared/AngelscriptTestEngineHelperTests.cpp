@@ -1,5 +1,6 @@
 #include "Shared/AngelscriptTestEngineHelper.h"
 
+#include "Shared/AngelscriptTestMacros.h"
 #include "Shared/AngelscriptNativeScriptTestObject.h"
 #include "ClassGenerator/ASClass.h"
 #include "ClassGenerator/ASStruct.h"
@@ -478,7 +479,7 @@ class UHelperResetGeneratedComponent : UAngelscriptComponent
 	// Spawner destroyed here — World, Actor, and Component are released so GC
 	// can reclaim the generated UASClass after ResetSharedCloneEngine.
 
-	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	ASTEST_RESET_ENGINE(Engine);
 
 	UASClass* FoundGeneratedClassByPath = FindObject<UASClass>(nullptr, *GeneratedClassPath);
 	int32 MatchingClasses = 0;
@@ -546,7 +547,7 @@ struct FHelperResetGeneratedStruct
 	TWeakObjectPtr<UASStruct> WeakGeneratedStruct(GeneratedStruct);
 	const FString GeneratedStructPath = GeneratedStruct->GetPathName();
 
-	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	ASTEST_RESET_ENGINE(Engine);
 
 	UASStruct* FoundGeneratedStructByPath = FindObject<UASStruct>(nullptr, *GeneratedStructPath);
 	int32 MatchingStructs = 0;
@@ -650,7 +651,7 @@ event void FHelperResetGeneratedEvent(int Value);
 	const FString GeneratedDelegateFunctionPath = GeneratedDelegateFunction->GetPathName();
 	const FString GeneratedEventFunctionPath = GeneratedEventFunction->GetPathName();
 
-	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	ASTEST_RESET_ENGINE(Engine);
 
 	UEnum* FoundGeneratedEnumByPath = FindObject<UEnum>(nullptr, *GeneratedEnumPath);
 	UDelegateFunction* FoundGeneratedDelegateFunctionByPath = FindObject<UDelegateFunction>(nullptr, *GeneratedDelegateFunctionPath);
@@ -731,7 +732,7 @@ bool FAngelscriptTestEngineHelperResetSharedEngineDiscardsRawModulesTest::RunTes
 	FAngelscriptEngine& Engine = AngelscriptTestSupport::GetOrCreateSharedCloneEngine();
 	ON_SCOPE_EXIT
 	{
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	{
@@ -769,7 +770,7 @@ bool FAngelscriptTestEngineHelperResetSharedEngineDiscardsRawModulesTest::RunTes
 		return false;
 	}
 
-	AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+	ASTEST_RESET_ENGINE(Engine);
 	return TestNull(
 		TEXT("ResetSharedCloneEngine should also discard raw direct-compile script modules"),
 		Engine.GetScriptEngine()->GetModule("HelperRawSharedReset", asGM_ONLY_IF_EXISTS));

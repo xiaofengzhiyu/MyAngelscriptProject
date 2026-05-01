@@ -231,7 +231,7 @@ bool FAngelscriptHotReloadModuleRecordTracksEnumAndDelegateArtifactsTest::RunTes
 	{
 		Engine.DiscardModule(*ModuleTrackedTypesA.ModuleName.ToString());
 		Engine.DiscardModule(*ModuleTrackedTypesB.ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	if (!TestTrue(

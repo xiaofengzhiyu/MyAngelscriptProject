@@ -216,7 +216,7 @@ bool FAngelscriptExecutionDiscardCleansTypeRegistriesTest::RunTest(const FString
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ExecutionDiscardLifecycleModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	FExecutionDiscardLifecycleState InitialState;

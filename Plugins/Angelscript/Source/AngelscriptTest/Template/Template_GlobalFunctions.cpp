@@ -66,7 +66,7 @@ bool FAngelscriptTemplateGlobalFunctionInvokeTest::RunTest(const FString& Parame
 	{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 	ON_SCOPE_EXIT
 	{
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	asIScriptModule* Module = BuildModule(
@@ -147,7 +147,7 @@ bool FAngelscriptTemplateGlobalFunctionAllArgsTest::RunTest(const FString& Param
 	{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 	ON_SCOPE_EXIT
 	{
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	asIScriptModule* Module = BuildModule(

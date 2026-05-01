@@ -71,7 +71,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassReplicationTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASClassReplicationTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptSource = TEXT(R"AS(

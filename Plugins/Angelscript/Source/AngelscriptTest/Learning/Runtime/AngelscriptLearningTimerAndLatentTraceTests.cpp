@@ -34,7 +34,7 @@ bool FAngelscriptLearningTimerAndLatentTraceTest::RunTest(const FString& Paramet
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptSource = TEXT(R"AS(

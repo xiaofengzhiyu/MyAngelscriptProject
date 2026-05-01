@@ -986,15 +986,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptForeachBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(ArrayForeach)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachArraySection(*TestRunner, Engine, GForeachProfile);
 		RunForeachReturnTypeSection(*TestRunner, Engine, GForeachProfile);
@@ -1003,56 +999,56 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptForeachBindingsTest,
 
 	TEST_METHOD(SetForeach)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachSetSection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(SetForeachExactVisit)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachSetExactVisitSection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(MapForeach)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachMapSection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(MapForeachKeyValuePairing)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachMapKeyValueSection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(ForeachNestedArrayMap)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachNestedSection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(ForeachEmptyContainerSkipsBody)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachEmptySection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(ForeachUObjectArrayCompiles)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachUObjectSection(*TestRunner, Engine, GForeachProfile);
 	}
 
 	TEST_METHOD(ForeachConstRefPreservesOriginal)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		RunForeachConstRefSection(*TestRunner, Engine, GForeachProfile);
 	}

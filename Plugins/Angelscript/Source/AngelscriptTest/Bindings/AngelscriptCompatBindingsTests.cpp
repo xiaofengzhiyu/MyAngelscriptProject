@@ -60,11 +60,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptCompatBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: ObjectCastCompat
@@ -72,7 +68,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptCompatBindingsTest,
 
 	TEST_METHOD(ObjectCastCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Plain module: test Cast<T> and n"" literal
@@ -170,7 +166,7 @@ class UBindingCastComponent : UActorComponent
 
 	TEST_METHOD(ObjectEditorOnly)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GCompatProfile, TEXT("EditorOnly"), TEXT(R"(
@@ -194,7 +190,7 @@ int Compat_EditorOnly_Package()
 
 	TEST_METHOD(ObjectEditorOnlyParity)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FName NonEditorOnlyName(*FString::Printf(
@@ -227,7 +223,7 @@ int Compat_EditorOnly_Package()
 				NonEditorOnlyComponent->MarkAsGarbage();
 			}
 
-			AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const bool bNativeNonEditorOnly = NonEditorOnlyComponent->IsEditorOnly();
@@ -276,7 +272,7 @@ int Compat_EditorOnlyParity()
 
 	TEST_METHOD(TimespanCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GCompatProfile, TEXT("TimespanCompat"), TEXT(R"(
@@ -371,7 +367,7 @@ int Compat_Timespan_Arithmetic()
 
 	TEST_METHOD(DateTimeCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GCompatProfile, TEXT("DateTimeCompat"), TEXT(R"(

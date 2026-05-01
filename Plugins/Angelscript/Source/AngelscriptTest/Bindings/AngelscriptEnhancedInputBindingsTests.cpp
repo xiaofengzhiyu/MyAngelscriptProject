@@ -46,15 +46,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptEnhancedInputBindingsTest, "Angelscript.TestMo
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(InputActionValueMulAssignCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("MulAssignCompat"), TEXT(R"(
@@ -86,7 +82,7 @@ int MulAssignChaining()
 
 	TEST_METHOD(EnhancedInputComponentConstCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		struct FConstClearMethodExpectation
@@ -178,7 +174,7 @@ int MutableEntry()
 
 	TEST_METHOD(InputDebugKeyBindingExecuteCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("DebugKeyBindingCompat"), TEXT(R"(
@@ -218,7 +214,7 @@ int DebugKeyEntry()
 
 	TEST_METHOD(InputActionValueConstructorsAndAxisTypes)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("ConstructorsAxisTypes"), TEXT(R"(
@@ -254,7 +250,7 @@ int VerifyConstructorsAndAxisTypes()
 
 	TEST_METHOD(InputActionValueConvertToType)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("ConvertToType"), TEXT(R"(
@@ -284,7 +280,7 @@ int VerifyConvertToType()
 
 	TEST_METHOD(EnhancedInputComponentBindActionCompiles)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("BindAction"), TEXT(R"(
@@ -322,7 +318,7 @@ int BindActionEntry()
 
 	TEST_METHOD(EnhancedInputComponentRemoveBindingCompiles)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("RemoveBinding"), TEXT(R"(
@@ -348,7 +344,7 @@ int RemoveBindingEntry()
 
 	TEST_METHOD(EnhancedInputComponentEditorDelegateFlags)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GEnhInputProfile, TEXT("EditorDelegateFlags"), TEXT(R"(

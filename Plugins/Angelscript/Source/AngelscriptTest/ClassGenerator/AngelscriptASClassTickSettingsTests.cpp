@@ -32,7 +32,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassTickSettingsTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASClassTickSettingsModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		// UE 5.7: AActor::ReceiveTick is no longer a BlueprintImplementableEvent.

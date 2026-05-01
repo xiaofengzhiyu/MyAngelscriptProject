@@ -121,7 +121,7 @@ class UASFunctionDispatchClassThreadSafeWithOverride : UObject
 			{
 				Engine.DiscardModule(*TestCase.ModuleName.ToString());
 			}
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		for (const ASFunctionDispatchTests::FDispatchCase& TestCase : Cases)

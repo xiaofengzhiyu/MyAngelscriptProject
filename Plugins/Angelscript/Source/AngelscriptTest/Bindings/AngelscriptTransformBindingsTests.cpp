@@ -98,11 +98,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTransformBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: TransformPosition
@@ -111,7 +107,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptTransformBindingsTest,
 	TEST_METHOD(TransformPosition)
 	{
 		using namespace AngelscriptTransformBindingsTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FRotator BaseRot(0.0, 90.0, 0.0);
@@ -180,7 +176,7 @@ int Transform_ScaleAffectsResult()
 	TEST_METHOD(RelativeTransform)
 	{
 		using namespace AngelscriptTransformBindingsTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FRotator BaseRot(0.0, 90.0, 0.0);
@@ -241,7 +237,7 @@ int Transform_RelativeNotIdentity()
 	TEST_METHOD(SettersAndGetters)
 	{
 		using namespace AngelscriptTransformBindingsTests_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		const FRotator BaseRot(0.0, 90.0, 0.0);

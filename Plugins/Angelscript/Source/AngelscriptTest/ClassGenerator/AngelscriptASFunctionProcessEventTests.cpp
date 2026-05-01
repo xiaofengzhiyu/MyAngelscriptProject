@@ -131,7 +131,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASFunctionProcessEventTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ASFunctionProcessEventTests::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UASClass* ScriptClass = ASFunctionProcessEventTests::CompileProcessEventCarrier(*TestRunner, Engine);

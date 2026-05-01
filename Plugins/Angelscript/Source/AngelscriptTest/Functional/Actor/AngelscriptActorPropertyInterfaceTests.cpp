@@ -1,4 +1,5 @@
 #include "CQTest.h"
+#include "Shared/AngelscriptTestMacros.h"
 #include "Functional/Actor/AngelscriptActorTestHelpers.h"
 
 #include "Components/SceneComponent.h"
@@ -56,15 +57,15 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptActorPropertyInterfaceTest,
 
 	AFTER_ALL()
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		ResetSharedCloneEngine(Engine);
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
+		ASTEST_RESET_ENGINE(Engine);
 	}
 
 	// --- Property Tests (from AngelscriptActorPropertyTests.cpp) ---
 
 	TEST_METHOD(UProperty)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorUProperty"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -99,7 +100,7 @@ class ATestActorUProperty : AActor
 
 	TEST_METHOD(UFunction)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorUFunction"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -137,7 +138,7 @@ class ATestActorUFunction : AActor
 
 	TEST_METHOD(DefaultValues)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorDefaultValues"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -168,7 +169,7 @@ class ATestActorDefaultValues : AActor
 
 	TEST_METHOD(InterfaceBoundMethods)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorInterfaceBoundMethods"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -268,7 +269,7 @@ class ATestActorInterfaceBoundMethods : AActor
 
 	TEST_METHOD(InterfaceComponentAndInput)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorInterfaceComponentAndInput"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
@@ -340,7 +341,7 @@ class ATestActorInterfaceComponentAndInput : AActor
 
 	TEST_METHOD(InterfaceSpawnAndQuery)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 		static const FName ModuleName(TEXT("TestActorInterfaceSpawnAndQuery"));
 		ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };

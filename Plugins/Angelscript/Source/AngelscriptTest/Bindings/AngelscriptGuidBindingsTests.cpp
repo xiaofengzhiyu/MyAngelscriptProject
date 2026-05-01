@@ -73,11 +73,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGuidBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: FormatAndSlots
@@ -112,7 +108,7 @@ int Guid_SlotAccess()
 		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
 		ScriptSource.ReplaceInline(TEXT("__DIGITS__"), *Digits, ESearchCase::CaseSensitive);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("FormatSlots"), ScriptSource);
@@ -176,7 +172,7 @@ int Guid_ParseExactDigits()
 		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
 		ScriptSource.ReplaceInline(TEXT("__DIGITS__"), *Digits, ESearchCase::CaseSensitive);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("ParseOk"), ScriptSource);
@@ -224,7 +220,7 @@ int Guid_ParseInvalid()
 		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
 		ScriptSource.ReplaceInline(TEXT("__INVALID__"), *InvalidInput, ESearchCase::CaseSensitive);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("ParseFail"), ScriptSource);
@@ -265,7 +261,7 @@ int Guid_CtorFromDigits()
 		ScriptSource.ReplaceInline(TEXT("__HYPHENS__"), *WithHyphens, ESearchCase::CaseSensitive);
 		ScriptSource.ReplaceInline(TEXT("__DIGITS__"), *Digits, ESearchCase::CaseSensitive);
 
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GGuidProfile, TEXT("StrCtor"), ScriptSource);

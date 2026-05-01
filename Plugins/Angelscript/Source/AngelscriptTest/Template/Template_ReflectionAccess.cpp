@@ -114,7 +114,7 @@ bool FAngelscriptTemplateReflectionAccessTest::RunTest(const FString& Parameters
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	// --- 1. Compile a script class with a modest mix of AS-declared members so
@@ -247,7 +247,7 @@ bool FAngelscriptTemplateReflectionAccessAllTypesTest::RunTest(const FString& Pa
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(
@@ -452,7 +452,7 @@ bool FAngelscriptTemplateReflectionAccessInvokeAllTypesTest::RunTest(const FStri
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(
@@ -762,7 +762,7 @@ bool FAngelscriptTemplateReflectionAccessExtendedTypesTest::RunTest(const FStrin
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(
@@ -1095,7 +1095,7 @@ bool FAngelscriptTemplateReflectionAccessInvokeExtendedTypesTest::RunTest(const 
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(
@@ -1782,7 +1782,7 @@ bool FAngelscriptTemplateReflectionAccessPathLimitsTest::RunTest(const FString& 
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(
@@ -1915,7 +1915,7 @@ bool FAngelscriptTemplateReflectionBPLibraryViaASGlobalWrapperTest::RunTest(cons
 	{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 	ON_SCOPE_EXIT
 	{
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	// BuildModule compiles a bare AS source (no UCLASS / no UPROPERTY) into an
@@ -2153,7 +2153,7 @@ bool FAngelscriptTemplateReflectionBPLibraryThroughActorUFunctionTest::RunTest(c
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	UClass* ScriptClass = CompileScriptModule(

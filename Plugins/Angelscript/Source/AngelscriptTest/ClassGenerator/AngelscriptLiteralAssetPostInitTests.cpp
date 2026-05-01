@@ -239,7 +239,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptLiteralAssetPostInitTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*LiteralAssetPostInitTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* GeneratedClass = LiteralAssetPostInitTest::CompileLiteralAssetCarrier(*TestRunner, Engine);
@@ -340,7 +340,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptLiteralAssetPostInitTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*LiteralAssetPostInitNameCollisionTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* GeneratedClass = LiteralAssetPostInitNameCollisionTest::CompileLiteralAssetCarrier(*TestRunner, Engine);
@@ -433,7 +433,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptLiteralAssetPostInitTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*LiteralAssetMultipleCoexistTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -489,7 +489,7 @@ asset SecondAsset of UMultiAssetOwner
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*LiteralAssetWithComponentTest::ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;

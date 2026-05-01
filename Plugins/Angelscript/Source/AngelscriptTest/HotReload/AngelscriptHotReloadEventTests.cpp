@@ -175,7 +175,7 @@ bool FAngelscriptHotReloadPostReloadModeFlagMatchesReloadPathTest::RunTest(const
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*PostReloadModeModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	const FString ScriptV1 = TEXT(R"AS(
@@ -368,7 +368,7 @@ class UFailedReloadEventTarget : UObject
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(*ModuleName.ToString());
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 	};
 
 	if (!TestTrue(

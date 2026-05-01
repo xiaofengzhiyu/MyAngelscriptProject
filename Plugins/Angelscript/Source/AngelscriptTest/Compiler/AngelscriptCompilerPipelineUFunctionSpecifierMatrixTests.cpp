@@ -33,7 +33,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUFunctionSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UFunctionSpecifierMatrixTest::CallInEditorModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -82,7 +82,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUFunctionSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UFunctionSpecifierMatrixTest::AuthorityOnlyModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -131,7 +131,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUFunctionSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UFunctionSpecifierMatrixTest::ExecModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;

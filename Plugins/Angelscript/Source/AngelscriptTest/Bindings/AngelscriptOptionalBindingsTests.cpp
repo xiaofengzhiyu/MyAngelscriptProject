@@ -699,15 +699,11 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptOptionalBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(OptionalCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 
 		RunOptionalSection(*TestRunner, Engine, GOptionalProfile);
@@ -721,7 +717,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptOptionalBindingsTest,
 
 	TEST_METHOD(OptionalGetValueUnsetError)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		{ FAngelscriptEngineScope _AutoEngineScope(Engine);
 
 		RunOptionalErrorSection(*TestRunner, Engine, GOptionalProfile);

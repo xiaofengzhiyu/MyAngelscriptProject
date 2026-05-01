@@ -50,11 +50,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptIntVectorBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: IntPointArithmetic
@@ -62,7 +58,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptIntVectorBindingsTest,
 
 	TEST_METHOD(IntPointArithmetic)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIntVectorProfile, TEXT("IntPoint"), TEXT(R"(
@@ -114,7 +110,7 @@ int IntPoint_GetMin()
 
 	TEST_METHOD(IntVectorOps)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIntVectorProfile, TEXT("IntVec"), TEXT(R"(
@@ -170,7 +166,7 @@ int IntVec_MulDivAssign()
 
 	TEST_METHOD(IntVector2Compat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIntVectorProfile, TEXT("IntVec2"), TEXT(R"(
@@ -214,7 +210,7 @@ int IntVec2_Indexing()
 
 	TEST_METHOD(IntVector4Arithmetic)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FCoverageModuleScope Mod(*TestRunner, Engine, GIntVectorProfile, TEXT("IntVec4"), TEXT(R"(

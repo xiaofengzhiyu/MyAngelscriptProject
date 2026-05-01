@@ -36,7 +36,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUPropertySpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UPropertySpecifierMatrixTest::EditConstModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -82,7 +82,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUPropertySpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UPropertySpecifierMatrixTest::NotEditableModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -128,7 +128,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUPropertySpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UPropertySpecifierMatrixTest::AdvancedDisplayModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -174,7 +174,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUPropertySpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UPropertySpecifierMatrixTest::SaveGameModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -220,7 +220,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUPropertySpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UPropertySpecifierMatrixTest::TransientModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -266,7 +266,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUPropertySpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UPropertySpecifierMatrixTest::ConfigModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;

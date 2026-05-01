@@ -43,7 +43,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::FNameModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -93,7 +93,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::EnumModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -159,7 +159,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::FloatBoolModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -225,7 +225,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::VectorModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -289,7 +289,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::StringModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -349,7 +349,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::TagsAddModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -411,7 +411,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::SubobjectModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -456,7 +456,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::PriorityModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -514,7 +514,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::NonExistentModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
@@ -550,7 +550,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::OutsideScopeModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);
@@ -583,7 +583,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelinePropertyDefaultMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*DefaultMatrixTest::TypeMismatchModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		TestRunner->AddExpectedError(TEXT(""), EAutomationExpectedErrorFlags::Contains, 0);

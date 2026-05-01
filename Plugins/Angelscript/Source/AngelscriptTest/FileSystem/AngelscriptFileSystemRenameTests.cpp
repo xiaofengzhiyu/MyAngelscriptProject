@@ -50,7 +50,7 @@ bool FAngelscriptFileSystemRenameWithoutDiscardTest::RunTest(const FString& Para
 	ON_SCOPE_EXIT
 	{
 		Engine.DiscardModule(TEXT("Game.AI.Patrol"));
-		ResetSharedCloneEngine(Engine);
+		ASTEST_RESET_ENGINE(Engine);
 		CleanFileSystemRenameTestRoot();
 	};
 

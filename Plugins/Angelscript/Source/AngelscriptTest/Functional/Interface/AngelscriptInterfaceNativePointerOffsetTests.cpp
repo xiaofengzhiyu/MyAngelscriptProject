@@ -103,12 +103,12 @@ namespace AngelscriptTest_InterfaceNativePointerOffset_Private
 TEST_CLASS_WITH_FLAGS(FAngelscriptInterfaceNativePointerOffsetTest, "Angelscript.TestModule.Interface.NativePointerOffset", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }
-	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE(); AngelscriptTestSupport::ResetSharedCloneEngine(Engine); }
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	TEST_METHOD(MultiInterfaceCast)
 	{
 		using namespace AngelscriptTest_InterfaceNativePointerOffset_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -117,7 +117,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptInterfaceNativePointerOffsetTest, "Angelscript
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(
@@ -218,7 +218,7 @@ class ATestInterfaceNativePointerOffset : AActor
 	TEST_METHOD(ScriptClassStillZeroOffset)
 	{
 		using namespace AngelscriptTest_InterfaceNativePointerOffset_Private;
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		AngelscriptNativeInterfaceTestHelpers::EnsureNativeInterfaceBound(UAngelscriptNativeParentInterface::StaticClass());
@@ -227,7 +227,7 @@ class ATestInterfaceNativePointerOffset : AActor
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*ScriptOnlyModuleName.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		UClass* ScriptClass = CompileScriptModule(

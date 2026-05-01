@@ -35,7 +35,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUClassSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UClassSpecifierMatrixTest::AbstractModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -77,7 +77,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUClassSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UClassSpecifierMatrixTest::BlueprintTypeModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -120,7 +120,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUClassSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UClassSpecifierMatrixTest::DefaultToInstancedModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -163,7 +163,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUClassSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UClassSpecifierMatrixTest::DeprecatedModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;
@@ -206,7 +206,7 @@ TEST_CLASS_WITH_FLAGS(FCompilerPipelineUClassSpecifierMatrixTests,
 		ON_SCOPE_EXIT
 		{
 			Engine.DiscardModule(*UClassSpecifierMatrixTest::HideCategoriesModule.ToString());
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		ECompileResult CompileResult = ECompileResult::Error;

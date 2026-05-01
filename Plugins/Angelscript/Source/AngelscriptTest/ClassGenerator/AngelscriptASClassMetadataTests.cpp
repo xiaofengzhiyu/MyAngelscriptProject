@@ -87,7 +87,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassMetadataTests,
 			{
 				Engine.DiscardModule(*TestCase.ModuleName.ToString());
 			}
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		for (const ASClassMetadataTests::FDeveloperOnlyModuleCase& TestCase : Cases)
@@ -123,7 +123,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptASClassMetadataTests,
 			{
 				Engine.DiscardModule(*DiscardModuleName.ToString());
 			}
-			ResetSharedCloneEngine(Engine);
+			ASTEST_RESET_ENGINE(Engine);
 		};
 
 		const FString ScriptSource = TEXT(R"AS(

@@ -50,11 +50,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptCollisionProfileBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: ObjectTypeConversion
@@ -62,7 +58,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptCollisionProfileBindingsTest,
 
 	TEST_METHOD(ObjectTypeConversion)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Compute native baselines
@@ -128,7 +124,7 @@ int ObjType_WorldDynamicRoundTrip()
 
 	TEST_METHOD(TraceTypeConversion)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		// Compute native baselines

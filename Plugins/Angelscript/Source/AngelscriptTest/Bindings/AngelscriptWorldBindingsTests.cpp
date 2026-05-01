@@ -59,11 +59,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptWorldBindingsTest,
 		ASTEST_CREATE_ENGINE();
 	}
 
-	AFTER_ALL()
-	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
-		AngelscriptTestSupport::ResetSharedCloneEngine(Engine);
-	}
+	AFTER_ALL() { FAngelscriptEngine& Engine = ASTEST_GET_ENGINE(); ASTEST_RESET_ENGINE(Engine); }
 
 	// ====================================================================
 	// Section: ContextAndGlobalsCompat
@@ -71,7 +67,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptWorldBindingsTest,
 
 	TEST_METHOD(ContextAndGlobalsCompat)
 	{
-		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+		FAngelscriptEngine& Engine = ASTEST_GET_ENGINE();
 		FAngelscriptEngineScope Scope(Engine);
 
 		FActorTestSpawner Spawner;

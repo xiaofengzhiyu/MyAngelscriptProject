@@ -36,7 +36,7 @@ bool FAngelscriptBindingsSharedExampleTest::RunTest(const FString& Parameters)
 	bool bPassed = true;
 	FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
 	{ FAngelscriptEngineScope _AutoEngineScope(Engine);
-	ON_SCOPE_EXIT { ResetSharedCloneEngine(Engine); };
+	ON_SCOPE_EXIT { ASTEST_RESET_ENGINE(Engine); };
 
 	static const FBindingsCoverageProfile GExampleProfile{
 		TEXT("Example"),
