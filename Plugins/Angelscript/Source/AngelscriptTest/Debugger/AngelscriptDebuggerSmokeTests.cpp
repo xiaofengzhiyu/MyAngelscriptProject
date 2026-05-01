@@ -1,136 +1,217 @@
-#include "Shared/AngelscriptDebuggerTestClient.h"
-#include "Shared/AngelscriptDebuggerTestSession.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptDebuggerTestContext.h"
 
-#include "Misc/AutomationTest.h"
-#include "Misc/ScopeExit.h"
+#include "Core/AngelscriptRuntimeModule.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 using namespace AngelscriptTestSupport;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebuggerSmokeHandshakeTest,
-	"Angelscript.TestModule.Debugger.Smoke.Handshake",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDebuggerSmokeHandshakeTest::RunTest(const FString& Parameters)
+namespace AngelscriptDebuggerSmokeTests_Private
 {
-	FAngelscriptDebuggerTestSession Session;
-	FAngelscriptDebuggerSessionConfig SessionConfig;
-	// UE 5.7: TryGetRunningProductionDebuggerEngine() returns null in headless
-	// automation (no UAngelscriptGameInstanceSubsystem). Leaving ExistingEngine
-	// null lets Initialize() build an isolated FAngelscriptEngine whose
-	// FAngelscriptDebugServer binds to a unique port — the session then owns
-	// full engine + server lifecycle for the test.
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should initialize a debugger test session"), Session.Initialize(SessionConfig)))
+	class FScopedDebugBreakFiltersBinding
 	{
-		return false;
-	}
-
-	FAngelscriptDebuggerTestClient Client;
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should connect a debugger test client"), Client.Connect(TEXT("127.0.0.1"), Session.GetPort())))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	ON_SCOPE_EXIT
-	{
-		if (Client.IsConnected())
+	public:
+		explicit FScopedDebugBreakFiltersBinding(TFunction<void(FAngelscriptDebugBreakFilters&)> InPopulateFilters)
+			: TargetDelegate(FAngelscriptRuntimeModule::GetDebugBreakFilters())
+			, PreviousDelegate(TargetDelegate)
+			, PopulateFilters(MoveTemp(InPopulateFilters))
 		{
-			Client.SendStopDebugging();
-			Session.PumpUntil([&Session]() { return !Session.GetDebugServer().bIsDebugging; }, 1.0f);
-			Client.SendDisconnect();
-			Client.Disconnect();
+			TargetDelegate.BindLambda([this](FAngelscriptDebugBreakFilters& OutFilters)
+			{
+				PopulateFilters(OutFilters);
+			});
 		}
+
+		~FScopedDebugBreakFiltersBinding()
+		{
+			TargetDelegate = MoveTemp(PreviousDelegate);
+		}
+
+	private:
+		FAngelscriptGetDebugBreakFilters& TargetDelegate;
+		FAngelscriptGetDebugBreakFilters PreviousDelegate;
+		TFunction<void(FAngelscriptDebugBreakFilters&)> PopulateFilters;
 	};
 
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should send StartDebugging"), Client.SendStartDebugging(2)))
+	bool WaitForDebuggerEnvelopeType(
+		FAutomationTestBase& Test,
+		FAngelscriptDebuggerTestSession& Session,
+		FAngelscriptDebuggerTestClient& Client,
+		EDebugMessageType ExpectedType,
+		TOptional<FAngelscriptDebugMessageEnvelope>& OutEnvelope,
+		const TCHAR* Context)
 	{
-		AddError(Client.GetLastError());
-		return false;
-	}
+		const bool bReceivedEnvelope = Session.PumpUntil(
+			[&Client, &OutEnvelope, ExpectedType]()
+			{
+				if (OutEnvelope.IsSet())
+				{
+					return true;
+				}
 
-	TOptional<FAngelscriptDebugMessageEnvelope> DebugVersionEnvelope;
-	const bool bReceivedDebugVersion = Session.PumpUntil(
-		[&Client, &DebugVersionEnvelope]()
+				TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
+				if (Envelope.IsSet() && Envelope->MessageType == ExpectedType)
+				{
+					OutEnvelope = MoveTemp(Envelope);
+					return true;
+				}
+
+				return false;
+			},
+			Session.GetDefaultTimeoutSeconds());
+
+		if (!Test.TestTrue(Context, bReceivedEnvelope))
 		{
-			if (DebugVersionEnvelope.IsSet())
+			if (!Client.GetLastError().IsEmpty())
 			{
-				return true;
+				Test.AddError(Client.GetLastError());
 			}
-
-			TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-			if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-			{
-				DebugVersionEnvelope = MoveTemp(Envelope);
-				return true;
-			}
-
 			return false;
-		},
-		Session.GetDefaultTimeoutSeconds());
+		}
 
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should receive the DebugServerVersion response"), bReceivedDebugVersion))
-	{
-		AddError(Client.GetLastError());
-		return false;
+		return true;
 	}
-
-	const TOptional<FDebugServerVersionMessage> DebugServerVersion = FAngelscriptDebuggerTestClient::DeserializeMessage<FDebugServerVersionMessage>(DebugVersionEnvelope.GetValue());
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should deserialize the debug server version payload"), DebugServerVersion.IsSet()))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Smoke.Handshake should report the current debug server version"), DebugServerVersion->DebugServerVersion, DEBUG_SERVER_VERSION);
-	TestTrue(TEXT("Debugger.Smoke.Handshake should put the session in debugging mode after StartDebugging"), Session.GetDebugServer().bIsDebugging);
-
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should request debugger break filters"), Client.SendRequestBreakFilters()))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	TOptional<FAngelscriptDebugMessageEnvelope> BreakFiltersEnvelope;
-	const bool bReceivedBreakFilters = Session.PumpUntil(
-		[&Client, &BreakFiltersEnvelope]()
-		{
-			if (BreakFiltersEnvelope.IsSet())
-			{
-				return true;
-			}
-
-			TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-			if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::BreakFilters)
-			{
-				BreakFiltersEnvelope = MoveTemp(Envelope);
-				return true;
-			}
-
-			return false;
-		},
-		Session.GetDefaultTimeoutSeconds());
-
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should receive a BreakFilters response"), bReceivedBreakFilters))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	const TOptional<FAngelscriptBreakFilters> BreakFilters = FAngelscriptDebuggerTestClient::DeserializeMessage<FAngelscriptBreakFilters>(BreakFiltersEnvelope.GetValue());
-	TestTrue(TEXT("Debugger.Smoke.Handshake should deserialize the BreakFilters payload"), BreakFilters.IsSet());
-
-	if (!TestTrue(TEXT("Debugger.Smoke.Handshake should send StopDebugging"), Client.SendStopDebugging()))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	const bool bStoppedDebugging = Session.PumpUntil([&Session]() { return !Session.GetDebugServer().bIsDebugging; }, Session.GetDefaultTimeoutSeconds());
-	TestTrue(TEXT("Debugger.Smoke.Handshake should leave debugging mode after StopDebugging"), bStoppedDebugging);
-	return !HasAnyErrors();
 }
 
-#endif
+TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerSmokeTests,
+	"Angelscript.TestModule.Debugger.Smoke",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+{
+	FDebuggerTestContext Ctx;
 
+	BEFORE_EACH()
+	{
+		ASSERT_THAT(IsTrue(Ctx.SetUp(*TestRunner)));
+	}
+
+	AFTER_EACH()
+	{
+		Ctx.TearDown();
+	}
+
+	TEST_METHOD(Handshake)
+	{
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Smoke.Handshake should put the session in debugging mode after StartDebugging"),
+			Ctx.GetDebugServer().bIsDebugging)));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Smoke.Handshake should request debugger break filters"),
+			Ctx.Client.SendRequestBreakFilters())));
+
+		TOptional<FAngelscriptDebugMessageEnvelope> BreakFiltersEnvelope;
+		const bool bReceivedBreakFilters = Ctx.Session.PumpUntil(
+			[this, &BreakFiltersEnvelope]()
+			{
+				if (BreakFiltersEnvelope.IsSet())
+				{
+					return true;
+				}
+
+				TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Ctx.Client.ReceiveEnvelope();
+				if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::BreakFilters)
+				{
+					BreakFiltersEnvelope = MoveTemp(Envelope);
+					return true;
+				}
+
+				return false;
+			},
+			Ctx.GetDefaultTimeoutSeconds());
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Smoke.Handshake should receive a BreakFilters response"),
+			bReceivedBreakFilters)));
+
+		const TOptional<FAngelscriptBreakFilters> BreakFilters =
+			FAngelscriptDebuggerTestClient::DeserializeMessage<FAngelscriptBreakFilters>(BreakFiltersEnvelope.GetValue());
+		TestRunner->TestTrue(
+			TEXT("Debugger.Smoke.Handshake should deserialize the BreakFilters payload"),
+			BreakFilters.IsSet());
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Smoke.Handshake should send StopDebugging"),
+			Ctx.Client.SendStopDebugging())));
+
+		const bool bStoppedDebugging = Ctx.Session.PumpUntil(
+			[this]() { return !Ctx.GetDebugServer().bIsDebugging; },
+			Ctx.GetDefaultTimeoutSeconds());
+		TestRunner->TestTrue(
+			TEXT("Debugger.Smoke.Handshake should leave debugging mode after StopDebugging"),
+			bStoppedDebugging);
+	}
+
+	TEST_METHOD(BreakFiltersRoundtrip)
+	{
+		using namespace AngelscriptDebuggerSmokeTests_Private;
+
+		FScopedDebugBreakFiltersBinding ScopedBinding(
+			[](FAngelscriptDebugBreakFilters& OutFilters)
+			{
+				OutFilters.Add(FName(TEXT("break:ensure")), TEXT("Ensure"));
+				OutFilters.Add(FName(TEXT("break:script")), TEXT("Script"));
+			});
+
+		TestRunner->TestTrue(
+			TEXT("Debugger smoke protocol should enter debugging mode after StartDebugging"),
+			Ctx.GetDebugServer().bIsDebugging);
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger smoke protocol should request break filters"),
+			Ctx.Client.SendRequestBreakFilters())));
+
+		TOptional<FAngelscriptDebugMessageEnvelope> BreakFiltersEnvelope;
+		ASSERT_THAT(IsTrue(WaitForDebuggerEnvelopeType(
+			*TestRunner,
+			Ctx.Session,
+			Ctx.Client,
+			EDebugMessageType::BreakFilters,
+			BreakFiltersEnvelope,
+			TEXT("Debugger smoke protocol should receive a BreakFilters response"))));
+
+		const TOptional<FAngelscriptBreakFilters> BreakFilters =
+			FAngelscriptDebuggerTestClient::DeserializeMessage<FAngelscriptBreakFilters>(BreakFiltersEnvelope.GetValue());
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger smoke protocol should deserialize the BreakFilters payload"),
+			BreakFilters.IsSet())));
+
+		TestRunner->TestTrue(
+			TEXT("Debugger smoke protocol should stay in debugging mode after querying break filters"),
+			Ctx.GetDebugServer().bIsDebugging);
+		TestRunner->TestEqual(
+			TEXT("Debugger smoke protocol should report two break filters"),
+			BreakFilters->Filters.Num(), 2);
+		TestRunner->TestEqual(
+			TEXT("Debugger smoke protocol should report two filter titles"),
+			BreakFilters->FilterTitles.Num(), 2);
+
+		TMap<FString, FString> ActualPairs;
+		for (int32 Index = 0; Index < BreakFilters->Filters.Num() && Index < BreakFilters->FilterTitles.Num(); ++Index)
+		{
+			ActualPairs.Add(BreakFilters->Filters[Index], BreakFilters->FilterTitles[Index]);
+		}
+
+		TestRunner->TestEqual(
+			TEXT("Debugger smoke protocol should preserve two unique filter/title pairs"),
+			ActualPairs.Num(), 2);
+
+		const FString* EnsureTitle = ActualPairs.Find(TEXT("break:ensure"));
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(
+			TEXT("Debugger smoke protocol should include the break:ensure filter"),
+			EnsureTitle)));
+		TestRunner->TestEqual(
+			TEXT("Debugger smoke protocol should preserve the break:ensure title"),
+			*EnsureTitle, FString(TEXT("Ensure")));
+
+		const FString* ScriptTitle = ActualPairs.Find(TEXT("break:script"));
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(
+			TEXT("Debugger smoke protocol should include the break:script filter"),
+			ScriptTitle)));
+		TestRunner->TestEqual(
+			TEXT("Debugger smoke protocol should preserve the break:script title"),
+			*ScriptTitle, FString(TEXT("Script")));
+	}
+};
+
+#endif

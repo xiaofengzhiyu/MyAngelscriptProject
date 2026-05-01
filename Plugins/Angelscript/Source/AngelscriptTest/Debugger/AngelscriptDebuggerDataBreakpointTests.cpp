@@ -1,11 +1,12 @@
+#include "CQTest.h"
+#include "Shared/AngelscriptDebuggerTestContext.h"
+#include "Shared/AngelscriptDebuggerTestMonitor.h"
 #include "Shared/AngelscriptDebuggerScriptFixture.h"
 #include "Shared/AngelscriptDebuggerTestClient.h"
-#include "Shared/AngelscriptDebuggerTestSession.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/GarbageCollection.h"
 
@@ -13,7 +14,7 @@
 
 using namespace AngelscriptTestSupport;
 
-namespace AngelscriptTest_Debugger_AngelscriptDebuggerDataBreakpointTests_Private
+namespace AngelscriptDebuggerDataBreakpointTests_Private
 {
 	FAngelscriptDebuggerScriptFixture CreateDataBreakpointFixture()
 	{
@@ -44,89 +45,6 @@ int RunTestCase()
 		Fixture.EvalPaths.Add(TEXT("ResultPath"), TEXT("0:Result"));
 		Fixture.bUseAnnotatedCompilation = false;
 		return Fixture;
-	}
-
-	bool StartDataBreakpointDebuggerSession(FAutomationTestBase& Test, FAngelscriptDebuggerTestSession& Session, FAngelscriptDebuggerTestClient& Client)
-	{
-		FAngelscriptDebuggerSessionConfig SessionConfig;
-		// UE 5.7: headless has no production subsystem. Let Initialize() create
-		// an isolated FAngelscriptEngine with its own FAngelscriptDebugServer.
-		SessionConfig.DefaultTimeoutSeconds = 45.0f;
-
-		if (!Test.TestTrue(TEXT("Debugger data breakpoint should initialize the debugger session"), Session.Initialize(SessionConfig)))
-		{
-			return false;
-		}
-
-		if (!Test.TestTrue(TEXT("Debugger data breakpoint should connect the control client"), Client.Connect(TEXT("127.0.0.1"), Session.GetPort())))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		bool bSentStartDebugging = false;
-		const bool bStartMessageSent = Session.PumpUntil(
-			[&Client, &bSentStartDebugging]()
-			{
-				if (bSentStartDebugging)
-				{
-					return true;
-				}
-
-				bSentStartDebugging = Client.SendStartDebugging(2);
-				return bSentStartDebugging;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger data breakpoint should send StartDebugging"), bStartMessageSent))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		TOptional<FAngelscriptDebugMessageEnvelope> VersionEnvelope;
-		const bool bReceivedVersion = Session.PumpUntil(
-			[&Client, &VersionEnvelope]()
-			{
-				TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-				if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-				{
-					VersionEnvelope = MoveTemp(Envelope);
-					return true;
-				}
-
-				return false;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger data breakpoint should receive DebugServerVersion"), bReceivedVersion))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool WaitForDebuggerBreakpointCount(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		int32 ExpectedCount,
-		const TCHAR* Context)
-	{
-		const bool bReachedCount = Session.PumpUntil(
-			[&Session, ExpectedCount]()
-			{
-				return Session.GetDebugServer().BreakpointCount == ExpectedCount;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!bReachedCount)
-		{
-			Test.AddError(FString::Printf(TEXT("%s (actual breakpoint count: %d)."), Context, Session.GetDebugServer().BreakpointCount));
-		}
-
-		return bReachedCount;
 	}
 
 	struct FAsyncDataBreakpointInvocationState : public TSharedFromThis<FAsyncDataBreakpointInvocationState>
@@ -169,72 +87,6 @@ int RunTestCase()
 			Session.GetDefaultTimeoutSeconds());
 
 		return Test.TestTrue(Context, bCompleted);
-	}
-
-	bool WaitForMonitorReady(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		TAtomic<bool>& bMonitorReady,
-		const TCHAR* Context)
-	{
-		const bool bReady = Session.PumpUntil(
-			[&bMonitorReady]()
-			{
-				return bMonitorReady.Load();
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		return Test.TestTrue(Context, bReady);
-	}
-
-	bool HandshakeMonitorClient(
-		FAngelscriptDebuggerTestClient& Client,
-		TAtomic<bool>& bShouldStop,
-		float TimeoutSeconds,
-		FString& OutError)
-	{
-		const double HandshakeEnd = FPlatformTime::Seconds() + TimeoutSeconds;
-		bool bSentStart = false;
-		bool bReceivedVersion = false;
-		while (FPlatformTime::Seconds() < HandshakeEnd && !bShouldStop.Load())
-		{
-			if (!bSentStart)
-			{
-				bSentStart = Client.SendStartDebugging(2);
-				if (!bSentStart)
-				{
-					OutError = FString::Printf(TEXT("Monitor failed to send StartDebugging: %s"), *Client.GetLastError());
-					return false;
-				}
-			}
-
-			TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-			if (Envelope.IsSet())
-			{
-				if (Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-				{
-					bReceivedVersion = true;
-					break;
-				}
-			}
-			else if (!Client.GetLastError().IsEmpty())
-			{
-				OutError = FString::Printf(TEXT("Monitor failed during handshake: %s"), *Client.GetLastError());
-				return false;
-			}
-
-			FPlatformProcess::Sleep(0.001f);
-		}
-
-		if (!bReceivedVersion)
-		{
-			OutError = bShouldStop.Load()
-				? TEXT("Monitor handshake aborted before receiving DebugServerVersion.")
-				: TEXT("Monitor timed out waiting for DebugServerVersion.");
-			return false;
-		}
-
-		return true;
 	}
 
 	template <typename T>
@@ -473,197 +325,146 @@ int RunTestCase()
 	}
 }
 
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebuggerDataBreakpointLocalValueHitCountTest,
-	"Angelscript.TestModule.Debugger.DataBreakpoint.LocalValueHitCount",
+TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerDataBreakpointTests,
+	"Angelscript.TestModule.Debugger.DataBreakpoint",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDebuggerDataBreakpointLocalValueHitCountTest::RunTest(const FString& Parameters)
 {
-	using namespace AngelscriptTest_Debugger_AngelscriptDebuggerDataBreakpointTests_Private;
-	FAngelscriptDebuggerTestSession Session;
-	FAngelscriptDebuggerTestClient Client;
-	if (!StartDataBreakpointDebuggerSession(*this, Session, Client))
+	FDebuggerTestContext Ctx;
+
+	BEFORE_EACH()
 	{
-		return false;
+		ASSERT_THAT(IsTrue(Ctx.SetUp(*TestRunner)));
 	}
 
-	FAngelscriptEngine& Engine = Session.GetEngine();
-	const FAngelscriptDebuggerScriptFixture Fixture = CreateDataBreakpointFixture();
-	FAngelscriptClearBreakpoints ClearBreakpoints;
-	ClearBreakpoints.Filename = Fixture.Filename;
-	ClearBreakpoints.ModuleName = Fixture.ModuleName.ToString();
-
-	ON_SCOPE_EXIT
+	AFTER_EACH()
 	{
-		Client.SendClearBreakpoints(ClearBreakpoints);
-		Client.SendStopDebugging();
-		Client.SendDisconnect();
-		Client.Disconnect();
-		Engine.DiscardModule(*Fixture.ModuleName.ToString());
-		CollectGarbage(RF_NoFlags, true);
-	};
-
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should compile the data breakpoint fixture"), Fixture.Compile(Engine)))
-	{
-		return false;
+		Ctx.TearDown();
 	}
 
-	TAtomic<bool> bDataMonitorReady(false);
-	TAtomic<bool> bDataMonitorShouldStop(false);
-	TFuture<FDataBreakpointMonitorResult> DataMonitorFuture = StartDataBreakpointMonitor(
-		Session.GetPort(),
-		bDataMonitorReady,
-		bDataMonitorShouldStop,
-		Fixture,
-		Session.GetDefaultTimeoutSeconds());
-	ON_SCOPE_EXIT
+	TEST_METHOD(LocalValueHitCount)
 	{
-		bDataMonitorShouldStop = true;
-		if (DataMonitorFuture.IsValid())
+		using namespace AngelscriptDebuggerDataBreakpointTests_Private;
+
+		FAngelscriptEngine& Engine = Ctx.GetEngine();
+		const FAngelscriptDebuggerScriptFixture Fixture = CreateDataBreakpointFixture();
+		FAngelscriptClearBreakpoints ClearBreakpoints;
+		ClearBreakpoints.Filename = Fixture.Filename;
+		ClearBreakpoints.ModuleName = Fixture.ModuleName.ToString();
+
+		ON_SCOPE_EXIT
 		{
-			DataMonitorFuture.Wait();
+			Ctx.Client.SendClearBreakpoints(ClearBreakpoints);
+			Engine.DiscardModule(*Fixture.ModuleName.ToString());
+			CollectGarbage(RF_NoFlags, true);
+		};
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should compile the data breakpoint fixture"), Fixture.Compile(Engine))));
+
+		TAtomic<bool> bDataMonitorReady(false);
+		TAtomic<bool> bDataMonitorShouldStop(false);
+		TFuture<FDataBreakpointMonitorResult> DataMonitorFuture = StartDataBreakpointMonitor(
+			Ctx.GetPort(),
+			bDataMonitorReady,
+			bDataMonitorShouldStop,
+			Fixture,
+			Ctx.GetDefaultTimeoutSeconds());
+		ON_SCOPE_EXIT
+		{
+			bDataMonitorShouldStop = true;
+			if (DataMonitorFuture.IsValid())
+			{
+				DataMonitorFuture.Wait();
+			}
+		};
+
+		ASSERT_THAT(IsTrue(WaitForMonitorReady(*TestRunner, Ctx.Session, bDataMonitorReady, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should bring the data breakpoint monitor up before execution"))));
+
+		FAngelscriptBreakpoint Breakpoint;
+		Breakpoint.Filename = Fixture.Filename;
+		Breakpoint.ModuleName = Fixture.ModuleName.ToString();
+		Breakpoint.LineNumber = Fixture.GetLine(TEXT("StepAfterCallLine"));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should set the step-after-call breakpoint"), Ctx.Client.SendSetBreakpoint(Breakpoint))));
+
+		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 1, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should observe the line breakpoint registration"))));
+
+		const TSharedRef<FAsyncDataBreakpointInvocationState> FirstInvocation = DispatchDataBreakpointInvocation(
+			Engine,
+			Fixture.Filename,
+			Fixture.ModuleName,
+			Fixture.EntryFunctionDeclaration);
+		ASSERT_THAT(IsTrue(WaitForDataBreakpointInvocationCompletion(*TestRunner, Ctx.Session, FirstInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the first invocation after the monitor resumes execution"))));
+
+		const FDataBreakpointMonitorResult DataMonitorResult = DataMonitorFuture.Get();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the data breakpoint monitor without transport errors"), DataMonitorResult.Error.IsEmpty())));
+		if (!DataMonitorResult.Error.IsEmpty())
+		{
+			TestRunner->AddError(DataMonitorResult.Error);
 		}
-	};
 
-	if (!WaitForMonitorReady(*this, Session, bDataMonitorReady, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should bring the data breakpoint monitor up before execution")))
-	{
-		return false;
-	}
+		ASSERT_THAT(IsTrue(TestRunner->TestFalse(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should not time out while driving the data breakpoint sequence"), DataMonitorResult.bTimedOut)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the initial breakpoint stop"), DataMonitorResult.InitialStopMessage.IsSet())));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the evaluate reply for Result"), DataMonitorResult.ResultVariable.IsSet())));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the data breakpoint stop"), DataMonitorResult.DataBreakpointStopMessage.IsSet())));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the ClearDataBreakpoints reply"), DataMonitorResult.ClearDataBreakpoints.IsSet())));
 
-	FAngelscriptBreakpoint Breakpoint;
-	Breakpoint.Filename = Fixture.Filename;
-	Breakpoint.ModuleName = Fixture.ModuleName.ToString();
-	Breakpoint.LineNumber = Fixture.GetLine(TEXT("StepAfterCallLine"));
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should set the step-after-call breakpoint"), Client.SendSetBreakpoint(Breakpoint)))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should stop initially because of the explicit line breakpoint"), DataMonitorResult.InitialStopMessage->Reason, FString(TEXT("breakpoint")));
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should evaluate Result before mutation"), DataMonitorResult.ResultVariable->Value, FString(TEXT("13")));
+		TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should expose a non-zero ValueAddress for Result"), DataMonitorResult.ResultVariable->ValueAddress != 0);
+		TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should expose a positive ValueSize for Result"), DataMonitorResult.ResultVariable->ValueSize > 0);
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should stop because of an exception when the data breakpoint fires"), DataMonitorResult.DataBreakpointStopMessage->Reason, FString(TEXT("exception")));
+		TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should report the data breakpoint name in the stop text"), DataMonitorResult.DataBreakpointStopMessage->Text.Contains(TEXT("Data breakpoint (Result) triggered!")));
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should clear exactly one data breakpoint"), DataMonitorResult.ClearDataBreakpoints->Ids.Num(), 1);
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should clear the hit-count-limited data breakpoint id"), DataMonitorResult.ClearDataBreakpoints->Ids[0], 11);
+		TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should complete the first invocation successfully"), FirstInvocation->bSucceeded);
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should preserve the first invocation result"), FirstInvocation->Result, 14);
 
-	if (!WaitForDebuggerBreakpointCount(*this, Session, 1, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should observe the line breakpoint registration")))
-	{
-		return false;
-	}
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should clear the line breakpoint before the second invocation"), Ctx.Client.SendClearBreakpoints(ClearBreakpoints))));
 
-	const TSharedRef<FAsyncDataBreakpointInvocationState> FirstInvocation = DispatchDataBreakpointInvocation(
-		Engine,
-		Fixture.Filename,
-		Fixture.ModuleName,
-		Fixture.EntryFunctionDeclaration);
-	if (!WaitForDataBreakpointInvocationCompletion(*this, Session, FirstInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the first invocation after the monitor resumes execution")))
-	{
-		return false;
-	}
+		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 0, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should observe the breakpoint removal before the second invocation"))));
 
-	const FDataBreakpointMonitorResult DataMonitorResult = DataMonitorFuture.Get();
+		Ctx.Client.DrainPendingMessages();
 
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the data breakpoint monitor without transport errors"), DataMonitorResult.Error.IsEmpty()))
-	{
-		AddError(DataMonitorResult.Error);
-		return false;
-	}
+		TAtomic<bool> bPassiveMonitorReady(false);
+		TAtomic<bool> bPassiveMonitorShouldStop(false);
+		TFuture<FPassiveBreakpointMonitorResult> PassiveMonitorFuture = StartPassiveBreakpointMonitor(
+			Ctx.GetPort(),
+			bPassiveMonitorReady,
+			bPassiveMonitorShouldStop,
+			Ctx.GetDefaultTimeoutSeconds());
+		ON_SCOPE_EXIT
+		{
+			bPassiveMonitorShouldStop = true;
+			if (PassiveMonitorFuture.IsValid())
+			{
+				PassiveMonitorFuture.Wait();
+			}
+		};
 
-	if (!TestFalse(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should not time out while driving the data breakpoint sequence"), DataMonitorResult.bTimedOut))
-	{
-		return false;
-	}
+		ASSERT_THAT(IsTrue(WaitForMonitorReady(*TestRunner, Ctx.Session, bPassiveMonitorReady, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should bring the passive monitor up before the second invocation"))));
 
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the initial breakpoint stop"), DataMonitorResult.InitialStopMessage.IsSet()))
-	{
-		return false;
-	}
+		const TSharedRef<FAsyncDataBreakpointInvocationState> SecondInvocation = DispatchDataBreakpointInvocation(
+			Engine,
+			Fixture.Filename,
+			Fixture.ModuleName,
+			Fixture.EntryFunctionDeclaration);
+		ASSERT_THAT(IsTrue(WaitForDataBreakpointInvocationCompletion(*TestRunner, Ctx.Session, SecondInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the second invocation without any debugger stop"))));
 
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the evaluate reply for Result"), DataMonitorResult.ResultVariable.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the data breakpoint stop"), DataMonitorResult.DataBreakpointStopMessage.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should capture the ClearDataBreakpoints reply"), DataMonitorResult.ClearDataBreakpoints.IsSet()))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should stop initially because of the explicit line breakpoint"), DataMonitorResult.InitialStopMessage->Reason, FString(TEXT("breakpoint")));
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should evaluate Result before mutation"), DataMonitorResult.ResultVariable->Value, FString(TEXT("13")));
-	TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should expose a non-zero ValueAddress for Result"), DataMonitorResult.ResultVariable->ValueAddress != 0);
-	TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should expose a positive ValueSize for Result"), DataMonitorResult.ResultVariable->ValueSize > 0);
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should stop because of an exception when the data breakpoint fires"), DataMonitorResult.DataBreakpointStopMessage->Reason, FString(TEXT("exception")));
-	TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should report the data breakpoint name in the stop text"), DataMonitorResult.DataBreakpointStopMessage->Text.Contains(TEXT("Data breakpoint (Result) triggered!")));
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should clear exactly one data breakpoint"), DataMonitorResult.ClearDataBreakpoints->Ids.Num(), 1);
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should clear the hit-count-limited data breakpoint id"), DataMonitorResult.ClearDataBreakpoints->Ids[0], 11);
-	TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should complete the first invocation successfully"), FirstInvocation->bSucceeded);
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should preserve the first invocation result"), FirstInvocation->Result, 14);
-
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should clear the line breakpoint before the second invocation"), Client.SendClearBreakpoints(ClearBreakpoints)))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	if (!WaitForDebuggerBreakpointCount(*this, Session, 0, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should observe the breakpoint removal before the second invocation")))
-	{
-		return false;
-	}
-
-	Client.DrainPendingMessages();
-
-	TAtomic<bool> bPassiveMonitorReady(false);
-	TAtomic<bool> bPassiveMonitorShouldStop(false);
-	TFuture<FPassiveBreakpointMonitorResult> PassiveMonitorFuture = StartPassiveBreakpointMonitor(
-		Session.GetPort(),
-		bPassiveMonitorReady,
-		bPassiveMonitorShouldStop,
-		Session.GetDefaultTimeoutSeconds());
-	ON_SCOPE_EXIT
-	{
 		bPassiveMonitorShouldStop = true;
-		if (PassiveMonitorFuture.IsValid())
+		const FPassiveBreakpointMonitorResult PassiveMonitorResult = PassiveMonitorFuture.Get();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should keep the passive monitor error-free on the second invocation"), PassiveMonitorResult.Error.IsEmpty())));
+		if (!PassiveMonitorResult.Error.IsEmpty())
 		{
-			PassiveMonitorFuture.Wait();
+			TestRunner->AddError(PassiveMonitorResult.Error);
 		}
-	};
 
-	if (!WaitForMonitorReady(*this, Session, bPassiveMonitorReady, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should bring the passive monitor up before the second invocation")))
-	{
-		return false;
+		ASSERT_THAT(IsTrue(TestRunner->TestFalse(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should not time out while passively watching the second invocation"), PassiveMonitorResult.bTimedOut)));
+
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should not stop again after the hit-count-limited data breakpoint auto-clears"), PassiveMonitorResult.StopMessages.Num(), 0);
+		TestRunner->TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should complete the second invocation successfully"), SecondInvocation->bSucceeded);
+		TestRunner->TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should preserve the second invocation result"), SecondInvocation->Result, 14);
 	}
-
-	const TSharedRef<FAsyncDataBreakpointInvocationState> SecondInvocation = DispatchDataBreakpointInvocation(
-		Engine,
-		Fixture.Filename,
-		Fixture.ModuleName,
-		Fixture.EntryFunctionDeclaration);
-	if (!WaitForDataBreakpointInvocationCompletion(*this, Session, SecondInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the second invocation without any debugger stop")))
-	{
-		return false;
-	}
-
-	bPassiveMonitorShouldStop = true;
-	const FPassiveBreakpointMonitorResult PassiveMonitorResult = PassiveMonitorFuture.Get();
-
-	if (!TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should keep the passive monitor error-free on the second invocation"), PassiveMonitorResult.Error.IsEmpty()))
-	{
-		AddError(PassiveMonitorResult.Error);
-		return false;
-	}
-
-	if (!TestFalse(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should not time out while passively watching the second invocation"), PassiveMonitorResult.bTimedOut))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should not stop again after the hit-count-limited data breakpoint auto-clears"), PassiveMonitorResult.StopMessages.Num(), 0);
-	TestTrue(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should complete the second invocation successfully"), SecondInvocation->bSucceeded);
-	TestEqual(TEXT("Debugger.DataBreakpoint.LocalValueHitCount should preserve the second invocation result"), SecondInvocation->Result, 14);
-	return !HasAnyErrors();
-}
+};
 
 #endif
-

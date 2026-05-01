@@ -1,6 +1,9 @@
+#include "CQTest.h"
+#include "Shared/AngelscriptDebuggerTestContext.h"
+#include "Shared/AngelscriptDebuggerTestMonitor.h"
 #include "Shared/AngelscriptDebuggerScriptFixture.h"
 #include "Shared/AngelscriptDebuggerTestClient.h"
-#include "Shared/AngelscriptDebuggerTestSession.h"
+#include "Shared/AngelscriptDebuggerTestHelpers.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 
 #include "Async/Async.h"
@@ -11,7 +14,6 @@
 #include "K2Node_FunctionEntry.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/Guid.h"
 #include "Misc/PackageName.h"
 #include "Misc/ScopeExit.h"
@@ -23,104 +25,12 @@
 
 using namespace AngelscriptTestSupport;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebuggerBlueprintMixedCallstackAndThisScopeTest,
-	"Angelscript.TestModule.Debugger.Blueprint.MixedCallstackAndThisScope",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Private
+namespace AngelscriptDebuggerBlueprintFrameTests_Private
 {
 	static const FName BlueprintInvocationFunctionName(TEXT("CallIntoScript"));
 	static const FName ScriptBreakpointFunctionName(TEXT("BreakInScript"));
 	static const FName ScriptValuePropertyName(TEXT("ScriptValue"));
 	static const FName LastBreakResultPropertyName(TEXT("LastBreakResult"));
-
-	bool StartBlueprintDebuggerSession(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		FAngelscriptDebuggerTestClient& Client,
-		int32 AdapterVersion = 2)
-	{
-		FAngelscriptDebuggerSessionConfig SessionConfig;
-		// UE 5.7: headless has no production subsystem. Let Initialize() create
-		// an isolated FAngelscriptEngine with its own FAngelscriptDebugServer.
-		SessionConfig.DefaultTimeoutSeconds = 45.0f;
-
-		if (!Test.TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should initialize the debugger session"), Session.Initialize(SessionConfig)))
-		{
-			return false;
-		}
-
-		if (!Test.TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should connect the primary debugger client"), Client.Connect(TEXT("127.0.0.1"), Session.GetPort())))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		bool bSentStartDebugging = false;
-		const bool bStartMessageSent = Session.PumpUntil(
-			[&Client, &bSentStartDebugging, AdapterVersion]()
-			{
-				if (bSentStartDebugging)
-				{
-					return true;
-				}
-
-				bSentStartDebugging = Client.SendStartDebugging(AdapterVersion);
-				return bSentStartDebugging;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should send StartDebugging"), bStartMessageSent))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		TOptional<FAngelscriptDebugMessageEnvelope> VersionEnvelope;
-		const bool bReceivedVersion = Session.PumpUntil(
-			[&Client, &VersionEnvelope]()
-			{
-				const TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-				if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-				{
-					VersionEnvelope = Envelope;
-					return true;
-				}
-
-				return false;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should receive the DebugServerVersion response"), bReceivedVersion))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool WaitForBlueprintBreakpointCount(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		int32 ExpectedCount,
-		const TCHAR* Context)
-	{
-		const bool bReachedCount = Session.PumpUntil(
-			[&Session, ExpectedCount]()
-			{
-				return Session.GetDebugServer().BreakpointCount == ExpectedCount;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!bReachedCount)
-		{
-			Test.AddError(FString::Printf(TEXT("%s (actual breakpoint count: %d)."), Context, Session.GetDebugServer().BreakpointCount));
-		}
-
-		return bReachedCount;
-	}
 
 	bool WaitForVoidInvocationCompletion(
 		FAutomationTestBase& Test,
@@ -185,7 +95,7 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 		FStringView Suffix,
 		const TCHAR* CallingContext = TEXT("AngelscriptDebuggerBlueprintFrameTests"))
 	{
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should resolve the script parent class before creating a transient child blueprint"), ParentClass))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should resolve the script parent class before creating a transient child blueprint"), ParentClass))
 		{
 			return nullptr;
 		}
@@ -196,7 +106,7 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 			Suffix.GetData(),
 			*FGuid::NewGuid().ToString(EGuidFormats::Digits));
 		UPackage* BlueprintPackage = CreatePackage(*PackagePath);
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should create a transient blueprint package"), BlueprintPackage))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should create a transient blueprint package"), BlueprintPackage))
 		{
 			return nullptr;
 		}
@@ -211,7 +121,7 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 			UBlueprint::StaticClass(),
 			UBlueprintGeneratedClass::StaticClass(),
 			CallingContext);
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should create a transient child blueprint"), Blueprint))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should create a transient child blueprint"), Blueprint))
 		{
 			return nullptr;
 		}
@@ -255,13 +165,13 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 		FName ScriptFunctionName)
 	{
 		UFunction* ScriptFunction = ParentClass.FindFunctionByName(ScriptFunctionName);
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose the script function that the transient blueprint calls"), ScriptFunction))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose the script function that the transient blueprint calls"), ScriptFunction))
 		{
 			return false;
 		}
 
 		UEdGraph* FunctionGraph = FBlueprintEditorUtils::CreateNewGraph(&Blueprint, FunctionName, UEdGraph::StaticClass(), UEdGraphSchema_K2::StaticClass());
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should create a Blueprint function graph"), FunctionGraph))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should create a Blueprint function graph"), FunctionGraph))
 		{
 			return false;
 		}
@@ -271,25 +181,25 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 		TArray<UK2Node_FunctionEntry*> EntryNodes;
 		FunctionGraph->GetNodesOfClass(EntryNodes);
 		UK2Node_FunctionEntry* EntryNode = EntryNodes.Num() > 0 ? EntryNodes[0] : nullptr;
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should create a function entry node for the Blueprint caller graph"), EntryNode))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should create a function entry node for the Blueprint caller graph"), EntryNode))
 		{
 			return false;
 		}
 
 		UEdGraphPin* EntryThenPin = EntryNode->FindPin(UEdGraphSchema_K2::PN_Then);
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose the function entry exec pin"), EntryThenPin))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose the function entry exec pin"), EntryThenPin))
 		{
 			return false;
 		}
 
 		UK2Node_CallFunction* CallNode = AddCallFunctionNode(*FunctionGraph, *ScriptFunction, EntryThenPin);
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should place a call-function node in the transient Blueprint graph"), CallNode))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should place a call-function node in the transient Blueprint graph"), CallNode))
 		{
 			return false;
 		}
 
 		UEdGraphPin* InputPin = CallNode->FindPin(TEXT("Input"));
-		if (!Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose the Input pin on the Blueprint call node"), InputPin))
+		if (!Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose the Input pin on the Blueprint call node"), InputPin))
 		{
 			return false;
 		}
@@ -297,7 +207,7 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 		InputPin->DefaultValue = TEXT("7");
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(&Blueprint);
 		FKismetEditorUtilities::CompileBlueprint(&Blueprint);
-		return Test.TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should compile the transient Blueprint caller into a generated class"), Blueprint.GeneratedClass.Get());
+		return Test.TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should compile the transient Blueprint caller into a generated class"), Blueprint.GeneratedClass.Get());
 	}
 
 	int32 FindCallstackFrameIndexByPrefix(const FAngelscriptCallStack& Callstack, const FString& Prefix)
@@ -367,33 +277,9 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 					return Result;
 				}
 
-				const double HandshakeEnd = FPlatformTime::Seconds() + TimeoutSeconds;
-				bool bSentStart = false;
-				bool bReceivedVersion = false;
-				while (FPlatformTime::Seconds() < HandshakeEnd && !bShouldStop.Load())
+				if (!HandshakeMonitorClient(MonitorClient, bShouldStop, TimeoutSeconds, Result.Error))
 				{
-					if (!bSentStart)
-					{
-						bSentStart = MonitorClient.SendStartDebugging(2);
-					}
-
-					if (bSentStart)
-					{
-						const TOptional<FAngelscriptDebugMessageEnvelope> Envelope = MonitorClient.ReceiveEnvelope();
-						if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-						{
-							bReceivedVersion = true;
-							break;
-						}
-					}
-
-					FPlatformProcess::Sleep(0.001f);
-				}
-
-				if (!bReceivedVersion)
-				{
-					Result.Error = TEXT("Blueprint-frame monitor timed out waiting for DebugServerVersion.");
-					Result.bTimedOut = true;
+					Result.bTimedOut = !bShouldStop.Load();
 					bMonitorReady = true;
 					return Result;
 				}
@@ -453,214 +339,144 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Privat
 	}
 }
 
-
-bool FAngelscriptDebuggerBlueprintMixedCallstackAndThisScopeTest::RunTest(const FString& Parameters)
+TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBlueprintFrameTests,
+	"Angelscript.TestModule.Debugger.BlueprintFrame",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	using namespace AngelscriptTest_Debugger_AngelscriptDebuggerBlueprintFrameTests_Private;
-	FAngelscriptDebuggerTestSession Session;
-	FAngelscriptDebuggerTestClient Client;
-	if (!StartBlueprintDebuggerSession(*this, Session, Client))
+	FDebuggerTestContext Ctx;
+
+	BEFORE_EACH()
 	{
-		return false;
+		ASSERT_THAT(IsTrue(Ctx.SetUp(*TestRunner)));
 	}
 
-	const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateBlueprintFrameFixture();
-	FAngelscriptEngine& Engine = Session.GetEngine();
-	UBlueprint* Blueprint = nullptr;
-	UObject* BlueprintObject = nullptr;
-
-	ON_SCOPE_EXIT
+	AFTER_EACH()
 	{
-		FAngelscriptClearBreakpoints ClearBreakpoints;
-		ClearBreakpoints.Filename = Fixture.Filename;
-		ClearBreakpoints.ModuleName = Fixture.ModuleName.ToString();
-		Client.SendClearBreakpoints(ClearBreakpoints);
-		Client.SendDisconnect();
-		Client.Disconnect();
+		Ctx.TearDown();
+	}
 
-		if (BlueprintObject != nullptr)
+	TEST_METHOD(BlueprintMixedCallstackAndThisScope)
+	{
+		using namespace AngelscriptDebuggerBlueprintFrameTests_Private;
+
+		const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateBlueprintFrameFixture();
+		FAngelscriptEngine& Engine = Ctx.GetEngine();
+		UBlueprint* Blueprint = nullptr;
+		UObject* BlueprintObject = nullptr;
+
+		ON_SCOPE_EXIT
 		{
-			BlueprintObject->MarkAsGarbage();
-			BlueprintObject = nullptr;
-		}
+			FAngelscriptClearBreakpoints ClearBreakpoints;
+			ClearBreakpoints.Filename = Fixture.Filename;
+			ClearBreakpoints.ModuleName = Fixture.ModuleName.ToString();
+			Ctx.Client.SendClearBreakpoints(ClearBreakpoints);
 
-		CleanupBlueprint(Blueprint);
-		Engine.DiscardModule(*Fixture.ModuleName.ToString());
-		CollectGarbage(RF_NoFlags, true);
-	};
+			if (BlueprintObject != nullptr)
+			{
+				BlueprintObject->MarkAsGarbage();
+				BlueprintObject = nullptr;
+			}
 
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should compile the Blueprint-frame script fixture"), Fixture.Compile(Engine)))
-	{
-		return false;
-	}
+			CleanupBlueprint(Blueprint);
+			Engine.DiscardModule(*Fixture.ModuleName.ToString());
+			CollectGarbage(RF_NoFlags, true);
+		};
 
-	UClass* ScriptParentClass = Fixture.FindGeneratedClass(Engine);
-	if (!TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should publish the script parent class"), ScriptParentClass))
-	{
-		return false;
-	}
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should compile the Blueprint-frame script fixture"), Fixture.Compile(Engine))));
 
-	Blueprint = CreateTransientBlueprintChild(*this, ScriptParentClass, TEXT("MixedCallstack"));
-	if (Blueprint == nullptr)
-	{
-		return false;
-	}
+		UClass* ScriptParentClass = Fixture.FindGeneratedClass(Engine);
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should publish the script parent class"), ScriptParentClass)));
 
-	if (!CreateTransientBlueprintCallingScriptFunction(*this, *ScriptParentClass, *Blueprint, BlueprintInvocationFunctionName, ScriptBreakpointFunctionName))
-	{
-		return false;
-	}
+		Blueprint = CreateTransientBlueprintChild(*TestRunner, ScriptParentClass, TEXT("MixedCallstack"));
+		ASSERT_THAT(IsTrue(Blueprint != nullptr));
 
-	UClass* BlueprintClass = Blueprint->GeneratedClass.Get();
-	if (!TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose the transient Blueprint generated class"), BlueprintClass))
-	{
-		return false;
-	}
+		ASSERT_THAT(IsTrue(CreateTransientBlueprintCallingScriptFunction(*TestRunner, *ScriptParentClass, *Blueprint, BlueprintInvocationFunctionName, ScriptBreakpointFunctionName)));
 
-	BlueprintObject = NewObject<UObject>(GetTransientPackage(), BlueprintClass);
-	if (!TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should instantiate the transient Blueprint caller"), BlueprintObject))
-	{
-		return false;
-	}
+		UClass* BlueprintClass = Blueprint->GeneratedClass.Get();
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose the transient Blueprint generated class"), BlueprintClass)));
 
-	UFunction* BlueprintFunction = BlueprintObject->FindFunction(BlueprintInvocationFunctionName);
-	if (!TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose the Blueprint caller function on the transient object"), BlueprintFunction))
-	{
-		return false;
-	}
+		BlueprintObject = NewObject<UObject>(GetTransientPackage(), BlueprintClass);
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should instantiate the transient Blueprint caller"), BlueprintObject)));
 
-	TAtomic<bool> bMonitorReady(false);
-	TAtomic<bool> bShouldStop(false);
-	TFuture<FBlueprintFrameMonitorResult> MonitorFuture =
-		StartBlueprintFrameMonitor(Session.GetPort(), bMonitorReady, bShouldStop, Session.GetDefaultTimeoutSeconds());
-	ON_SCOPE_EXIT
-	{
+		UFunction* BlueprintFunction = BlueprintObject->FindFunction(BlueprintInvocationFunctionName);
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose the Blueprint caller function on the transient object"), BlueprintFunction)));
+
+		TAtomic<bool> bMonitorReady(false);
+		TAtomic<bool> bShouldStop(false);
+		TFuture<FBlueprintFrameMonitorResult> MonitorFuture =
+			StartBlueprintFrameMonitor(Ctx.GetPort(), bMonitorReady, bShouldStop, Ctx.GetDefaultTimeoutSeconds());
+		ON_SCOPE_EXIT
+		{
+			bShouldStop = true;
+			if (MonitorFuture.IsValid())
+			{
+				MonitorFuture.Wait();
+			}
+		};
+
+		ASSERT_THAT(IsTrue(WaitForMonitorReady(*TestRunner, Ctx.Session, bMonitorReady, TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should bring the monitor client up before execution"))));
+
+		FAngelscriptBreakpoint Breakpoint;
+		Breakpoint.Id = 46;
+		Breakpoint.Filename = Fixture.Filename;
+		Breakpoint.ModuleName = Fixture.ModuleName.ToString();
+		Breakpoint.LineNumber = Fixture.GetLine(TEXT("BlueprintScriptBreakLine"));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should send the script breakpoint"), Ctx.Client.SendSetBreakpoint(Breakpoint))));
+
+		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 1, TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should observe the breakpoint registration after both debugger clients finish handshaking"))));
+
+		const TSharedRef<FAsyncGeneratedVoidInvocationState> InvocationState =
+			DispatchGeneratedVoidInvocation(Engine, BlueprintObject, BlueprintFunction);
+		ASSERT_THAT(IsTrue(WaitForVoidInvocationCompletion(*TestRunner, Ctx.Session, InvocationState, TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should finish the Blueprint invocation after the monitor resumes execution"))));
+
 		bShouldStop = true;
-		if (MonitorFuture.IsValid())
+		const FBlueprintFrameMonitorResult MonitorResult = MonitorFuture.Get();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should finish without monitor errors"), MonitorResult.Error.IsEmpty())));
+		if (!MonitorResult.Error.IsEmpty())
 		{
-			MonitorFuture.Wait();
+			TestRunner->AddError(MonitorResult.Error);
 		}
-	};
 
-	const bool bMonitorStarted = Session.PumpUntil(
-		[&bMonitorReady]()
-		{
-			return bMonitorReady.Load();
-		},
-		Session.GetDefaultTimeoutSeconds());
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should bring the monitor client up before execution"), bMonitorStarted))
-	{
-		return false;
+		ASSERT_THAT(IsTrue(TestRunner->TestFalse(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should not time out while collecting debugger payloads"), MonitorResult.bTimedOut)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should finish the Blueprint caller invocation successfully"), InvocationState->bSucceeded)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should deserialize the stop payload"), MonitorResult.StopMessage.IsSet())));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should capture a mixed callstack"), MonitorResult.Callstack.IsSet())));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should capture the Blueprint-frame ScriptValue evaluation"), MonitorResult.BlueprintScriptValue.IsSet())));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should capture the Blueprint-frame %this% scope"), MonitorResult.BlueprintThisScope.IsSet())));
+
+		const FAngelscriptCallStack& Callstack = MonitorResult.Callstack.GetValue();
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should return at least two frames"), Callstack.Frames.Num() >= 2)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should locate a Blueprint frame inside the mixed callstack"), Callstack.Frames.IsValidIndex(MonitorResult.BlueprintFrameIndex))));
+
+		const FAngelscriptCallFrame& ScriptFrame = Callstack.Frames[0];
+		const FAngelscriptCallFrame& BlueprintFrame = Callstack.Frames[MonitorResult.BlueprintFrameIndex];
+
+		TestRunner->TestEqual(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should stop because of a breakpoint"), MonitorResult.StopMessage->Reason, FString(TEXT("breakpoint")));
+		TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should keep the script frame on top of the mixed callstack"), ScriptFrame.Source.EndsWith(Fixture.Filename));
+		TestRunner->TestEqual(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should report the script breakpoint line on the top frame"), ScriptFrame.LineNumber, Fixture.GetLine(TEXT("BlueprintScriptBreakLine")));
+		TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should tag the Blueprint caller frame with the (BP) prefix"), BlueprintFrame.Name.StartsWith(TEXT("(BP)")));
+		TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should report the Blueprint caller source as a transient outer/class path"), BlueprintFrame.Source.StartsWith(TEXT("::")));
+		TestRunner->TestEqual(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should evaluate Blueprint-frame ScriptValue to 5"), MonitorResult.BlueprintScriptValue->Value, FString(TEXT("5")));
+		TestRunner->TestEqual(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should observe a single HasContinued after resuming"), MonitorResult.ContinuedCount, 1);
+
+		const TArray<FAngelscriptVariable>& BlueprintThisVariables = MonitorResult.BlueprintThisScope->Variables;
+		const FAngelscriptVariable* ScriptValueVariable = BlueprintThisVariables.FindByPredicate(
+			[](const FAngelscriptVariable& Variable)
+			{
+				return Variable.Name == TEXT("ScriptValue");
+			});
+		ASSERT_THAT(IsTrue(TestRunner->TestNotNull(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose ScriptValue inside the Blueprint-frame %this% scope"), ScriptValueVariable)));
+
+		TestRunner->TestEqual(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should report ScriptValue = 5 inside the Blueprint-frame %this% scope"), ScriptValueVariable->Value, FString(TEXT("5")));
+		TestRunner->TestTrue(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should expose a non-zero ValueAddress for ScriptValue inside the Blueprint-frame %this% scope"), ScriptValueVariable->ValueAddress != 0);
+
+		int32 LastBreakResult = INDEX_NONE;
+		ASSERT_THAT(IsTrue(ReadIntProperty(*TestRunner, *BlueprintObject, LastBreakResultPropertyName, LastBreakResult, TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope"))));
+
+		TestRunner->TestEqual(TEXT("Debugger.BlueprintFrame.BlueprintMixedCallstackAndThisScope should preserve the expected script-side result after the Blueprint caller resumes"), LastBreakResult, 12);
 	}
-
-	FAngelscriptBreakpoint Breakpoint;
-	Breakpoint.Id = 46;
-	Breakpoint.Filename = Fixture.Filename;
-	Breakpoint.ModuleName = Fixture.ModuleName.ToString();
-	Breakpoint.LineNumber = Fixture.GetLine(TEXT("BlueprintScriptBreakLine"));
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should send the script breakpoint"), Client.SendSetBreakpoint(Breakpoint)))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	if (!WaitForBlueprintBreakpointCount(*this, Session, 1, TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should observe the breakpoint registration after both debugger clients finish handshaking")))
-	{
-		return false;
-	}
-
-	const TSharedRef<FAsyncGeneratedVoidInvocationState> InvocationState =
-		DispatchGeneratedVoidInvocation(Engine, BlueprintObject, BlueprintFunction);
-	if (!WaitForVoidInvocationCompletion(*this, Session, InvocationState, TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should finish the Blueprint invocation after the monitor resumes execution")))
-	{
-		return false;
-	}
-
-	bShouldStop = true;
-	const FBlueprintFrameMonitorResult MonitorResult = MonitorFuture.Get();
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should finish without monitor errors"), MonitorResult.Error.IsEmpty()))
-	{
-		AddError(MonitorResult.Error);
-		return false;
-	}
-
-	if (!TestFalse(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should not time out while collecting debugger payloads"), MonitorResult.bTimedOut))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should finish the Blueprint caller invocation successfully"), InvocationState->bSucceeded))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should deserialize the stop payload"), MonitorResult.StopMessage.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should capture a mixed callstack"), MonitorResult.Callstack.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should capture the Blueprint-frame ScriptValue evaluation"), MonitorResult.BlueprintScriptValue.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should capture the Blueprint-frame %this% scope"), MonitorResult.BlueprintThisScope.IsSet()))
-	{
-		return false;
-	}
-
-	const FAngelscriptCallStack& Callstack = MonitorResult.Callstack.GetValue();
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should return at least two frames"), Callstack.Frames.Num() >= 2))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should locate a Blueprint frame inside the mixed callstack"), Callstack.Frames.IsValidIndex(MonitorResult.BlueprintFrameIndex)))
-	{
-		return false;
-	}
-
-	const FAngelscriptCallFrame& ScriptFrame = Callstack.Frames[0];
-	const FAngelscriptCallFrame& BlueprintFrame = Callstack.Frames[MonitorResult.BlueprintFrameIndex];
-
-	TestEqual(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should stop because of a breakpoint"), MonitorResult.StopMessage->Reason, FString(TEXT("breakpoint")));
-	TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should keep the script frame on top of the mixed callstack"), ScriptFrame.Source.EndsWith(Fixture.Filename));
-	TestEqual(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should report the script breakpoint line on the top frame"), ScriptFrame.LineNumber, Fixture.GetLine(TEXT("BlueprintScriptBreakLine")));
-	TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should tag the Blueprint caller frame with the (BP) prefix"), BlueprintFrame.Name.StartsWith(TEXT("(BP)")));
-	TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should report the Blueprint caller source as a transient outer/class path"), BlueprintFrame.Source.StartsWith(TEXT("::")));
-	TestEqual(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should evaluate Blueprint-frame ScriptValue to 5"), MonitorResult.BlueprintScriptValue->Value, FString(TEXT("5")));
-	TestEqual(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should observe a single HasContinued after resuming"), MonitorResult.ContinuedCount, 1);
-
-	const TArray<FAngelscriptVariable>& BlueprintThisVariables = MonitorResult.BlueprintThisScope->Variables;
-	const FAngelscriptVariable* ScriptValueVariable = BlueprintThisVariables.FindByPredicate(
-		[](const FAngelscriptVariable& Variable)
-		{
-			return Variable.Name == TEXT("ScriptValue");
-		});
-	if (!TestNotNull(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose ScriptValue inside the Blueprint-frame %this% scope"), ScriptValueVariable))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should report ScriptValue = 5 inside the Blueprint-frame %this% scope"), ScriptValueVariable->Value, FString(TEXT("5")));
-	TestTrue(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should expose a non-zero ValueAddress for ScriptValue inside the Blueprint-frame %this% scope"), ScriptValueVariable->ValueAddress != 0);
-
-	int32 LastBreakResult = INDEX_NONE;
-	if (!ReadIntProperty(*this, *BlueprintObject, LastBreakResultPropertyName, LastBreakResult, TEXT("Debugger.Blueprint.MixedCallstackAndThisScope")))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Blueprint.MixedCallstackAndThisScope should preserve the expected script-side result after the Blueprint caller resumes"), LastBreakResult, 12);
-	return !HasAnyErrors();
-}
+};
 
 #endif
-

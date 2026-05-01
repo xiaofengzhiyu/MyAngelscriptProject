@@ -1039,7 +1039,9 @@ int asCCompiler::CompileFunction(asCBuilder *in_builder, asCScriptCode *in_scrip
 	asCByteCode bc(builder);
 
 	// Show warnings about divergent function signatures for comparison operators
-	if (FAngelscriptEngine::Get().ConfigSettings->bWarnOnDivergentComparisonOperatorOverloads
+	FAngelscriptEngine* WarningEngine = FAngelscriptEngine::TryGetCurrentEngine();
+	if (WarningEngine != nullptr
+		&& WarningEngine->ConfigSettings->bWarnOnDivergentComparisonOperatorOverloads
 		&& in_outFunc->name.StartsWith("op"))
 	{
 		if (in_outFunc->name == "opEquals" || in_outFunc->name == "opCmp")

@@ -126,11 +126,7 @@ namespace AngelscriptTestSupport
 		return true;
 	}
 
-	/**
-	 * Pump the session until DebugServer.BreakpointCount equals the expected
-	 * value (or the session timeout elapses). Reports the actual count on
-	 * failure for debugging.
-	 */
+	/** Full overload with caller-supplied context label. */
 	inline bool WaitForBreakpointCount(
 		FAutomationTestBase& Test,
 		FAngelscriptDebuggerTestSession& Session,
@@ -153,6 +149,21 @@ namespace AngelscriptTestSupport
 		}
 
 		return bReachedCount;
+	}
+
+	/**
+	 * Pump the session until DebugServer.BreakpointCount equals the expected
+	 * value (or the session timeout elapses). Reports the actual count on
+	 * failure for debugging.
+	 */
+	inline bool WaitForBreakpointCount(
+		FAutomationTestBase& Test,
+		FAngelscriptDebuggerTestSession& Session,
+		int32 ExpectedCount)
+	{
+		const FString AutoContext = FString::Printf(
+			TEXT("Should observe breakpoint count reaching %d"), ExpectedCount);
+		return WaitForBreakpointCount(Test, Session, ExpectedCount, *AutoContext);
 	}
 
 	/**

@@ -1,11 +1,12 @@
-#include "Shared/AngelscriptDebuggerScriptFixture.h"
-#include "Shared/AngelscriptDebuggerTestClient.h"
+#include "CQTest.h"
+#include "Shared/AngelscriptDebuggerTestContext.h"
+#include "Shared/AngelscriptDebuggerTestHelpers.h"
+#include "Shared/AngelscriptDebuggerTestMonitor.h"
 #include "Shared/AngelscriptDebuggerTestSession.h"
 #include "Shared/AngelscriptTestEngineHelper.h"
 
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -13,105 +14,8 @@
 
 using namespace AngelscriptTestSupport;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebuggerEvaluationScopeValuesTest,
-	"Angelscript.TestModule.Debugger.Evaluation.ScopeValues",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebuggerEvaluationAdapterV1LegacyPayloadTest,
-	"Angelscript.TestModule.Debugger.Evaluation.AdapterV1LegacyPayload",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-namespace AngelscriptTest_Debugger_AngelscriptDebuggerEvaluationTests_Private
+namespace AngelscriptDebuggerEvaluationTests_Private
 {
-	bool StartEvaluationDebuggerSession(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		FAngelscriptDebuggerTestClient& Client,
-		int32 AdapterVersion = 2)
-	{
-		FAngelscriptDebuggerSessionConfig SessionConfig;
-		// UE 5.7: headless has no production subsystem. Let Initialize() create
-		// an isolated FAngelscriptEngine with its own FAngelscriptDebugServer.
-		SessionConfig.DefaultTimeoutSeconds = 45.0f;
-
-		if (!Test.TestTrue(TEXT("Debugger evaluation should initialize the debugger session"), Session.Initialize(SessionConfig)))
-		{
-			return false;
-		}
-
-		if (!Test.TestTrue(TEXT("Debugger evaluation should connect the primary debugger client"), Client.Connect(TEXT("127.0.0.1"), Session.GetPort())))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		bool bSentStartDebugging = false;
-		const bool bStartMessageSent = Session.PumpUntil(
-			[&Client, &bSentStartDebugging, AdapterVersion]()
-			{
-				if (bSentStartDebugging)
-				{
-					return true;
-				}
-
-				bSentStartDebugging = Client.SendStartDebugging(AdapterVersion);
-				return bSentStartDebugging;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger evaluation should send StartDebugging"), bStartMessageSent))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		TOptional<FAngelscriptDebugMessageEnvelope> VersionEnvelope;
-		const bool bReceivedVersion = Session.PumpUntil(
-			[&Client, &VersionEnvelope]()
-			{
-				TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-				if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-				{
-					VersionEnvelope = MoveTemp(Envelope);
-					return true;
-				}
-
-				return false;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger evaluation should receive the DebugServerVersion response"), bReceivedVersion))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool WaitForEvaluationBreakpointCount(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		int32 ExpectedCount,
-		const TCHAR* Context)
-	{
-		const bool bReachedCount = Session.PumpUntil(
-			[&Session, ExpectedCount]()
-			{
-				return Session.GetDebugServer().BreakpointCount == ExpectedCount;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!bReachedCount)
-		{
-			Test.AddError(FString::Printf(TEXT("%s (actual breakpoint count: %d)."), Context, Session.GetDebugServer().BreakpointCount));
-		}
-
-		return bReachedCount;
-	}
-
 	struct FAsyncGeneratedInvocationState : public TSharedFromThis<FAsyncGeneratedInvocationState>
 	{
 		TAtomic<bool> bCompleted = false;
@@ -258,32 +162,10 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerEvaluationTests_Private
 					return Result;
 				}
 
-				const double HandshakeEnd = FPlatformTime::Seconds() + TimeoutSeconds;
-				bool bSentStart = false;
-				bool bReceivedVersion = false;
-				while (FPlatformTime::Seconds() < HandshakeEnd && !bShouldStop.Load())
+				FString HandshakeError;
+				if (!HandshakeMonitorClient(MonitorClient, bShouldStop, AdapterVersion, TimeoutSeconds, HandshakeError))
 				{
-					if (!bSentStart)
-					{
-						bSentStart = MonitorClient.SendStartDebugging(AdapterVersion);
-					}
-
-					if (bSentStart)
-					{
-						TOptional<FAngelscriptDebugMessageEnvelope> Envelope = MonitorClient.ReceiveEnvelope();
-						if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-						{
-							bReceivedVersion = true;
-							break;
-						}
-					}
-
-					FPlatformProcess::Sleep(0.001f);
-				}
-
-				if (!bReceivedVersion)
-				{
-					Result.Error = TEXT("Evaluation monitor timed out waiting for DebugServerVersion.");
+					Result.Error = HandshakeError;
 					Result.bTimedOut = true;
 					bMonitorReady = true;
 					return Result;
@@ -374,415 +256,274 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerEvaluationTests_Private
 	}
 }
 
-
-bool FAngelscriptDebuggerEvaluationScopeValuesTest::RunTest(const FString& Parameters)
+TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerEvaluationTests,
+	"Angelscript.TestModule.Debugger.Evaluation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
-	using namespace AngelscriptTest_Debugger_AngelscriptDebuggerEvaluationTests_Private;
-	FAngelscriptDebuggerTestSession Session;
-	FAngelscriptDebuggerTestClient Client;
-	if (!StartEvaluationDebuggerSession(*this, Session, Client))
+	FDebuggerTestContext Ctx;
+
+	BEFORE_EACH()
 	{
-		return false;
+		ASSERT_THAT(IsTrue(Ctx.SetUp(*TestRunner)));
 	}
 
-	const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateCallstackFixture();
-	FAngelscriptEngine& Engine = Session.GetEngine();
-
-	ON_SCOPE_EXIT
+	AFTER_EACH()
 	{
-		FAngelscriptClearBreakpoints ClearBreakpoints;
-		ClearBreakpoints.Filename = Fixture.Filename;
-		ClearBreakpoints.ModuleName = Fixture.ModuleName.ToString();
-		Client.SendClearBreakpoints(ClearBreakpoints);
-		Client.SendDisconnect();
-		Client.Disconnect();
-	};
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should compile the callstack fixture"), Fixture.Compile(Engine)))
-	{
-		return false;
+		Ctx.TearDown();
 	}
 
-	TAtomic<bool> bMonitorReady(false);
-	TAtomic<bool> bShouldStop(false);
-	TFuture<FEvaluationMonitorResult> MonitorFuture = StartEvaluationMonitor(
-		Session.GetPort(),
-		bMonitorReady,
-		bShouldStop,
-		Fixture,
-		Session.GetDefaultTimeoutSeconds());
-	ON_SCOPE_EXIT
+	TEST_METHOD(ScopeValues)
 	{
-		bShouldStop = true;
-		if (MonitorFuture.IsValid())
+		using namespace AngelscriptDebuggerEvaluationTests_Private;
+
+		const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateCallstackFixture();
+		FAngelscriptEngine& Engine = Ctx.GetEngine();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should compile the callstack fixture"), Fixture.Compile(Engine))));
+
+		TAtomic<bool> bMonitorReady(false);
+		TFuture<FEvaluationMonitorResult> MonitorFuture = StartEvaluationMonitor(
+			Ctx.GetPort(),
+			bMonitorReady,
+			Ctx.bMonitorShouldStop,
+			Fixture,
+			Ctx.GetDefaultTimeoutSeconds());
+		ON_SCOPE_EXIT
 		{
-			MonitorFuture.Wait();
+			Ctx.bMonitorShouldStop = true;
+			if (MonitorFuture.IsValid())
+			{
+				MonitorFuture.Wait();
+			}
+		};
+
+		ASSERT_THAT(IsTrue(WaitForMonitorReady(*TestRunner, Ctx.Session, bMonitorReady,
+			TEXT("Debugger.Evaluation.ScopeValues should bring the evaluation monitor up before execution"))));
+
+		FAngelscriptBreakpoint Breakpoint;
+		Breakpoint.Id = 7;
+		Breakpoint.Filename = Fixture.Filename;
+		Breakpoint.ModuleName = Fixture.ModuleName.ToString();
+		Breakpoint.LineNumber = Fixture.GetLine(TEXT("CallstackLeafLine"));
+
+		if (!TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should send the leaf breakpoint"), Ctx.Client.SendSetBreakpoint(Breakpoint)))
+		{
+			TestRunner->AddError(Ctx.Client.GetLastError());
+			return;
 		}
-	};
 
-	const bool bMonitorStarted = Session.PumpUntil(
-		[&bMonitorReady]()
+		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 1,
+			TEXT("Debugger.Evaluation.ScopeValues should observe the breakpoint registration after both debugger clients finish handshaking"))));
+
+		const TSharedRef<FAsyncGeneratedInvocationState> InvocationState = DispatchGeneratedIntInvocation(Engine, Fixture);
+		ASSERT_THAT(IsTrue(WaitForGeneratedInvocationCompletion(*TestRunner, Ctx.Session, InvocationState,
+			TEXT("Debugger.Evaluation.ScopeValues should complete the generated invocation after the monitor resumes execution"))));
+
+		Ctx.bMonitorShouldStop = true;
+		const FEvaluationMonitorResult MonitorResult = MonitorFuture.Get();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should resolve the generated class before invocation"), InvocationState->bResolvedClass)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should resolve the generated Entry function before invocation"), InvocationState->bResolvedFunction)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should create a generated UObject instance before invocation"), InvocationState->bCreatedObject)));
+
+		if (!TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should finish without monitor errors"), MonitorResult.Error.IsEmpty()))
 		{
-			return bMonitorReady.Load();
-		},
-		Session.GetDefaultTimeoutSeconds());
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should bring the evaluation monitor up before execution"), bMonitorStarted))
-	{
-		return false;
-	}
-
-	FAngelscriptBreakpoint Breakpoint;
-	Breakpoint.Id = 7;
-	Breakpoint.Filename = Fixture.Filename;
-	Breakpoint.ModuleName = Fixture.ModuleName.ToString();
-	Breakpoint.LineNumber = Fixture.GetLine(TEXT("CallstackLeafLine"));
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should send the leaf breakpoint"), Client.SendSetBreakpoint(Breakpoint)))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	if (!WaitForEvaluationBreakpointCount(*this, Session, 1, TEXT("Debugger.Evaluation.ScopeValues should observe the breakpoint registration after both debugger clients finish handshaking")))
-	{
-		return false;
-	}
-
-	const TSharedRef<FAsyncGeneratedInvocationState> InvocationState = DispatchGeneratedIntInvocation(Engine, Fixture);
-	if (!WaitForGeneratedInvocationCompletion(*this, Session, InvocationState, TEXT("Debugger.Evaluation.ScopeValues should complete the generated invocation after the monitor resumes execution")))
-	{
-		return false;
-	}
-
-	bShouldStop = true;
-	const FEvaluationMonitorResult MonitorResult = MonitorFuture.Get();
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should resolve the generated class before invocation"), InvocationState->bResolvedClass))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should resolve the generated Entry function before invocation"), InvocationState->bResolvedFunction))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should create a generated UObject instance before invocation"), InvocationState->bCreatedObject))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should finish without monitor errors"), MonitorResult.Error.IsEmpty()))
-	{
-		AddError(MonitorResult.Error);
-		return false;
-	}
-
-	if (!TestFalse(TEXT("Debugger.Evaluation.ScopeValues should not time out while collecting debugger payloads"), MonitorResult.bTimedOut))
-	{
-		return false;
-	}
-
-	if (!TestEqual(TEXT("Debugger.Evaluation.ScopeValues should capture exactly one HasStopped event"), MonitorResult.StopEnvelopes.Num(), 1))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should deserialize the stop payload"), MonitorResult.StopMessage.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should capture a callstack"), MonitorResult.Callstack.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should capture all evaluate replies"), MonitorResult.LeafLocalValue.IsSet() && MonitorResult.LeafCombinedValue.IsSet() && MonitorResult.ThisMemberValue.IsSet() && MonitorResult.ModuleGlobalCounterValue.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should capture the local scope variables"), MonitorResult.LocalScopeVariables.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should capture the this scope variables"), MonitorResult.ThisScopeVariables.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should capture the module scope variables"), MonitorResult.ModuleScopeVariables.IsSet()))
-	{
-		return false;
-	}
-
-	const FAngelscriptCallStack& Callstack = MonitorResult.Callstack.GetValue();
-	if (!TestTrue(TEXT("Debugger.Evaluation.ScopeValues should return at least three frames"), Callstack.Frames.Num() >= 3))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should stop because of a breakpoint"), MonitorResult.StopMessage->Reason, FString(TEXT("breakpoint")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report the leaf line on the top frame"), Callstack.Frames[0].LineNumber, Fixture.GetLine(TEXT("CallstackLeafLine")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report the middle line on the second frame"), Callstack.Frames[1].LineNumber, Fixture.GetLine(TEXT("CallstackMiddleLine")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report the entry line on the third frame"), Callstack.Frames[2].LineNumber, Fixture.GetLine(TEXT("CallstackEntryLine")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate LocalValue to 4"), MonitorResult.LeafLocalValue->Value, FString(TEXT("4")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate Combined to 16"), MonitorResult.LeafCombinedValue->Value, FString(TEXT("16")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate this.MemberValue to 5"), MonitorResult.ThisMemberValue->Value, FString(TEXT("5")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate %module%.GlobalCounter to 7"), MonitorResult.ModuleGlobalCounterValue->Value, FString(TEXT("7")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should observe a single HasContinued after resuming"), MonitorResult.ContinuedCount, 1);
-	TestTrue(TEXT("Debugger.Evaluation.ScopeValues should finish the generated invocation successfully"), InvocationState->bSucceeded);
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should preserve the generated invocation return value"), InvocationState->Result, 16);
-
-	const TArray<FAngelscriptVariable>& LocalVariables = MonitorResult.LocalScopeVariables->Variables;
-	const TArray<FAngelscriptVariable>& ThisVariables = MonitorResult.ThisScopeVariables->Variables;
-	const TArray<FAngelscriptVariable>& ModuleVariables = MonitorResult.ModuleScopeVariables->Variables;
-	const FAngelscriptVariable* LocalValueVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
-	{
-		return Variable.Name == TEXT("LocalValue");
-	});
-	const FAngelscriptVariable* CombinedVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
-	{
-		return Variable.Name == TEXT("Combined");
-	});
-	const FAngelscriptVariable* MemberValueVariable = ThisVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
-	{
-		return Variable.Name == TEXT("MemberValue");
-	});
-	const FAngelscriptVariable* GlobalCounterVariable = ModuleVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
-	{
-		return Variable.Name == TEXT("GlobalCounter");
-	});
-	if (!TestNotNull(TEXT("Debugger.Evaluation.ScopeValues should include LocalValue in the local scope"), LocalValueVariable))
-	{
-		return false;
-	}
-
-	if (!TestNotNull(TEXT("Debugger.Evaluation.ScopeValues should include Combined in the local scope"), CombinedVariable))
-	{
-		return false;
-	}
-
-	if (!TestNotNull(TEXT("Debugger.Evaluation.ScopeValues should include MemberValue in the this scope"), MemberValueVariable))
-	{
-		return false;
-	}
-
-	if (!TestNotNull(TEXT("Debugger.Evaluation.ScopeValues should include GlobalCounter in the module scope"), GlobalCounterVariable))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report LocalValue = 4 in the local scope"), LocalValueVariable->Value, FString(TEXT("4")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report Combined = 16 in the local scope"), CombinedVariable->Value, FString(TEXT("16")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report MemberValue = 5 in the this scope"), MemberValueVariable->Value, FString(TEXT("5")));
-	TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report GlobalCounter = 7 in the module scope"), GlobalCounterVariable->Value, FString(TEXT("7")));
-	TestTrue(TEXT("Debugger.Evaluation.ScopeValues should expose a non-zero ValueAddress for this.MemberValue through %this% scope"), MemberValueVariable->ValueAddress != 0);
-	TestTrue(TEXT("Debugger.Evaluation.ScopeValues should expose a non-zero ValueAddress for %module%.GlobalCounter through module scope"), GlobalCounterVariable->ValueAddress != 0);
-	return !HasAnyErrors();
-}
-
-bool FAngelscriptDebuggerEvaluationAdapterV1LegacyPayloadTest::RunTest(const FString& Parameters)
-{
-	using namespace AngelscriptTest_Debugger_AngelscriptDebuggerEvaluationTests_Private;
-	FAngelscriptDebuggerTestSession Session;
-	FAngelscriptDebuggerTestClient Client;
-	if (!StartEvaluationDebuggerSession(*this, Session, Client, 1))
-	{
-		return false;
-	}
-
-	const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateCallstackFixture();
-	FAngelscriptEngine& Engine = Session.GetEngine();
-
-	ON_SCOPE_EXIT
-	{
-		FAngelscriptClearBreakpoints ClearBreakpoints;
-		ClearBreakpoints.Filename = Fixture.Filename;
-		ClearBreakpoints.ModuleName = Fixture.ModuleName.ToString();
-		Client.SendClearBreakpoints(ClearBreakpoints);
-		Client.SendDisconnect();
-		Client.Disconnect();
-	};
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should compile the callstack fixture"), Fixture.Compile(Engine)))
-	{
-		return false;
-	}
-
-	FAngelscriptBreakpoint Breakpoint;
-	Breakpoint.Id = 20;
-	Breakpoint.Filename = Fixture.Filename;
-	Breakpoint.ModuleName = Fixture.ModuleName.ToString();
-	Breakpoint.LineNumber = Fixture.GetLine(TEXT("CallstackLeafLine"));
-
-	TAtomic<bool> bMonitorReady(false);
-	TAtomic<bool> bShouldStop(false);
-	TFuture<FEvaluationMonitorResult> MonitorFuture = StartEvaluationMonitor(
-		Session.GetPort(),
-		bMonitorReady,
-		bShouldStop,
-		Fixture,
-		Session.GetDefaultTimeoutSeconds(),
-		1);
-	ON_SCOPE_EXIT
-	{
-		bShouldStop = true;
-		if (MonitorFuture.IsValid())
-		{
-			MonitorFuture.Wait();
+			TestRunner->AddError(MonitorResult.Error);
+			return;
 		}
-	};
 
-	const bool bMonitorStarted = Session.PumpUntil(
-		[&bMonitorReady]()
+		ASSERT_THAT(IsFalse(MonitorResult.bTimedOut));
+		ASSERT_THAT(IsTrue(TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should capture exactly one HasStopped event"), MonitorResult.StopEnvelopes.Num(), 1)));
+		ASSERT_THAT(IsTrue(MonitorResult.StopMessage.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.Callstack.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.LeafLocalValue.IsSet() && MonitorResult.LeafCombinedValue.IsSet() && MonitorResult.ThisMemberValue.IsSet() && MonitorResult.ModuleGlobalCounterValue.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.LocalScopeVariables.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.ThisScopeVariables.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.ModuleScopeVariables.IsSet()));
+
+		const FAngelscriptCallStack& Callstack = MonitorResult.Callstack.GetValue();
+		ASSERT_THAT(IsTrue(Callstack.Frames.Num() >= 3));
+
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should stop because of a breakpoint"), MonitorResult.StopMessage->Reason, FString(TEXT("breakpoint")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report the leaf line on the top frame"), Callstack.Frames[0].LineNumber, Fixture.GetLine(TEXT("CallstackLeafLine")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report the middle line on the second frame"), Callstack.Frames[1].LineNumber, Fixture.GetLine(TEXT("CallstackMiddleLine")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report the entry line on the third frame"), Callstack.Frames[2].LineNumber, Fixture.GetLine(TEXT("CallstackEntryLine")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate LocalValue to 4"), MonitorResult.LeafLocalValue->Value, FString(TEXT("4")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate Combined to 16"), MonitorResult.LeafCombinedValue->Value, FString(TEXT("16")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate this.MemberValue to 5"), MonitorResult.ThisMemberValue->Value, FString(TEXT("5")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should evaluate %module%.GlobalCounter to 7"), MonitorResult.ModuleGlobalCounterValue->Value, FString(TEXT("7")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should observe a single HasContinued after resuming"), MonitorResult.ContinuedCount, 1);
+		TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should finish the generated invocation successfully"), InvocationState->bSucceeded);
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should preserve the generated invocation return value"), InvocationState->Result, 16);
+
+		const TArray<FAngelscriptVariable>& LocalVariables = MonitorResult.LocalScopeVariables->Variables;
+		const TArray<FAngelscriptVariable>& ThisVariables = MonitorResult.ThisScopeVariables->Variables;
+		const TArray<FAngelscriptVariable>& ModuleVariables = MonitorResult.ModuleScopeVariables->Variables;
+		const FAngelscriptVariable* LocalValueVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
 		{
-			return bMonitorReady.Load();
-		},
-		Session.GetDefaultTimeoutSeconds());
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should bring the evaluation monitor up before execution"), bMonitorStarted))
-	{
-		return false;
+			return Variable.Name == TEXT("LocalValue");
+		});
+		const FAngelscriptVariable* CombinedVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
+		{
+			return Variable.Name == TEXT("Combined");
+		});
+		const FAngelscriptVariable* MemberValueVariable = ThisVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
+		{
+			return Variable.Name == TEXT("MemberValue");
+		});
+		const FAngelscriptVariable* GlobalCounterVariable = ModuleVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
+		{
+			return Variable.Name == TEXT("GlobalCounter");
+		});
+
+		ASSERT_THAT(IsNotNull(LocalValueVariable));
+		ASSERT_THAT(IsNotNull(CombinedVariable));
+		ASSERT_THAT(IsNotNull(MemberValueVariable));
+		ASSERT_THAT(IsNotNull(GlobalCounterVariable));
+
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report LocalValue = 4 in the local scope"), LocalValueVariable->Value, FString(TEXT("4")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report Combined = 16 in the local scope"), CombinedVariable->Value, FString(TEXT("16")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report MemberValue = 5 in the this scope"), MemberValueVariable->Value, FString(TEXT("5")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.ScopeValues should report GlobalCounter = 7 in the module scope"), GlobalCounterVariable->Value, FString(TEXT("7")));
+		TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should expose a non-zero ValueAddress for this.MemberValue through %this% scope"), MemberValueVariable->ValueAddress != 0);
+		TestRunner->TestTrue(TEXT("Debugger.Evaluation.ScopeValues should expose a non-zero ValueAddress for %module%.GlobalCounter through module scope"), GlobalCounterVariable->ValueAddress != 0);
 	}
 
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should send the leaf breakpoint"), Client.SendSetBreakpoint(Breakpoint)))
+	TEST_METHOD(AdapterV1LegacyPayload)
 	{
-		AddError(Client.GetLastError());
-		return false;
+		using namespace AngelscriptDebuggerEvaluationTests_Private;
+
+		// Re-initialize with adapter version 1
+		Ctx.TearDown();
+		ASSERT_THAT(IsTrue(Ctx.SetUp(*TestRunner, /*AdapterVersion=*/ 1)));
+
+		const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreateCallstackFixture();
+		FAngelscriptEngine& Engine = Ctx.GetEngine();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should compile the callstack fixture"), Fixture.Compile(Engine))));
+
+		FAngelscriptBreakpoint Breakpoint;
+		Breakpoint.Id = 20;
+		Breakpoint.Filename = Fixture.Filename;
+		Breakpoint.ModuleName = Fixture.ModuleName.ToString();
+		Breakpoint.LineNumber = Fixture.GetLine(TEXT("CallstackLeafLine"));
+
+		TAtomic<bool> bMonitorReady(false);
+		TFuture<FEvaluationMonitorResult> MonitorFuture = StartEvaluationMonitor(
+			Ctx.GetPort(),
+			bMonitorReady,
+			Ctx.bMonitorShouldStop,
+			Fixture,
+			Ctx.GetDefaultTimeoutSeconds(),
+			1);
+		ON_SCOPE_EXIT
+		{
+			Ctx.bMonitorShouldStop = true;
+			if (MonitorFuture.IsValid())
+			{
+				MonitorFuture.Wait();
+			}
+		};
+
+		ASSERT_THAT(IsTrue(WaitForMonitorReady(*TestRunner, Ctx.Session, bMonitorReady,
+			TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should bring the evaluation monitor up before execution"))));
+
+		if (!TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should send the leaf breakpoint"), Ctx.Client.SendSetBreakpoint(Breakpoint)))
+		{
+			TestRunner->AddError(Ctx.Client.GetLastError());
+			return;
+		}
+
+		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 1,
+			TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should observe the breakpoint registration after both debugger clients finish handshaking"))));
+
+		const TSharedRef<FAsyncGeneratedInvocationState> InvocationState = DispatchGeneratedIntInvocation(Engine, Fixture);
+		ASSERT_THAT(IsTrue(WaitForGeneratedInvocationCompletion(*TestRunner, Ctx.Session, InvocationState,
+			TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should complete the generated invocation after resume"))));
+
+		Ctx.bMonitorShouldStop = true;
+		const FEvaluationMonitorResult MonitorResult = MonitorFuture.Get();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should resolve the generated class before invocation"), InvocationState->bResolvedClass)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should resolve the generated Entry function before invocation"), InvocationState->bResolvedFunction)));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should create a generated UObject instance before invocation"), InvocationState->bCreatedObject)));
+
+		if (!TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should finish without monitor errors"), MonitorResult.Error.IsEmpty()))
+		{
+			TestRunner->AddError(MonitorResult.Error);
+			return;
+		}
+
+		ASSERT_THAT(IsFalse(MonitorResult.bTimedOut));
+		ASSERT_THAT(IsTrue(TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should capture exactly one HasStopped event"), MonitorResult.StopEnvelopes.Num(), 1)));
+		ASSERT_THAT(IsTrue(MonitorResult.StopMessage.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.LeafCombinedValue.IsSet()));
+		ASSERT_THAT(IsTrue(MonitorResult.LocalScopeVariables.IsSet()));
+
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should stop because of a breakpoint"), MonitorResult.StopMessage->Reason, FString(TEXT("breakpoint")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should evaluate Name = Combined"), MonitorResult.LeafCombinedValue->Name, FString(TEXT("Combined")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should evaluate Value = 16"), MonitorResult.LeafCombinedValue->Value, FString(TEXT("16")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should evaluate Type = int"), MonitorResult.LeafCombinedValue->Type, FString(TEXT("int")));
+
+		if (!AssertLegacyVariablePayload(*TestRunner, MonitorResult.LeafCombinedValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload evaluate reply")))
+		{
+			return;
+		}
+
+		const TArray<FAngelscriptVariable>& LocalVariables = MonitorResult.LocalScopeVariables->Variables;
+		const FAngelscriptVariable* LocalValueVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
+		{
+			return Variable.Name == TEXT("LocalValue");
+		});
+		const FAngelscriptVariable* LocalCombinedVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
+		{
+			return Variable.Name == TEXT("Combined");
+		});
+
+		ASSERT_THAT(IsNotNull(LocalValueVariable));
+		ASSERT_THAT(IsNotNull(LocalCombinedVariable));
+
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should report LocalValue = 4 in the local scope"), LocalValueVariable->Value, FString(TEXT("4")));
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should report Combined = 16 in the local scope"), LocalCombinedVariable->Value, FString(TEXT("16")));
+
+		if (!AssertLegacyVariablePayloads(*TestRunner, LocalVariables, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload local scope")))
+		{
+			return;
+		}
+
+		if (MonitorResult.LeafLocalValue.IsSet() &&
+			!AssertLegacyVariablePayload(*TestRunner, MonitorResult.LeafLocalValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload local evaluate reply")))
+		{
+			return;
+		}
+
+		if (MonitorResult.ThisMemberValue.IsSet() &&
+			!AssertLegacyVariablePayload(*TestRunner, MonitorResult.ThisMemberValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload this-member evaluate reply")))
+		{
+			return;
+		}
+
+		if (MonitorResult.ModuleGlobalCounterValue.IsSet() &&
+			!AssertLegacyVariablePayload(*TestRunner, MonitorResult.ModuleGlobalCounterValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload module-global evaluate reply")))
+		{
+			return;
+		}
+
+		if (MonitorResult.ThisScopeVariables.IsSet() &&
+			!AssertLegacyVariablePayloads(*TestRunner, MonitorResult.ThisScopeVariables->Variables, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload this scope")))
+		{
+			return;
+		}
+
+		if (MonitorResult.ModuleScopeVariables.IsSet() &&
+			!AssertLegacyVariablePayloads(*TestRunner, MonitorResult.ModuleScopeVariables->Variables, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload module scope")))
+		{
+			return;
+		}
+
+		TestRunner->TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should finish the generated invocation successfully"), InvocationState->bSucceeded);
+		TestRunner->TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should preserve the generated invocation return value"), InvocationState->Result, 16);
 	}
-
-	if (!WaitForEvaluationBreakpointCount(*this, Session, 1, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should observe the breakpoint registration after both debugger clients finish handshaking")))
-	{
-		return false;
-	}
-
-	const TSharedRef<FAsyncGeneratedInvocationState> InvocationState = DispatchGeneratedIntInvocation(Engine, Fixture);
-
-	if (!WaitForGeneratedInvocationCompletion(*this, Session, InvocationState, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should complete the generated invocation after resume")))
-	{
-		return false;
-	}
-
-	bShouldStop = true;
-	const FEvaluationMonitorResult MonitorResult = MonitorFuture.Get();
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should resolve the generated class before invocation"), InvocationState->bResolvedClass))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should resolve the generated Entry function before invocation"), InvocationState->bResolvedFunction))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should create a generated UObject instance before invocation"), InvocationState->bCreatedObject))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should finish without monitor errors"), MonitorResult.Error.IsEmpty()))
-	{
-		AddError(MonitorResult.Error);
-		return false;
-	}
-
-	if (!TestFalse(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should not time out while collecting debugger payloads"), MonitorResult.bTimedOut))
-	{
-		return false;
-	}
-
-	if (!TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should capture exactly one HasStopped event"), MonitorResult.StopEnvelopes.Num(), 1))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should deserialize the stop payload"), MonitorResult.StopMessage.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should deserialize the evaluate payload"), MonitorResult.LeafCombinedValue.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should deserialize the variables payload"), MonitorResult.LocalScopeVariables.IsSet()))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should stop because of a breakpoint"), MonitorResult.StopMessage->Reason, FString(TEXT("breakpoint")));
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should evaluate Name = Combined"), MonitorResult.LeafCombinedValue->Name, FString(TEXT("Combined")));
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should evaluate Value = 16"), MonitorResult.LeafCombinedValue->Value, FString(TEXT("16")));
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should evaluate Type = int"), MonitorResult.LeafCombinedValue->Type, FString(TEXT("int")));
-	if (!AssertLegacyVariablePayload(*this, MonitorResult.LeafCombinedValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload evaluate reply")))
-	{
-		return false;
-	}
-
-	const TArray<FAngelscriptVariable>& LocalVariables = MonitorResult.LocalScopeVariables->Variables;
-	const FAngelscriptVariable* LocalValueVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
-	{
-		return Variable.Name == TEXT("LocalValue");
-	});
-	const FAngelscriptVariable* LocalCombinedVariable = LocalVariables.FindByPredicate([](const FAngelscriptVariable& Variable)
-	{
-		return Variable.Name == TEXT("Combined");
-	});
-	if (!TestNotNull(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should include LocalValue in the local scope"), LocalValueVariable))
-	{
-		return false;
-	}
-
-	if (!TestNotNull(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should include Combined in the local scope"), LocalCombinedVariable))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should report LocalValue = 4 in the local scope"), LocalValueVariable->Value, FString(TEXT("4")));
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should report Combined = 16 in the local scope"), LocalCombinedVariable->Value, FString(TEXT("16")));
-	if (!AssertLegacyVariablePayloads(*this, LocalVariables, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload local scope")))
-	{
-		return false;
-	}
-
-	if (MonitorResult.LeafLocalValue.IsSet() &&
-		!AssertLegacyVariablePayload(*this, MonitorResult.LeafLocalValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload local evaluate reply")))
-	{
-		return false;
-	}
-
-	if (MonitorResult.ThisMemberValue.IsSet() &&
-		!AssertLegacyVariablePayload(*this, MonitorResult.ThisMemberValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload this-member evaluate reply")))
-	{
-		return false;
-	}
-
-	if (MonitorResult.ModuleGlobalCounterValue.IsSet() &&
-		!AssertLegacyVariablePayload(*this, MonitorResult.ModuleGlobalCounterValue.GetValue(), TEXT("Debugger.Evaluation.AdapterV1LegacyPayload module-global evaluate reply")))
-	{
-		return false;
-	}
-
-	if (MonitorResult.ThisScopeVariables.IsSet() &&
-		!AssertLegacyVariablePayloads(*this, MonitorResult.ThisScopeVariables->Variables, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload this scope")))
-	{
-		return false;
-	}
-
-	if (MonitorResult.ModuleScopeVariables.IsSet() &&
-		!AssertLegacyVariablePayloads(*this, MonitorResult.ModuleScopeVariables->Variables, TEXT("Debugger.Evaluation.AdapterV1LegacyPayload module scope")))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should finish the generated invocation successfully"), InvocationState->bSucceeded);
-	TestEqual(TEXT("Debugger.Evaluation.AdapterV1LegacyPayload should preserve the generated invocation return value"), InvocationState->Result, 16);
-	return !HasAnyErrors();
-}
+};
 
 #endif
-

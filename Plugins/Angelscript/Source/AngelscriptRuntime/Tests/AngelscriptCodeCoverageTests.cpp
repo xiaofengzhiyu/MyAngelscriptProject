@@ -210,8 +210,10 @@ bool FAngelscriptCodeCoverageResetHitsTest::RunTest(const FString& Parameters)
 {
 	FAngelscriptEngine& Manager = FAngelscriptEngine::Get();
 
+	TArray<TSharedRef<struct FAngelscriptModuleDesc>> ActiveModules = Manager.GetActiveModules();
+
 	FAngelscriptCodeCoverage Coverage;
-	for (TSharedRef<struct FAngelscriptModuleDesc>& Module : Manager.GetActiveModules())
+	for (TSharedRef<struct FAngelscriptModuleDesc>& Module : ActiveModules)
 	{
 		Coverage.MapExecutableLines(*Module);
 	}
@@ -220,7 +222,7 @@ bool FAngelscriptCodeCoverageResetHitsTest::RunTest(const FString& Parameters)
 
 	// Hit some lines
 	TSharedRef<struct FAngelscriptModuleDesc>* FirstModule = nullptr;
-	for (TSharedRef<struct FAngelscriptModuleDesc>& Module : Manager.GetActiveModules())
+	for (TSharedRef<struct FAngelscriptModuleDesc>& Module : ActiveModules)
 	{
 		const FLineCoverage* LC = Coverage.GetLineCoverage(*Module);
 		if (LC != nullptr && LC->NumExecutableLines() > 0)

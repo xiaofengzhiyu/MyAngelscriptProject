@@ -1,11 +1,11 @@
+#include "CQTest.h"
+#include "Shared/AngelscriptDebuggerTestContext.h"
+#include "Shared/AngelscriptDebuggerTestMonitor.h"
 #include "Shared/AngelscriptDebuggerScriptFixture.h"
-#include "Shared/AngelscriptDebuggerTestClient.h"
-#include "Shared/AngelscriptDebuggerTestSession.h"
-#include "Shared/AngelscriptTestEngineHelper.h"
+#include "Shared/AngelscriptDebuggerTestHelpers.h"
 
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
-#include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/GarbageCollection.h"
 
@@ -13,199 +13,8 @@
 
 using namespace AngelscriptTestSupport;
 
-namespace AngelscriptTest_Debugger_AngelscriptDebuggerPauseTests_Private
+namespace AngelscriptDebuggerPauseTests_Private
 {
-	bool StartPauseDebuggerSession(FAutomationTestBase& Test, FAngelscriptDebuggerTestSession& Session, FAngelscriptDebuggerTestClient& Client)
-	{
-		FAngelscriptDebuggerSessionConfig SessionConfig;
-		// UE 5.7: headless has no production subsystem. Let Initialize() create
-		// an isolated FAngelscriptEngine with its own FAngelscriptDebugServer.
-		SessionConfig.DefaultTimeoutSeconds = 45.0f;
-
-		if (!Test.TestTrue(TEXT("Debugger pause should initialize the debugger session"), Session.Initialize(SessionConfig)))
-		{
-			return false;
-		}
-
-		if (!Test.TestTrue(TEXT("Debugger pause should connect the control client"), Client.Connect(TEXT("127.0.0.1"), Session.GetPort())))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		bool bSentStartDebugging = false;
-		const bool bStartMessageSent = Session.PumpUntil(
-			[&Client, &bSentStartDebugging]()
-			{
-				if (bSentStartDebugging)
-				{
-					return true;
-				}
-
-				bSentStartDebugging = Client.SendStartDebugging(2);
-				return bSentStartDebugging;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger pause should send StartDebugging"), bStartMessageSent))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		TOptional<FAngelscriptDebugMessageEnvelope> VersionEnvelope;
-		const bool bReceivedVersion = Session.PumpUntil(
-			[&Client, &VersionEnvelope]()
-			{
-				TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-				if (Envelope.IsSet() && Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-				{
-					VersionEnvelope = MoveTemp(Envelope);
-					return true;
-				}
-
-				return false;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!Test.TestTrue(TEXT("Debugger pause should receive DebugServerVersion"), bReceivedVersion))
-		{
-			Test.AddError(Client.GetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool WaitForPauseBreakpointCount(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		int32 ExpectedCount,
-		const TCHAR* Context)
-	{
-		const bool bReachedCount = Session.PumpUntil(
-			[&Session, ExpectedCount]()
-			{
-				return Session.GetDebugServer().BreakpointCount == ExpectedCount;
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		if (!bReachedCount)
-		{
-			Test.AddError(FString::Printf(TEXT("%s (actual breakpoint count: %d)."), Context, Session.GetDebugServer().BreakpointCount));
-		}
-
-		return bReachedCount;
-	}
-
-	struct FAsyncPauseInvocationState : public TSharedFromThis<FAsyncPauseInvocationState>
-	{
-		TAtomic<bool> bCompleted = false;
-		bool bSucceeded = false;
-		int32 Result = 0;
-	};
-
-	TSharedRef<FAsyncPauseInvocationState> DispatchPauseInvocation(
-		FAngelscriptEngine& Engine,
-		const FString& Filename,
-		FName ModuleName,
-		const FString& Declaration)
-	{
-		TSharedRef<FAsyncPauseInvocationState> State = MakeShared<FAsyncPauseInvocationState>();
-
-		AsyncTask(ENamedThreads::GameThread, [&Engine, Filename, ModuleName, Declaration, State]()
-		{
-			int32 InvocationResult = 0;
-			State->bSucceeded = ExecuteIntFunction(&Engine, Filename, ModuleName, Declaration, InvocationResult);
-			State->Result = InvocationResult;
-			State->bCompleted = true;
-		});
-
-		return State;
-	}
-
-	bool WaitForPauseInvocationCompletion(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		const TSharedRef<FAsyncPauseInvocationState>& InvocationState,
-		const TCHAR* Context)
-	{
-		const bool bCompleted = Session.PumpUntil(
-			[&InvocationState]()
-			{
-				return InvocationState->bCompleted.Load();
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		return Test.TestTrue(Context, bCompleted);
-	}
-
-	bool WaitForMonitorReady(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		TAtomic<bool>& bMonitorReady,
-		const TCHAR* Context)
-	{
-		return Test.TestTrue(
-			Context,
-			Session.PumpUntil(
-				[&bMonitorReady]()
-				{
-					return bMonitorReady.Load();
-				},
-				Session.GetDefaultTimeoutSeconds()));
-	}
-
-	bool HandshakePauseMonitorClient(
-		FAngelscriptDebuggerTestClient& Client,
-		TAtomic<bool>& bShouldStop,
-		float TimeoutSeconds,
-		FString& OutError)
-	{
-		const double HandshakeEnd = FPlatformTime::Seconds() + TimeoutSeconds;
-		bool bSentStart = false;
-		bool bReceivedVersion = false;
-		while (FPlatformTime::Seconds() < HandshakeEnd && !bShouldStop.Load())
-		{
-			if (!bSentStart)
-			{
-				bSentStart = Client.SendStartDebugging(2);
-				if (!bSentStart)
-				{
-					OutError = FString::Printf(TEXT("Pause monitor failed to send StartDebugging: %s"), *Client.GetLastError());
-					return false;
-				}
-			}
-
-			TOptional<FAngelscriptDebugMessageEnvelope> Envelope = Client.ReceiveEnvelope();
-			if (Envelope.IsSet())
-			{
-				if (Envelope->MessageType == EDebugMessageType::DebugServerVersion)
-				{
-					bReceivedVersion = true;
-					break;
-				}
-			}
-			else if (!Client.GetLastError().IsEmpty())
-			{
-				OutError = FString::Printf(TEXT("Pause monitor failed during handshake: %s"), *Client.GetLastError());
-				return false;
-			}
-
-			FPlatformProcess::Sleep(0.001f);
-		}
-
-		if (!bReceivedVersion)
-		{
-			OutError = bShouldStop.Load()
-				? TEXT("Pause monitor handshake aborted before receiving DebugServerVersion.")
-				: TEXT("Pause monitor timed out waiting for DebugServerVersion.");
-			return false;
-		}
-
-		return true;
-	}
-
 	template <typename T>
 	bool WaitForTypedMessageUntil(
 		FAngelscriptDebuggerTestClient& Client,
@@ -295,7 +104,7 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerPauseTests_Private
 					return Result;
 				}
 
-				if (!HandshakePauseMonitorClient(MonitorClient, bShouldStop, TimeoutSeconds, Result.Error))
+				if (!HandshakeMonitorClient(MonitorClient, bShouldStop, TimeoutSeconds, Result.Error))
 				{
 					Result.bTimedOut = !bShouldStop.Load();
 					bMonitorReady = true;
@@ -430,185 +239,196 @@ namespace AngelscriptTest_Debugger_AngelscriptDebuggerPauseTests_Private
 	}
 }
 
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FAngelscriptDebuggerPauseStopsAtNextScriptLineTest,
-	"Angelscript.TestModule.Debugger.Session.PauseStopsAtNextScriptLine",
+TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerPauseTests,
+	"Angelscript.TestModule.Debugger.Pause",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FAngelscriptDebuggerPauseStopsAtNextScriptLineTest::RunTest(const FString& Parameters)
 {
-	using namespace AngelscriptTest_Debugger_AngelscriptDebuggerPauseTests_Private;
-	FAngelscriptDebuggerTestSession Session;
-	FAngelscriptDebuggerTestClient Client;
-	if (!StartPauseDebuggerSession(*this, Session, Client))
+	FDebuggerTestContext Ctx;
+
+	BEFORE_EACH()
 	{
-		return false;
+		ASSERT_THAT(IsTrue(Ctx.SetUp(*TestRunner)));
 	}
 
-	FAngelscriptEngine& Engine = Session.GetEngine();
-	const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreatePauseFixture();
-	TAtomic<bool> bMonitorShouldStop(false);
-	ON_SCOPE_EXIT
+	AFTER_EACH()
 	{
-		bMonitorShouldStop = true;
-		Client.SendStopDebugging();
-		Client.SendDisconnect();
-		Client.Disconnect();
-		Engine.DiscardModule(*Fixture.ModuleName.ToString());
-		CollectGarbage(RF_NoFlags, true);
-	};
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should compile the pause fixture"), Fixture.Compile(Engine)))
-	{
-		return false;
+		Ctx.TearDown();
 	}
 
-	TAtomic<bool> bMonitorReady(false);
-	TAtomic<bool> bInvocationCompleted(false);
-	TFuture<FPauseMonitorResult> MonitorFuture = StartPauseMonitor(
-		Session.GetPort(),
-		bMonitorReady,
-		bMonitorShouldStop,
-		bInvocationCompleted,
-		Session.GetDefaultTimeoutSeconds());
-	ON_SCOPE_EXIT
+	TEST_METHOD(PauseStopsAtNextScriptLine)
 	{
-		bMonitorShouldStop = true;
-		if (MonitorFuture.IsValid())
+		using namespace AngelscriptDebuggerPauseTests_Private;
+
+		FAngelscriptEngine& Engine = Ctx.GetEngine();
+		const FAngelscriptDebuggerScriptFixture Fixture = FAngelscriptDebuggerScriptFixture::CreatePauseFixture();
+		ON_SCOPE_EXIT
 		{
-			MonitorFuture.Wait();
-		}
-	};
+			Engine.DiscardModule(*Fixture.ModuleName.ToString());
+			CollectGarbage(RF_NoFlags, true);
+		};
 
-	TAtomic<bool> bControlShouldStop(false);
-	TFuture<FControlPauseResult> ControlPauseFuture;
-	ON_SCOPE_EXIT
-	{
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should compile the pause fixture"),
+			Fixture.Compile(Engine))));
+
+		TAtomic<bool> bMonitorReady(false);
+		TAtomic<bool> bInvocationCompleted(false);
+		TFuture<FPauseMonitorResult> MonitorFuture = StartPauseMonitor(
+			Ctx.GetPort(),
+			bMonitorReady,
+			Ctx.bMonitorShouldStop,
+			bInvocationCompleted,
+			Ctx.GetDefaultTimeoutSeconds());
+		ON_SCOPE_EXIT
+		{
+			Ctx.bMonitorShouldStop = true;
+			if (MonitorFuture.IsValid())
+			{
+				MonitorFuture.Wait();
+			}
+		};
+
+		TAtomic<bool> bControlShouldStop(false);
+		TFuture<FControlPauseResult> ControlPauseFuture;
+		ON_SCOPE_EXIT
+		{
+			bControlShouldStop = true;
+			if (ControlPauseFuture.IsValid())
+			{
+				ControlPauseFuture.Wait();
+			}
+		};
+
+		ASSERT_THAT(IsTrue(WaitForMonitorReady(
+			*TestRunner,
+			Ctx.Session,
+			bMonitorReady,
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should bring the pause monitor up before execution"))));
+
+		FAngelscriptBreakpoint Breakpoint;
+		Breakpoint.Filename = Fixture.Filename;
+		Breakpoint.ModuleName = Fixture.ModuleName.ToString();
+		Breakpoint.LineNumber = Fixture.GetLine(TEXT("PauseReadyLine"));
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should set the pause-ready breakpoint"),
+			Ctx.Client.SendSetBreakpoint(Breakpoint))));
+
+		ASSERT_THAT(IsTrue(WaitForBreakpointCount(
+			*TestRunner,
+			Ctx.Session,
+			1,
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should observe the breakpoint registration"))));
+
+		ControlPauseFuture = StartControlPauseRequest(
+			Ctx.Client,
+			bControlShouldStop,
+			Ctx.GetDefaultTimeoutSeconds());
+
+		const TSharedRef<FAsyncModuleInvocationState> InvocationState = DispatchModuleInvocation(
+			Engine,
+			Fixture.Filename,
+			Fixture.ModuleName,
+			Fixture.EntryFunctionDeclaration);
+
+		ASSERT_THAT(IsTrue(WaitForInvocationCompletion(
+			*TestRunner,
+			Ctx.Session,
+			InvocationState,
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should finish the invocation after resuming from the pause stop"))));
+
+		bInvocationCompleted = true;
+		Ctx.bMonitorShouldStop = true;
 		bControlShouldStop = true;
-		if (ControlPauseFuture.IsValid())
+
+		const FPauseMonitorResult MonitorResult = MonitorFuture.Get();
+		const FControlPauseResult ControlPauseResult = ControlPauseFuture.Get();
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should let the control client observe HasContinued without errors"),
+			ControlPauseResult.Error.IsEmpty())));
+		if (!ControlPauseResult.Error.IsEmpty())
 		{
-			ControlPauseFuture.Wait();
+			TestRunner->AddError(ControlPauseResult.Error);
 		}
-	};
 
-	if (!WaitForMonitorReady(*this, Session, bMonitorReady, TEXT("Debugger.Session.PauseStopsAtNextScriptLine should bring the pause monitor up before execution")))
-	{
-		return false;
+		ASSERT_THAT(IsTrue(TestRunner->TestFalse(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should not time out while waiting for the control-client HasContinued"),
+			ControlPauseResult.bTimedOut)));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should observe HasContinued on the control client before sending Pause"),
+			ControlPauseResult.bObservedContinued)));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should send Pause from the control client after HasContinued"),
+			ControlPauseResult.bSentPause)));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should keep the pause monitor error-free"),
+			MonitorResult.Error.IsEmpty())));
+		if (!MonitorResult.Error.IsEmpty())
+		{
+			TestRunner->AddError(MonitorResult.Error);
+		}
+
+		ASSERT_THAT(IsTrue(TestRunner->TestFalse(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should not time out while driving the pause test case"),
+			MonitorResult.bTimedOut)));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should capture the initial breakpoint stop"),
+			MonitorResult.FirstStopMessage.IsSet())));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should capture the initial callstack"),
+			MonitorResult.FirstCallstack.IsSet())));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should capture the pause stop"),
+			MonitorResult.SecondStopMessage.IsSet())));
+
+		ASSERT_THAT(IsTrue(TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should capture the pause callstack"),
+			MonitorResult.SecondCallstack.IsSet())));
+
+		TestRunner->TestEqual(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should stop first because of the breakpoint"),
+			MonitorResult.FirstStopMessage->Reason, FString(TEXT("breakpoint")));
+		TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should report the fixture filename on the first stop"),
+			MonitorResult.FirstCallstack->Frames.Num() > 0 && MonitorResult.FirstCallstack->Frames[0].Source.EndsWith(Fixture.Filename));
+		TestRunner->TestEqual(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should stop first at PauseReadyLine"),
+			MonitorResult.FirstCallstack->Frames[0].LineNumber, Fixture.GetLine(TEXT("PauseReadyLine")));
+		TestRunner->TestEqual(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should observe exactly one HasContinued after the initial resume"),
+			MonitorResult.ContinuedCount, 1);
+		TestRunner->TestEqual(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should stop the second time because of Pause"),
+			MonitorResult.SecondStopMessage->Reason, FString(TEXT("pause")));
+		TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should report the fixture filename on the pause stop"),
+			MonitorResult.SecondCallstack->Frames.Num() > 0 && MonitorResult.SecondCallstack->Frames[0].Source.EndsWith(Fixture.Filename));
+
+		// UE 5.7: VM line-event granularity may pause at either the for-header (PauseForHeaderLine)
+		// or the loop body (PauseLoopLine) depending on engine state and test ordering.
+		const int32 ActualPauseLine = MonitorResult.SecondCallstack->Frames[0].LineNumber;
+		const int32 ForHeaderLine = Fixture.GetLine(TEXT("PauseForHeaderLine"));
+		const int32 LoopBodyLine = Fixture.GetLine(TEXT("PauseLoopLine"));
+		TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should stop the second time at either PauseForHeaderLine or PauseLoopLine"),
+			ActualPauseLine == ForHeaderLine || ActualPauseLine == LoopBodyLine);
+
+		TestRunner->TestEqual(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should not receive any unexpected extra HasStopped messages after resuming from Pause"),
+			MonitorResult.UnexpectedStopCount, 0);
+		TestRunner->TestTrue(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should finish the invocation successfully"),
+			InvocationState->bSucceeded);
+		TestRunner->TestEqual(
+			TEXT("Debugger.Pause.PauseStopsAtNextScriptLine should preserve the pause fixture return value"),
+			InvocationState->Result, 5001);
 	}
-
-	FAngelscriptBreakpoint Breakpoint;
-	Breakpoint.Filename = Fixture.Filename;
-	Breakpoint.ModuleName = Fixture.ModuleName.ToString();
-	Breakpoint.LineNumber = Fixture.GetLine(TEXT("PauseReadyLine"));
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should set the pause-ready breakpoint"), Client.SendSetBreakpoint(Breakpoint)))
-	{
-		AddError(Client.GetLastError());
-		return false;
-	}
-
-	if (!WaitForPauseBreakpointCount(*this, Session, 1, TEXT("Debugger.Session.PauseStopsAtNextScriptLine should observe the breakpoint registration")))
-	{
-		return false;
-	}
-
-	ControlPauseFuture = StartControlPauseRequest(
-		Client,
-		bControlShouldStop,
-		Session.GetDefaultTimeoutSeconds());
-
-	const TSharedRef<FAsyncPauseInvocationState> InvocationState = DispatchPauseInvocation(
-		Engine,
-		Fixture.Filename,
-		Fixture.ModuleName,
-		Fixture.EntryFunctionDeclaration);
-
-	if (!WaitForPauseInvocationCompletion(
-		*this,
-		Session,
-		InvocationState,
-		TEXT("Debugger.Session.PauseStopsAtNextScriptLine should finish the invocation after resuming from the pause stop")))
-	{
-		return false;
-	}
-
-	bInvocationCompleted = true;
-	bMonitorShouldStop = true;
-	bControlShouldStop = true;
-
-	const FPauseMonitorResult MonitorResult = MonitorFuture.Get();
-	const FControlPauseResult ControlPauseResult = ControlPauseFuture.Get();
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should let the control client observe HasContinued without errors"), ControlPauseResult.Error.IsEmpty()))
-	{
-		AddError(ControlPauseResult.Error);
-		return false;
-	}
-
-	if (!TestFalse(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should not time out while waiting for the control-client HasContinued"), ControlPauseResult.bTimedOut))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should observe HasContinued on the control client before sending Pause"), ControlPauseResult.bObservedContinued))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should send Pause from the control client after HasContinued"), ControlPauseResult.bSentPause))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should keep the pause monitor error-free"), MonitorResult.Error.IsEmpty()))
-	{
-		AddError(MonitorResult.Error);
-		return false;
-	}
-
-	if (!TestFalse(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should not time out while driving the pause test case"), MonitorResult.bTimedOut))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should capture the initial breakpoint stop"), MonitorResult.FirstStopMessage.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should capture the initial callstack"), MonitorResult.FirstCallstack.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should capture the pause stop"), MonitorResult.SecondStopMessage.IsSet()))
-	{
-		return false;
-	}
-
-	if (!TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should capture the pause callstack"), MonitorResult.SecondCallstack.IsSet()))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop first because of the breakpoint"), MonitorResult.FirstStopMessage->Reason, FString(TEXT("breakpoint")));
-	TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should report the fixture filename on the first stop"), MonitorResult.FirstCallstack->Frames.Num() > 0 && MonitorResult.FirstCallstack->Frames[0].Source.EndsWith(Fixture.Filename));
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop first at PauseReadyLine"), MonitorResult.FirstCallstack->Frames[0].LineNumber, Fixture.GetLine(TEXT("PauseReadyLine")));
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should observe exactly one HasContinued after the initial resume"), MonitorResult.ContinuedCount, 1);
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop the second time because of Pause"), MonitorResult.SecondStopMessage->Reason, FString(TEXT("pause")));
-	TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should report the fixture filename on the pause stop"), MonitorResult.SecondCallstack->Frames.Num() > 0 && MonitorResult.SecondCallstack->Frames[0].Source.EndsWith(Fixture.Filename));
-	// UE 5.7: VM line-event granularity may pause at either the for-header (PauseForHeaderLine)
-	// or the loop body (PauseLoopLine) depending on engine state and test ordering.
-	const int32 ActualPauseLine = MonitorResult.SecondCallstack->Frames[0].LineNumber;
-	const int32 ForHeaderLine = Fixture.GetLine(TEXT("PauseForHeaderLine"));
-	const int32 LoopBodyLine = Fixture.GetLine(TEXT("PauseLoopLine"));
-	TestTrue(
-		TEXT("Debugger.Session.PauseStopsAtNextScriptLine should stop the second time at either PauseForHeaderLine or PauseLoopLine"),
-		ActualPauseLine == ForHeaderLine || ActualPauseLine == LoopBodyLine);
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should not receive any unexpected extra HasStopped messages after resuming from Pause"), MonitorResult.UnexpectedStopCount, 0);
-	TestTrue(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should finish the invocation successfully"), InvocationState->bSucceeded);
-	TestEqual(TEXT("Debugger.Session.PauseStopsAtNextScriptLine should preserve the pause fixture return value"), InvocationState->Result, 5001);
-	return !HasAnyErrors();
-}
+};
 
 #endif
-
