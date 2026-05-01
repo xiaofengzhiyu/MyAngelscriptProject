@@ -492,7 +492,284 @@ if (!Mod.IsValid()) return;      // CQTest: void
 if (!Mod.IsValid()) return false; // 传统 IMPLEMENT_SIMPLE: bool
 ```
 
-## 10. 参考文件
+## 10. 实战用法食谱
+
+本节基于项目代码库中 ~187 个 CQTest 测试文件的实际模式，提炼出常用场景的代码示例。
+
+### 10.1 最简单测试 — 编译 AS 代码并断言返回值
+
+最基本的模式：编译一段 AS 脚本、调用函数、检查 int 返回值。
+
+```cpp
+TEST_METHOD(BasicCompile)
+{
+    FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+    FAngelscriptEngineScope Scope(Engine);
+
+    FCoverageModuleScope Mod(*TestRunner, Engine, GProfile, TEXT("Basic"), TEXT(R"(
+int GetFortyTwo() { return 42; }
+)"));
+    if (!Mod.IsValid()) return;
+    auto& M = Mod.GetModule();
+
+    ExpectGlobalInt(*TestRunner, Engine, M, GProfile,
+        TEXT("int GetFortyTwo()"), TEXT("returns 42"), 42);
+}
+```
+
+### 10.2 批量断言 — FExpectedGlobalInt 数组
+
+一个 `TEST_METHOD` 内测试多个函数，将所有期望值集中在一个数组中。这是**绑定覆盖率测试**的标准模式：
+
+```cpp
+TEST_METHOD(Operators)
+{
+    FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+    FAngelscriptEngineScope Scope(Engine);
+
+    FCoverageModuleScope Mod(*TestRunner, Engine, GProfile, TEXT("Ops"), TEXT(R"(
+int Add()      { return 2 + 3; }
+int Subtract() { return 10 - 7; }
+int Multiply() { return 4 * 5; }
+)"));
+    if (!Mod.IsValid()) return;
+    auto& M = Mod.GetModule();
+
+    const FExpectedGlobalInt Cases[] = {
+        { TEXT("int Add()"),      TEXT("2+3=5"),   5 },
+        { TEXT("int Subtract()"), TEXT("10-7=3"),  3 },
+        { TEXT("int Multiply()"), TEXT("4*5=20"), 20 },
+    };
+    ExpectGlobalInts(*TestRunner, Engine, M, GProfile, Cases);
+}
+```
+
+> **决策点**：一个 Section 通常对应一个 `TEST_METHOD`，如果该 Section 内有 N 个小测试点，全部放进一个 `FExpectedGlobalInt` 数组即可。
+
+### 10.3 自定义返回类型 — ExpectGlobalReturnCustom
+
+当 AS 函数返回 `FString`、结构体等非 int 类型时，使用 lambda 验证器：
+
+```cpp
+TEST_METHOD(ReturnFString)
+{
+    // ... 省略引擎获取和模块编译 ...
+
+    ExpectGlobalReturnCustom<FString>(*TestRunner, Engine, M, GProfile,
+        TEXT("FString BuildGreeting()"),
+        TEXT("concat produces Hello World"),
+        [](FAutomationTestBase& T, const FString& V) -> bool
+        {
+            return T.TestEqual(TEXT("greeting"), V, TEXT("Hello World"));
+        });
+}
+```
+
+### 10.4 带参数调用 — FASGlobalFunctionInvoker
+
+C++ 侧向 AS 函数传入参数并读取返回值：
+
+```cpp
+TEST_METHOD(PassArguments)
+{
+    // ... 省略引擎获取和模块编译 ...
+
+    // 传递 int 参数
+    {
+        FASGlobalFunctionInvoker Inv(*TestRunner, Engine, M,
+            TEXT("int AddInts(int, int)"));
+        Inv.AddArg(static_cast<int32>(17)).AddArg(static_cast<int32>(25));
+        TestRunner->TestEqual(TEXT("AddInts(17,25)=42"),
+            Inv.CallAndReturn<int32>(-1), 42);
+    }
+
+    // 传递 FString 引用参数
+    {
+        FString Name = TEXT("CQTest");
+        FASGlobalFunctionInvoker Inv(*TestRunner, Engine, M,
+            TEXT("FString Greet(const FString& in)"));
+        Inv.AddArgRef(Name);
+        if (Inv.Call())
+        {
+            FString Result;
+            if (Inv.ReadReturnStruct(Result))
+            {
+                TestRunner->TestEqual(TEXT("Greet returns Hello, CQTest!"),
+                    Result, TEXT("Hello, CQTest!"));
+            }
+        }
+    }
+}
+```
+
+### 10.5 负面路径 — 期望 AS 异常
+
+测试 AS 脚本在运行时抛出异常的场景。**关键**：必须在编译模块之前注册预期错误。
+
+```cpp
+TEST_METHOD(NegativePath)
+{
+    FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+    FAngelscriptEngineScope Scope(Engine);
+
+    // ① 在编译前注册预期错误（模块名 + 函数签名 + 异常消息）
+    TestRunner->AddExpectedErrorPlain(
+        TEXT("ASMyTest_Negative"), EAutomationExpectedErrorFlags::Contains, 0);
+    TestRunner->AddExpectedErrorPlain(
+        TEXT("void StringIndexOOB()"), EAutomationExpectedErrorFlags::Contains, 0);
+    TestRunner->AddExpectedErrorPlain(
+        TEXT("out of bounds"), EAutomationExpectedErrorFlags::Contains, 0);
+
+    // ② 编译模块
+    FCoverageModuleScope Mod(*TestRunner, Engine, GProfile, TEXT("Negative"), TEXT(R"(
+void StringIndexOOB()
+{
+    FString S = "AB";
+    int16 C = S[99];
+}
+)"));
+    if (!Mod.IsValid()) return;
+    auto& M = Mod.GetModule();
+
+    // ③ 执行并断言异常
+    ExecuteFunctionExpectingScriptException(
+        *TestRunner, Engine, M, GProfile,
+        TEXT("void StringIndexOOB()"),
+        TEXT("OOB throws"),
+        TEXT("out of bounds"));
+}
+```
+
+### 10.6 World Tick + Actor 功能测试
+
+测试 AS 脚本定义的 Actor 在 World 中被驱动 Tick：
+
+```cpp
+TEST_METHOD(ActorTickDriving)
+{
+    FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE();
+    FAngelscriptEngineScope Scope(Engine);
+    static const FName ModuleName(TEXT("TickTest"));
+    ON_SCOPE_EXIT { Engine.DiscardModule(*ModuleName.ToString()); };
+
+    // ① 编译带 BeginPlay / Tick 的 AS Actor 类
+    UClass* ScriptClass = CompileScriptModule(*TestRunner, Engine, ModuleName,
+        TEXT("TickTest.as"),
+        TEXT(R"AS(
+UCLASS()
+class ATickTestActor : AActor
+{
+    UPROPERTY()
+    int TickCount = 0;
+
+    UFUNCTION(BlueprintOverride)
+    void Tick(float DeltaTime)
+    {
+        TickCount += 1;
+    }
+}
+)AS"),
+        TEXT("ATickTestActor"));
+    ASSERT_THAT(IsNotNull(ScriptClass));
+
+    // ② 创建测试世界 → 生成 Actor → 驱动 Tick
+    FAngelscriptTestWorld W(*TestRunner, Engine);
+    ASSERT_THAT(IsTrue(W.IsValid()));
+
+    AActor* Actor = W.SpawnActorOfClass(ScriptClass);
+    ASSERT_THAT(IsNotNull(Actor));
+
+    W.BeginPlay(*Actor);
+    constexpr int32 NumTicks = 5;
+    W.DispatchActorTick(*Actor, 0.016f, NumTicks);
+
+    // ③ 通过反射读取 AS 属性并断言
+    int32 TickCount = 0;
+    ASSERT_THAT(IsTrue(ReadPropertyValue<FIntProperty>(
+        *TestRunner, Actor, TEXT("TickCount"), TickCount)));
+    TestRunner->TestEqual(TEXT("TickCount == NumTicks"), TickCount, NumTicks);
+}
+```
+
+> **注意**：此模式使用 `FAngelscriptTestWorld` + `DispatchActorTick` 精确驱动，而非 `TickViaManager`（后者受 UE 调度影响不保证 N 次）。
+
+### 10.7 namespace Helper 函数模式
+
+当多个 `TEST_METHOD` 需要复用逻辑时，将 helper 函数放在文件级 namespace 中（而非类内成员方法）：
+
+```cpp
+namespace MyTestHelpers
+{
+    // 复用 helper：编译一段 AS 代码并返回编译好的 UClass*
+    UClass* CompileAndGetClass(
+        FAutomationTestBase& Test,
+        FAngelscriptEngine& Engine,
+        const FName& ModuleName,
+        const FString& Source,
+        const TCHAR* ClassName)
+    {
+        return CompileScriptModule(Test, Engine, ModuleName,
+            *FString::Printf(TEXT("%s.as"), *ModuleName.ToString()),
+            Source, ClassName);
+    }
+
+    // 复用 helper：读 int 属性并断言
+    bool ExpectProperty(
+        FAutomationTestBase& Test, AActor* Actor,
+        const TCHAR* PropName, int32 Expected)
+    {
+        int32 Value = 0;
+        if (!ReadPropertyValue<FIntProperty>(Test, Actor, PropName, Value))
+            return false;
+        return Test.TestEqual(PropName, Value, Expected);
+    }
+}
+```
+
+> **为什么不用类内 protected 方法？** CQTest 每个 `TEST_METHOD` 创建新实例，类内方法没有状态共享优势。且 `TEST_CLASS_WITH_FLAGS` 宏展开后的结构不鼓励在 `struct` 内部添加 `protected:` 区域。项目统一使用外部 namespace 或共享头文件中的自由函数。
+
+### 10.8 决策树：何时选择哪种模式
+
+```text
+需要测试什么？
+│
+├── 纯 AS 编译 + 执行？
+│   ├── 只检查 int 返回值？ → ExpectGlobalInt / ExpectGlobalInts (10.1/10.2)
+│   ├── 检查 FString/struct 返回值？ → ExpectGlobalReturnCustom<T> (10.3)
+│   ├── 需要传参数？ → FASGlobalFunctionInvoker (10.4)
+│   └── 期望抛异常？ → ExecuteFunctionExpectingScriptException (10.5)
+│
+├── 需要 Actor/Component 在 World 中运行？
+│   └── FAngelscriptTestWorld + CompileScriptModule (10.6)
+│
+├── 多个 TEST_METHOD 共享逻辑？
+│   └── namespace Helper 函数 (10.7)
+│
+└── 需要 BEFORE_EACH / AFTER_EACH？
+    └── 一般不需要。FCoverageModuleScope RAII 已处理模块隔离。
+        只有在确实需要"每个 TEST_METHOD 前后执行固定动作"时才使用。
+```
+
+### 10.9 日志与诊断输出
+
+使用 `AddInfo` 在测试日志中留下可读的执行轨迹（即使全部通过也可事后审查）：
+
+```cpp
+TestRunner->AddInfo(TEXT("[FString.Construction] Testing empty constructor"));
+TestRunner->AddInfo(FString::Printf(TEXT("[Coverage] %d cases validated"), NumCases));
+```
+
+使用 `AddWarning` 标记非致命但需要关注的情况：
+
+```cpp
+TestRunner->AddWarning(TEXT("Reflective fallback invoked — no direct binding for this function"));
+```
+
+> **注意**：`AddInfo` / `AddWarning` / `AddError` 是 `TBaseTest` 的方法，在 `TEST_METHOD` 中通过 `TestRunner->` 调用。`ExpectGlobalInt` 等 helper 内部已自动调用 `Test.AddInfo` 输出 per-case 轨迹。
+
+---
+
+## 11. 参考文件
 
 | 文件 | 说明 |
 | --- | --- |
