@@ -451,7 +451,9 @@
 
 > 缓存实现见 `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/BlueprintCallableReflectiveFallback.cpp`（`FReflectiveParamCache` + `FBlueprintCallableReflectiveSignature::GetOrBuildCache` + `InvokeReflectiveUFunctionFromGenericCallCached`）。原始 `InvokeReflectiveUFunctionFromGenericCall` 公共 API 现在转发到缓存路径，因此现存的 UMG/AIModule/GameplayTags 反射回退测试也间接覆盖缓存。
 >
-> 7 个新增功能用例选用 GameplayTags BPLib（UHT 摘要 35/35 stub，100% 反射回退）作为驱动函数，避免 AngelscriptTest 模块内函数被 UHT 直接绑定旁路缓存。
+> 通过 CVar `as.ReflectiveFallback.UseCache`（默认 1）可在运行时切换两条调度策略：1=`FFrame`+`UFunction::Invoke` 缓存路径；0=传统 `UObject::ProcessEvent` + 每调用 `TFieldIterator` 路径。在线切换支持 A/B 性能对比、灰度发布以及缓存路径出问题时立即回退。
+>
+> 8 个功能用例选用 GameplayTags BPLib（UHT 摘要 35/35 stub，100% 反射回退）作为驱动函数，避免 AngelscriptTest 模块内函数被 UHT 直接绑定旁路缓存。
 
 | 测试名 | 验证内容 | 源文件 |
 |--------|----------|--------|
@@ -462,6 +464,7 @@
 | Bindings.ReflectiveFallbackCache.MixinObject | `bInjectMixinObject==true` 静态 BPLib 函数：首参从 `Generic->GetObject()` 注入而非 AS 参数列表 | AngelscriptReflectiveFallbackCacheTests.cpp |
 | Bindings.ReflectiveFallbackCache.CacheReuse | 同一 UFunction 在循环中调用 32 次，验证首次构建的缓存在后续调用中被正确复用 | AngelscriptReflectiveFallbackCacheTests.cpp |
 | Bindings.ReflectiveFallbackCache.FuncNetEligibility | 结构性兜底：BPLib UFUNCTION 在缓存改造后仍保持反射回退资格（FUNC_Net 端到端验证待网络环境） | AngelscriptReflectiveFallbackCacheTests.cpp |
+| Bindings.ReflectiveFallbackCache.CVarParityCachedVsProcessEvent | 在同一测试中切换 `as.ReflectiveFallback.UseCache` 0/1，跑同脚本两遍（POD 标量 + FName 返回 + non-const out 写回 + 8 次循环），断言缓存路径与 ProcessEvent 路径产出复合 checksum 完全一致；测试结束 `ON_SCOPE_EXIT` 还原 CVar | AngelscriptReflectiveFallbackCacheTests.cpp |
 
 ---
 

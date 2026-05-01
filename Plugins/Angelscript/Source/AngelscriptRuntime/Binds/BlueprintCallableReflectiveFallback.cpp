@@ -5,6 +5,7 @@
 #include "Core/FunctionCallers.h"
 #include "Binds/Helper_FunctionSignature.h"
 
+#include "HAL/IConsoleManager.h"
 #include "Misc/Optional.h"
 #include "UObject/UnrealType.h"
 #include "UObject/Class.h"
@@ -87,6 +88,34 @@ namespace
 {
 	constexpr int32 BlueprintCallableReflectiveFallbackMaxArgs = 16;
 	const FName NAME_BlueprintCallableReflectiveFallback_CustomThunk(TEXT("CustomThunk"));
+
+	// =====================================================================
+	// CVar: as.ReflectiveFallback.UseCache (default 1)
+	//
+	// Toggles between two reflective fallback dispatch strategies:
+	//   1 (default) - cached path: precomputed FReflectiveParamCache +
+	//                 FFrame + UFunction::Invoke (with FUNC_Net branch).
+	//                 ~3-6x faster than ProcessEvent for typical signatures.
+	//                 See InvokeReflectiveUFunctionFromGenericCallCached.
+	//   0           - legacy path: per-call TFieldIterator walk + Init/Copy +
+	//                 UObject::ProcessEvent + per-call DestroyValue. Matches
+	//                 the pre-cache behaviour. Use to roll back instantly if
+	//                 the cached path misbehaves on a specific UFunction or
+	//                 to A/B compare correctness for a regression hunt.
+	//                 See InvokeReflectiveUFunctionFromGenericCallProcessEvent.
+	//
+	// Read per-call via GetValueOnAnyThread() so toggling at runtime takes
+	// effect immediately without engine restart or module reload.
+	// =====================================================================
+	TAutoConsoleVariable<bool> CVarReflectiveFallbackUseCache(
+		TEXT("as.ReflectiveFallback.UseCache"),
+		true,
+		TEXT("Whether reflective fallback for BlueprintCallable UFunction calls uses ")
+		TEXT("the precomputed FReflectiveParamCache + UFunction::Invoke fast path. ")
+		TEXT("Set to 0 to revert to legacy per-call TFieldIterator + UObject::ProcessEvent ")
+		TEXT("dispatch (slower; useful for A/B comparison and incident-response rollback). ")
+		TEXT("Default: 1 (cached)."),
+		ECVF_Default);
 
 	// =====================================================================
 	// FReflectiveParamCache
@@ -512,6 +541,145 @@ namespace
 		return true;
 	}
 
+	// Legacy reflective fallback dispatch via UObject::ProcessEvent. Mirrors
+	// the pre-cache behaviour exactly: every call walks Function->ChildProperties
+	// with TFieldIterator, initialises the parameter buffer in place, copies
+	// AS arguments into UFunction parameter slots, dispatches via ProcessEvent
+	// (which handles the FFrame setup, FOutParmRec chain, FUNC_Net routing and
+	// PreScriptCall hooks internally), then writes back out parameters and the
+	// return value to the AS side. Selected when as.ReflectiveFallback.UseCache=0.
+	bool InvokeReflectiveUFunctionFromGenericCallProcessEvent(
+		asCGeneric* Generic,
+		UObject* TargetObject,
+		UFunction* Function,
+		bool bInjectMixinObject)
+	{
+		if (Generic == nullptr || TargetObject == nullptr || Function == nullptr)
+		{
+			return false;
+		}
+
+		const int32 BufferSize = static_cast<int32>(Function->ParmsSize);
+		uint8* ParameterBuffer = static_cast<uint8*>(FMemory_Alloca(FMath::Max(BufferSize, 1)));
+		FMemory::Memzero(ParameterBuffer, FMath::Max(BufferSize, 1));
+
+		// Initialize all parameter slots so non-trivial properties (FString,
+		// USTRUCT, TArray etc.) start in a constructed state before CopySingleValue.
+		for (TFieldIterator<FProperty> It(Function); It && (It->PropertyFlags & CPF_Parm); ++It)
+		{
+			It->InitializeValue_InContainer(ParameterBuffer);
+		}
+
+		// Capture script-side addresses for non-const out parameters so we can
+		// write the post-dispatch values back into AS storage. Indexed by
+		// parameter ordinal in the UFunction's child property list.
+		void* OutScriptAddresses[BlueprintCallableReflectiveFallbackMaxArgs];
+		FMemory::Memzero(OutScriptAddresses, sizeof(OutScriptAddresses));
+
+		int32 ParamIndex = 0;
+		int32 ScriptArgIndex = 0;
+		bool bInjectedMixinObject = false;
+		FProperty* ReturnProperty = nullptr;
+
+		for (TFieldIterator<FProperty> It(Function); It && (It->PropertyFlags & CPF_Parm); ++It)
+		{
+			FProperty* Property = *It;
+
+			if (Property->HasAnyPropertyFlags(CPF_ReturnParm))
+			{
+				ReturnProperty = Property;
+				++ParamIndex;
+				continue;
+			}
+
+			void* Destination = Property->ContainerPtrToValuePtr<void>(ParameterBuffer);
+
+			if (bInjectMixinObject && !bInjectedMixinObject)
+			{
+				UObject* MixinObject = static_cast<UObject*>(Generic->GetObject());
+				Property->CopySingleValue(Destination, &MixinObject);
+				bInjectedMixinObject = true;
+				++ParamIndex;
+				continue;
+			}
+
+			if (ScriptArgIndex >= Generic->GetArgCount())
+			{
+				// Argument under-flow: clean up and bail out before ProcessEvent.
+				for (TFieldIterator<FProperty> Cleanup(Function); Cleanup && (Cleanup->PropertyFlags & CPF_Parm); ++Cleanup)
+				{
+					Cleanup->DestroyValue_InContainer(ParameterBuffer);
+				}
+				return false;
+			}
+
+			void* ScriptArgumentAddress = Generic->GetAddressOfArg(ScriptArgIndex);
+			void* SourceAddress = ResolveScriptArgumentAddress(Property, ScriptArgumentAddress);
+			if (SourceAddress != nullptr)
+			{
+				Property->CopySingleValue(Destination, SourceAddress);
+			}
+
+			const bool bIsWritebackOut =
+				Property->HasAnyPropertyFlags(CPF_OutParm)
+				&& !Property->HasAnyPropertyFlags(CPF_ConstParm)
+				&& !Property->HasAnyPropertyFlags(CPF_ReturnParm);
+			if (bIsWritebackOut && ParamIndex < BlueprintCallableReflectiveFallbackMaxArgs)
+			{
+				OutScriptAddresses[ParamIndex] = SourceAddress;
+			}
+
+			++ScriptArgIndex;
+			++ParamIndex;
+		}
+
+		// ProcessEvent handles FFrame, FOutParmRec chain, native vs Blueprint
+		// dispatch, FUNC_Net RPC routing, and PreScriptCall hooks all in one.
+		TargetObject->ProcessEvent(Function, ParameterBuffer);
+
+		// Out-parameter writeback to script-side storage (non-const refs only).
+		ParamIndex = 0;
+		for (TFieldIterator<FProperty> It(Function); It && (It->PropertyFlags & CPF_Parm); ++It)
+		{
+			FProperty* Property = *It;
+			if (Property->HasAnyPropertyFlags(CPF_ReturnParm))
+			{
+				++ParamIndex;
+				continue;
+			}
+			if (ParamIndex < BlueprintCallableReflectiveFallbackMaxArgs)
+			{
+				void* ScriptAddress = OutScriptAddresses[ParamIndex];
+				if (ScriptAddress != nullptr)
+				{
+					void* SourceAddress = Property->ContainerPtrToValuePtr<void>(ParameterBuffer);
+					Property->CopySingleValue(ScriptAddress, SourceAddress);
+				}
+			}
+			++ParamIndex;
+		}
+
+		// Return-value writeback to AS-controlled location.
+		if (ReturnProperty != nullptr)
+		{
+			void* ReturnDestination = Generic->GetAddressOfReturnLocation();
+			if (ReturnDestination != nullptr)
+			{
+				void* SourceAddress = ReturnProperty->ContainerPtrToValuePtr<void>(ParameterBuffer);
+				ReturnProperty->InitializeValue(ReturnDestination);
+				ReturnProperty->CopySingleValue(ReturnDestination, SourceAddress);
+			}
+		}
+
+		// Tear down everything the buffer initialised.
+		for (TFieldIterator<FProperty> It(Function); It && (It->PropertyFlags & CPF_Parm); ++It)
+		{
+			It->DestroyValue_InContainer(ParameterBuffer);
+		}
+
+		return true;
+	}
+
 	void CallBlueprintCallableReflectiveFallback(asIScriptGeneric* InGeneric)
 	{
 		auto* Generic = static_cast<asCGeneric*>(InGeneric);
@@ -531,13 +699,27 @@ namespace
 			return;
 		}
 
-		const FReflectiveParamCache& Cache = Signature->GetOrBuildCache();
-		InvokeReflectiveUFunctionFromGenericCallCached(
-			static_cast<asCGeneric*>(InGeneric),
-			TargetObject,
-			Signature->UnrealFunction,
-			Cache,
-			Signature->bInjectMixinObject);
+		// Per-call CVar read so runtime toggles take effect immediately.
+		// When disabled, skip cache build entirely - the legacy path is
+		// fully self-contained and walks Function->ChildProperties on demand.
+		if (CVarReflectiveFallbackUseCache.GetValueOnAnyThread())
+		{
+			const FReflectiveParamCache& Cache = Signature->GetOrBuildCache();
+			InvokeReflectiveUFunctionFromGenericCallCached(
+				static_cast<asCGeneric*>(InGeneric),
+				TargetObject,
+				Signature->UnrealFunction,
+				Cache,
+				Signature->bInjectMixinObject);
+		}
+		else
+		{
+			InvokeReflectiveUFunctionFromGenericCallProcessEvent(
+				static_cast<asCGeneric*>(InGeneric),
+				TargetObject,
+				Signature->UnrealFunction,
+				Signature->bInjectMixinObject);
+		}
 	}
 
 	// Bridge for the public-API InvokeReflectiveUFunctionFromGenericCall: callers
@@ -554,6 +736,17 @@ namespace
 		if (Generic == nullptr || TargetObject == nullptr || Function == nullptr)
 		{
 			return false;
+		}
+
+		// Honour the same CVar as the primary entry point. Note: the bridge
+		// is a one-shot path (transient signature, throwaway cache) used by
+		// the public legacy API, so even the "cached" branch here pays the
+		// cache-build cost on every call. The branch still preserves
+		// dispatch-strategy parity (Invoke vs ProcessEvent) for A/B tests.
+		if (!CVarReflectiveFallbackUseCache.GetValueOnAnyThread())
+		{
+			return InvokeReflectiveUFunctionFromGenericCallProcessEvent(
+				Generic, TargetObject, Function, bInjectMixinObject);
 		}
 
 		FBlueprintCallableReflectiveSignature TransientSignature;

@@ -50,6 +50,7 @@
 
 #include "GameplayTagsManager.h"
 #include "BlueprintGameplayTagLibrary.h"
+#include "HAL/IConsoleManager.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -398,6 +399,95 @@ int RunCacheReuse()
 			TEXT("BPLib UFUNCTIONs reaching reflective fallback should remain eligible after the cache lands"),
 			EvaluateReflectiveFallbackEligibility(SetTagsFunction),
 			EAngelscriptReflectiveFallbackEligibility::Eligible);
+	}
+
+	// ====================================================================
+	// Section: CVarParityCachedVsProcessEvent
+	//
+	// Toggles `as.ReflectiveFallback.UseCache` mid-test to verify both
+	// dispatch strategies produce identical observable results. Combines
+	// POD scalar + non-POD return + out-param writeback + repeated calls
+	// into one composite checksum so a single integer encodes the full
+	// behavioural surface. The CVar is captured + restored to keep the
+	// rest of the suite running with whatever default the project chose.
+	// ====================================================================
+
+	TEST_METHOD(CVarParityCachedVsProcessEvent)
+	{
+		using namespace AngelscriptTest_Bindings_ReflectiveFallbackCache_Private;
+		FAngelscriptEngine& Engine = ASTEST_CREATE_ENGINE_FULL();
+		FAngelscriptEngineScope Scope(Engine);
+
+		const FString CallPrefix = GetGameplayTagLibraryCallPrefix(*TestRunner);
+		if (CallPrefix.IsEmpty()) return;
+
+		const FString TagName = GetReusableTagName();
+		// Composite checksum exercising every cache-relevant code path:
+		//   - POD scalar return (GetNumGameplayTagsInContainer)
+		//   - FName return (GetTagName, hashed by length)
+		//   - Non-const out-param writeback (AddGameplayTag)
+		//   - Repeated calls so cache reuse vs cache absence both stress
+		FString Script = FString::Printf(TEXT(R"(
+int RunParity()
+{
+	FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName("%s"), false);
+	if (!Tag.IsValid())
+		return -1; // benign skip path - returned identically by both strategies.
+
+	int Acc = 0;
+	for (int Index = 0; Index < 8; ++Index)
+	{
+		FGameplayTagContainer Container = %sMakeGameplayTagContainerFromTag(Tag);
+		Acc += %sGetNumGameplayTagsInContainer(Container) * 100;
+
+		FName Reflected = %sGetTagName(Tag);
+		Acc += Reflected.ToString().Len();
+
+		%sAddGameplayTag(Container, Tag);
+		Acc += %sGetNumGameplayTagsInContainer(Container) * 7;
+	}
+	return Acc;
+}
+)"),
+			*TagName,
+			*CallPrefix, *CallPrefix, *CallPrefix, *CallPrefix, *CallPrefix);
+
+		// Capture the CVar so we leave it exactly as we found it. The CVar is
+		// owned by AngelscriptRuntime (registered in BlueprintCallableReflectiveFallback.cpp).
+		IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("as.ReflectiveFallback.UseCache"));
+		ASSERT_THAT(IsNotNull(CVar));
+		const bool bOriginal = CVar->GetBool();
+		ON_SCOPE_EXIT { CVar->Set(bOriginal ? 1 : 0, ECVF_SetByCode); };
+
+		// --- Cached path (CVar = 1) ---
+		CVar->Set(1, ECVF_SetByCode);
+		asIScriptModule* CachedModule = BuildModule(*TestRunner, Engine, "ASRefCacheParityCached", Script);
+		if (CachedModule == nullptr) return;
+		asIScriptFunction* CachedFunction = GetFunctionByDecl(*TestRunner, *CachedModule, TEXT("int RunParity()"));
+		if (CachedFunction == nullptr) return;
+		int32 CachedResult = 0;
+		if (!ExecuteIntFunction(*TestRunner, Engine, *CachedFunction, CachedResult)) return;
+
+		// --- Legacy ProcessEvent path (CVar = 0) ---
+		CVar->Set(0, ECVF_SetByCode);
+		asIScriptModule* LegacyModule = BuildModule(*TestRunner, Engine, "ASRefCacheParityLegacy", Script);
+		if (LegacyModule == nullptr) return;
+		asIScriptFunction* LegacyFunction = GetFunctionByDecl(*TestRunner, *LegacyModule, TEXT("int RunParity()"));
+		if (LegacyFunction == nullptr) return;
+		int32 LegacyResult = 0;
+		if (!ExecuteIntFunction(*TestRunner, Engine, *LegacyFunction, LegacyResult)) return;
+
+		TestRunner->TestEqual(
+			TEXT("Cached and ProcessEvent reflective fallback paths must produce identical composite checksum"),
+			CachedResult,
+			LegacyResult);
+
+		// Sanity bound: the script either returns -1 (tag missing) or a
+		// strictly positive accumulator. A zero would indicate both paths
+		// silently failed in lockstep, defeating the equality check above.
+		TestRunner->TestTrue(
+			TEXT("Composite checksum should be non-zero (or -1 for benign skip) on a valid tag environment"),
+			CachedResult != 0);
 	}
 };
 
