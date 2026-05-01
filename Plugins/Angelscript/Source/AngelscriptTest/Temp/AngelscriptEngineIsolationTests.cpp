@@ -68,6 +68,15 @@ static FString MakeIsolationName(const TCHAR* Prefix)
 	return FString::Printf(TEXT("%s_%s"), Prefix, *FGuid::NewGuid().ToString(EGuidFormats::Digits));
 }
 
+// FAngelscriptPooledContextBase::operator->() returns asCContext* (incomplete here because
+// <source/as_context.h> is intentionally not pulled into this test). asCContext inherits from
+// asIScriptContext, and reinterpret_cast between pointer types is well-defined in C++ without
+// requiring a complete type, so we use this helper to reach the public AS interface.
+static FORCEINLINE asIScriptContext* ScriptContextOf(const FAngelscriptPooledContextBase& Pooled)
+{
+	return reinterpret_cast<asIScriptContext*>(Pooled.operator->());
+}
+
 static asIScriptFunction* CompileIsolationFunction(
 	FAutomationTestBase& Test,
 	FAngelscriptEngine& Engine,
