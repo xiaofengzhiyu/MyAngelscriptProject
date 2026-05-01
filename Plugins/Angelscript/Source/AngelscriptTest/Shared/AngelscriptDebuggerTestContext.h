@@ -45,7 +45,7 @@ namespace AngelscriptTestSupport
 		 * @param AdapterVersion  Protocol version sent in StartDebugging (default 2).
 		 *                        Pass 1 for legacy v1 payload tests.
 		 */
-		bool SetUp(FAutomationTestBase& Test, int32 AdapterVersion = 2, float TimeoutSeconds = 45.0f)
+		bool SetUp(FAutomationTestBase& Test, int32 AdapterVersion = 2, float TimeoutSeconds = kDefaultDebuggerTestTimeoutSeconds)
 		{
 			bMonitorShouldStop = false;
 
@@ -118,7 +118,7 @@ namespace AngelscriptTestSupport
 		 * Session-only setup: Initialize session but do NOT connect a client.
 		 * Used by SessionInfra tests that test the infrastructure itself.
 		 */
-		bool SetUpSessionOnly(FAutomationTestBase& Test, float TimeoutSeconds = 45.0f)
+		bool SetUpSessionOnly(FAutomationTestBase& Test, float TimeoutSeconds = kDefaultDebuggerTestTimeoutSeconds)
 		{
 			bMonitorShouldStop = false;
 

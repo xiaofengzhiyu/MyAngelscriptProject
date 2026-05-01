@@ -15,6 +15,7 @@ class UFunction;
 
 namespace AngelscriptTestSupport
 {
+	constexpr float kDefaultDebuggerTestTimeoutSeconds = 45.0f;
 	struct FAngelscriptDebuggerSessionConfig
 	{
 		FAngelscriptEngine* ExistingEngine = nullptr;

@@ -8,8 +8,6 @@
 #include "Core/AngelscriptRuntimeModule.h"
 
 #include "Algo/AllOf.h"
-#include "Async/Async.h"
-#include "HAL/PlatformProcess.h"
 #include "Misc/ScopeExit.h"
 #include "Misc/ScopeLock.h"
 #include "UObject/GarbageCollection.h"
@@ -49,96 +47,6 @@ namespace AngelscriptDebuggerBreakpointTests_Private
 		TFunction<bool(const FAngelscriptDebugBreakOptions&, UObject*)> ShouldBreak;
 	};
 
-	// BreakOptions test uses a world-context-aware invocation that is different
-	// from the shared DispatchModuleInvocation (no world context parameter there).
-	struct FAsyncBreakOptionsInvocationState : public TSharedFromThis<FAsyncBreakOptionsInvocationState>
-	{
-		TAtomic<bool> bCompleted = false;
-		bool bSucceeded = false;
-		int32 Result = 0;
-	};
-
-	TSharedRef<FAsyncBreakOptionsInvocationState> DispatchBreakOptionsModuleInvocation(
-		FAngelscriptEngine& Engine,
-		UObject* WorldContext,
-		const FString& Filename,
-		FName ModuleName,
-		const FString& Declaration)
-	{
-		TSharedRef<FAsyncBreakOptionsInvocationState> State = MakeShared<FAsyncBreakOptionsInvocationState>();
-
-		AsyncTask(ENamedThreads::GameThread, [&Engine, WorldContext, Filename, ModuleName, Declaration, State]()
-		{
-			if (WorldContext == nullptr)
-			{
-				State->bCompleted = true;
-				return;
-			}
-
-			TSharedPtr<FAngelscriptModuleDesc> ModuleDesc = Engine.GetModuleByFilenameOrModuleName(Filename, ModuleName.ToString());
-			if (!ModuleDesc.IsValid() || ModuleDesc->ScriptModule == nullptr)
-			{
-				State->bCompleted = true;
-				return;
-			}
-
-			asIScriptModule* Module = ModuleDesc->ScriptModule;
-			asIScriptFunction* Function = Module->GetFunctionByDecl(TCHAR_TO_ANSI(*Declaration));
-			if (Function == nullptr)
-			{
-				State->bCompleted = true;
-				return;
-			}
-
-			FAngelscriptEngineScope EngineScope(Engine, WorldContext);
-			asIScriptContext* Context = Engine.CreateContext();
-			if (Context == nullptr)
-			{
-				State->bCompleted = true;
-				return;
-			}
-
-			ON_SCOPE_EXIT
-			{
-				Context->Release();
-			};
-
-			if (Context->Prepare(Function) != asSUCCESS)
-			{
-				State->bCompleted = true;
-				return;
-			}
-
-			if (Context->Execute() != asEXECUTION_FINISHED)
-			{
-				State->bCompleted = true;
-				return;
-			}
-
-			State->Result = static_cast<int32>(Context->GetReturnDWord());
-			State->bSucceeded = true;
-			State->bCompleted = true;
-		});
-
-		return State;
-	}
-
-	bool WaitForBreakOptionsInvocationCompletion(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		TSharedRef<FAsyncBreakOptionsInvocationState> InvocationState,
-		const TCHAR* Context)
-	{
-		const bool bCompleted = Session.PumpUntil(
-			[&InvocationState]()
-			{
-				return InvocationState->bCompleted.Load();
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		return Test.TestTrue(Context, bCompleted);
-	}
-
 	bool WaitForBreakOptionsState(
 		FAutomationTestBase& Test,
 		FAngelscriptDebuggerTestSession& Session,
@@ -171,107 +79,6 @@ namespace AngelscriptDebuggerBreakpointTests_Private
 			Session.GetDefaultTimeoutSeconds());
 
 		return Test.TestTrue(Context, bObservedExpectedState);
-	}
-
-	// Conditional breakpoint test uses a function that takes an int argument
-	struct FAsyncIntInvocationState : public TSharedFromThis<FAsyncIntInvocationState>
-	{
-		TAtomic<bool> bCompleted = false;
-		bool bSucceeded = false;
-		int32 Result = 0;
-		FString Error;
-	};
-
-	asIScriptFunction* FindFunctionByDeclaration(FAngelscriptEngine& Engine, const FString& Filename, FName ModuleName, const FString& Declaration)
-	{
-		TSharedPtr<FAngelscriptModuleDesc> ModuleDesc = Engine.GetModuleByFilenameOrModuleName(Filename, ModuleName.ToString());
-		if (!ModuleDesc.IsValid() || ModuleDesc->ScriptModule == nullptr)
-		{
-			return nullptr;
-		}
-
-		asIScriptModule* Module = ModuleDesc->ScriptModule;
-		FTCHARToUTF8 DeclarationUtf8(*Declaration);
-		if (asIScriptFunction* Function = Module->GetFunctionByDecl(DeclarationUtf8.Get()))
-		{
-			return Function;
-		}
-
-		return nullptr;
-	}
-
-	TSharedRef<FAsyncIntInvocationState> DispatchIntInvocation(
-		FAngelscriptEngine& Engine,
-		const FString& Filename,
-		FName ModuleName,
-		const FString& Declaration,
-		int32 ArgumentValue)
-	{
-		TSharedRef<FAsyncIntInvocationState> State = MakeShared<FAsyncIntInvocationState>();
-
-		AsyncTask(ENamedThreads::GameThread, [&Engine, Filename, ModuleName, Declaration, ArgumentValue, State]()
-		{
-			asIScriptFunction* Function = FindFunctionByDeclaration(Engine, Filename, ModuleName, Declaration);
-			if (Function == nullptr)
-			{
-				State->Error = FString::Printf(TEXT("Failed to find script function '%s' in module '%s'."), *Declaration, *ModuleName.ToString());
-				State->bCompleted = true;
-				return;
-			}
-
-			FAngelscriptEngineScope EngineScope(Engine);
-			asIScriptContext* Context = Engine.CreateContext();
-			if (Context == nullptr)
-			{
-				State->Error = TEXT("Failed to create Angelscript execution context.");
-				State->bCompleted = true;
-				return;
-			}
-
-			ON_SCOPE_EXIT
-			{
-				Context->Release();
-			};
-
-			const int PrepareResult = Context->Prepare(Function);
-			if (PrepareResult != asSUCCESS)
-			{
-				State->Error = FString::Printf(TEXT("Prepare failed with code %d for '%s'."), PrepareResult, *Declaration);
-				State->bCompleted = true;
-				return;
-			}
-
-			Context->SetArgDWord(0, static_cast<asDWORD>(ArgumentValue));
-			const int ExecuteResult = Context->Execute();
-			if (ExecuteResult != asEXECUTION_FINISHED)
-			{
-				State->Error = FString::Printf(TEXT("Execute failed with code %d for '%s'."), ExecuteResult, *Declaration);
-				State->bCompleted = true;
-				return;
-			}
-
-			State->bSucceeded = true;
-			State->Result = static_cast<int32>(Context->GetReturnDWord());
-			State->bCompleted = true;
-		});
-
-		return State;
-	}
-
-	bool WaitForIntInvocationCompletion(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		TSharedRef<FAsyncIntInvocationState> InvocationState,
-		const TCHAR* Context)
-	{
-		const bool bCompleted = Session.PumpUntil(
-			[&InvocationState]()
-			{
-				return InvocationState->bCompleted.Load();
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		return Test.TestTrue(Context, bCompleted);
 	}
 
 	// Protocol tests need to wait for breakpoint ack envelopes
@@ -867,7 +674,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBreakpointTests,
 				const TArray<FName>& ExpectedFilters,
 				const TArray<FName>& RejectedFilters,
 				FBreakpointMonitorResult& OutMonitorResult,
-				TSharedRef<FAsyncBreakOptionsInvocationState>& OutInvocationState,
+				TSharedRef<FAsyncModuleInvocationState>& OutInvocationState,
 				const TCHAR* SendContext,
 				const TCHAR* StateContext,
 				const TCHAR* InvocationContext) -> bool
@@ -930,14 +737,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBreakpointTests,
 					return false;
 				}
 
-				OutInvocationState = DispatchBreakOptionsModuleInvocation(
+				OutInvocationState = DispatchModuleInvocation(
 					Engine,
 					BreakOptionsWorldContext,
 					Fixture.Filename,
 					Fixture.ModuleName,
 					Fixture.EntryFunctionDeclaration);
 
-				if (!WaitForBreakOptionsInvocationCompletion(*TestRunner, Ctx.Session, OutInvocationState, InvocationContext))
+				if (!WaitForInvocationCompletion(*TestRunner, Ctx.Session, OutInvocationState, InvocationContext))
 				{
 					bMonitorShouldStop = true;
 					return false;
@@ -949,7 +756,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBreakpointTests,
 			};
 
 		FBreakpointMonitorResult FirstRoundMonitorResult;
-		TSharedRef<FAsyncBreakOptionsInvocationState> FirstInvocationState = MakeShared<FAsyncBreakOptionsInvocationState>();
+		TSharedRef<FAsyncModuleInvocationState> FirstInvocationState = MakeShared<FAsyncModuleInvocationState>();
 		if (!RunBreakpointRound(
 			151,
 			{TEXT("break:other")},
@@ -965,7 +772,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBreakpointTests,
 		}
 
 		FBreakpointMonitorResult SecondRoundMonitorResult;
-		TSharedRef<FAsyncBreakOptionsInvocationState> SecondInvocationState = MakeShared<FAsyncBreakOptionsInvocationState>();
+		TSharedRef<FAsyncModuleInvocationState> SecondInvocationState = MakeShared<FAsyncModuleInvocationState>();
 		if (!RunBreakpointRound(
 			152,
 			{TEXT("break:test")},
@@ -1071,14 +878,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBreakpointTests,
 
 		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 1, TEXT("Debugger.Breakpoint.ConditionExpression should observe the conditional breakpoint registration before running the positive case"))));
 
-		TSharedRef<FAsyncIntInvocationState> PositiveInvocation = DispatchIntInvocation(
+		TSharedRef<FAsyncModuleInvocationState> PositiveInvocation = DispatchModuleInvocationWithIntArg(
 			Engine,
 			Fixture.Filename,
 			Fixture.ModuleName,
 			TEXT("int Helper(int Input)"),
 			3);
 
-		if (!WaitForIntInvocationCompletion(*TestRunner, Ctx.Session, PositiveInvocation, TEXT("Debugger.Breakpoint.ConditionExpression should finish the positive invocation after the monitor resumes execution")))
+		if (!WaitForInvocationCompletion(*TestRunner, Ctx.Session, PositiveInvocation, TEXT("Debugger.Breakpoint.ConditionExpression should finish the positive invocation after the monitor resumes execution")))
 		{
 			Ctx.bMonitorShouldStop = true;
 			return;
@@ -1126,14 +933,14 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerBreakpointTests,
 
 		ASSERT_THAT(IsTrue(TestRunner->TestTrue(TEXT("Debugger.Breakpoint.ConditionExpression should start the negative-run monitor"), Ctx.Session.PumpUntil([&bNegativeMonitorReady]() { return bNegativeMonitorReady.Load(); }, Ctx.GetDefaultTimeoutSeconds()))));
 
-		TSharedRef<FAsyncIntInvocationState> NegativeInvocation = DispatchIntInvocation(
+		TSharedRef<FAsyncModuleInvocationState> NegativeInvocation = DispatchModuleInvocationWithIntArg(
 			Engine,
 			Fixture.Filename,
 			Fixture.ModuleName,
 			TEXT("int Helper(int Input)"),
 			-1);
 
-		if (!WaitForIntInvocationCompletion(*TestRunner, Ctx.Session, NegativeInvocation, TEXT("Debugger.Breakpoint.ConditionExpression should finish the negative invocation without stopping")))
+		if (!WaitForInvocationCompletion(*TestRunner, Ctx.Session, NegativeInvocation, TEXT("Debugger.Breakpoint.ConditionExpression should finish the negative invocation without stopping")))
 		{
 			Ctx.bMonitorShouldStop = true;
 			return;

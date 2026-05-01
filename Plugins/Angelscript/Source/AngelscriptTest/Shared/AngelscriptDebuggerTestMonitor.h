@@ -37,6 +37,7 @@ namespace AngelscriptTestSupport
 		TAtomic<bool> bCompleted{false};
 		bool bSucceeded = false;
 		int32 Result = 0;
+		FString Error;
 	};
 
 	ANGELSCRIPTTEST_API TSharedRef<FAsyncModuleInvocationState> DispatchModuleInvocation(
@@ -44,6 +45,22 @@ namespace AngelscriptTestSupport
 		const FString& Filename,
 		FName ModuleName,
 		const FString& Declaration);
+
+	/** Overload with explicit world context for FAngelscriptEngineScope. */
+	ANGELSCRIPTTEST_API TSharedRef<FAsyncModuleInvocationState> DispatchModuleInvocation(
+		FAngelscriptEngine& Engine,
+		UObject* WorldContext,
+		const FString& Filename,
+		FName ModuleName,
+		const FString& Declaration);
+
+	/** Dispatch a script function that takes a single int32 argument. */
+	ANGELSCRIPTTEST_API TSharedRef<FAsyncModuleInvocationState> DispatchModuleInvocationWithIntArg(
+		FAngelscriptEngine& Engine,
+		const FString& Filename,
+		FName ModuleName,
+		const FString& Declaration,
+		int32 ArgumentValue);
 
 	ANGELSCRIPTTEST_API bool WaitForInvocationCompletion(
 		FAutomationTestBase& Test,
@@ -96,7 +113,7 @@ namespace AngelscriptTestSupport
 		bool bRequestCallstack = false;
 		bool bSendContinueOnStop = true;
 		int32 MaxStopsToHandle = 1;
-		float TimeoutSeconds = 45.0f;
+		float TimeoutSeconds = kDefaultDebuggerTestTimeoutSeconds;
 	};
 
 	struct FBreakpointMonitorResult
@@ -168,6 +185,65 @@ namespace AngelscriptTestSupport
 		TAtomic<bool>& bShouldStop,
 		TArray<FStepMonitorPhase> Phases,
 		TFuture<FStepMonitorResult>& OutFuture);
+
+	// =========================================================================
+	// Lifecycle No-Stop Monitor
+	// =========================================================================
+
+	struct FLifecycleNoStopMonitorResult
+	{
+		bool bReceivedVersion = false;
+		TArray<FAngelscriptDebugMessageEnvelope> ResidualMessagesAfterHandshake;
+		TArray<FAngelscriptDebugMessageEnvelope> ResidualMessagesAfterInvocation;
+		int32 UnexpectedStopCount = 0;
+		int32 ContinuedCount = 0;
+		bool bTimedOut = false;
+		FString Error;
+	};
+
+	ANGELSCRIPTTEST_API TFuture<FLifecycleNoStopMonitorResult> StartLifecycleNoStopMonitor(
+		int32 Port,
+		TAtomic<bool>& bMonitorReady,
+		TAtomic<bool>& bShouldStop,
+		TAtomic<bool>& bInvocationCompleted,
+		float TimeoutSeconds);
+
+	// =========================================================================
+	// Additional Debugger Client Monitor
+	// =========================================================================
+
+	struct FAdditionalDebuggerMonitorResult
+	{
+		TArray<FAngelscriptDebugMessageEnvelope> StopEnvelopes;
+		TOptional<FStoppedMessage> StopMessage;
+		TOptional<FAngelscriptCallStack> CapturedCallstack;
+		int32 ContinuedCount = 0;
+		bool bTimedOut = false;
+		bool bCompletedWithoutStop = false;
+		FString Error;
+	};
+
+	ANGELSCRIPTTEST_API TFuture<FAdditionalDebuggerMonitorResult> StartAdditionalDebuggerClientMonitor(
+		FAngelscriptDebugServer& DebugServer,
+		int32 Port,
+		TAtomic<bool>& bMonitorReady,
+		TAtomic<bool>& bHandshakeSucceeded,
+		TAtomic<bool>& bAbortMonitor,
+		TAtomic<bool>& bInvocationCompleted,
+		TAtomic<int32>& OutMinObservedBreakpointCount,
+		float TimeoutSeconds);
+
+	// =========================================================================
+	// Protocol Message Utilities
+	// =========================================================================
+
+	ANGELSCRIPTTEST_API void AppendNonPingMessages(
+		TArray<FAngelscriptDebugMessageEnvelope>& OutMessages,
+		const TArray<FAngelscriptDebugMessageEnvelope>& InMessages);
+
+	ANGELSCRIPTTEST_API int32 CountMessagesByType(
+		const FSingleClientDebuggerTranscript& Transcript,
+		EDebugMessageType Type);
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

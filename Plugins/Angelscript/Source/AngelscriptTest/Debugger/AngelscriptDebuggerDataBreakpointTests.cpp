@@ -47,48 +47,6 @@ int RunTestCase()
 		return Fixture;
 	}
 
-	struct FAsyncDataBreakpointInvocationState : public TSharedFromThis<FAsyncDataBreakpointInvocationState>
-	{
-		TAtomic<bool> bCompleted = false;
-		bool bSucceeded = false;
-		int32 Result = 0;
-	};
-
-	TSharedRef<FAsyncDataBreakpointInvocationState> DispatchDataBreakpointInvocation(
-		FAngelscriptEngine& Engine,
-		const FString& Filename,
-		FName ModuleName,
-		const FString& Declaration)
-	{
-		TSharedRef<FAsyncDataBreakpointInvocationState> State = MakeShared<FAsyncDataBreakpointInvocationState>();
-
-		AsyncTask(ENamedThreads::GameThread, [&Engine, Filename, ModuleName, Declaration, State]()
-		{
-			int32 InvocationResult = 0;
-			State->bSucceeded = ExecuteIntFunction(&Engine, Filename, ModuleName, Declaration, InvocationResult);
-			State->Result = InvocationResult;
-			State->bCompleted = true;
-		});
-
-		return State;
-	}
-
-	bool WaitForDataBreakpointInvocationCompletion(
-		FAutomationTestBase& Test,
-		FAngelscriptDebuggerTestSession& Session,
-		const TSharedRef<FAsyncDataBreakpointInvocationState>& InvocationState,
-		const TCHAR* Context)
-	{
-		const bool bCompleted = Session.PumpUntil(
-			[&InvocationState]()
-			{
-				return InvocationState->bCompleted.Load();
-			},
-			Session.GetDefaultTimeoutSeconds());
-
-		return Test.TestTrue(Context, bCompleted);
-	}
-
 	template <typename T>
 	bool WaitForTypedMessageUntil(
 		FAngelscriptDebuggerTestClient& Client,
@@ -387,12 +345,12 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerDataBreakpointTests,
 
 		ASSERT_THAT(IsTrue(WaitForBreakpointCount(*TestRunner, Ctx.Session, 1, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should observe the line breakpoint registration"))));
 
-		const TSharedRef<FAsyncDataBreakpointInvocationState> FirstInvocation = DispatchDataBreakpointInvocation(
+		const TSharedRef<FAsyncModuleInvocationState> FirstInvocation = DispatchModuleInvocation(
 			Engine,
 			Fixture.Filename,
 			Fixture.ModuleName,
 			Fixture.EntryFunctionDeclaration);
-		ASSERT_THAT(IsTrue(WaitForDataBreakpointInvocationCompletion(*TestRunner, Ctx.Session, FirstInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the first invocation after the monitor resumes execution"))));
+		ASSERT_THAT(IsTrue(WaitForInvocationCompletion(*TestRunner, Ctx.Session, FirstInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the first invocation after the monitor resumes execution"))));
 
 		const FDataBreakpointMonitorResult DataMonitorResult = DataMonitorFuture.Get();
 
@@ -443,12 +401,12 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptDebuggerDataBreakpointTests,
 
 		ASSERT_THAT(IsTrue(WaitForMonitorReady(*TestRunner, Ctx.Session, bPassiveMonitorReady, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should bring the passive monitor up before the second invocation"))));
 
-		const TSharedRef<FAsyncDataBreakpointInvocationState> SecondInvocation = DispatchDataBreakpointInvocation(
+		const TSharedRef<FAsyncModuleInvocationState> SecondInvocation = DispatchModuleInvocation(
 			Engine,
 			Fixture.Filename,
 			Fixture.ModuleName,
 			Fixture.EntryFunctionDeclaration);
-		ASSERT_THAT(IsTrue(WaitForDataBreakpointInvocationCompletion(*TestRunner, Ctx.Session, SecondInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the second invocation without any debugger stop"))));
+		ASSERT_THAT(IsTrue(WaitForInvocationCompletion(*TestRunner, Ctx.Session, SecondInvocation, TEXT("Debugger.DataBreakpoint.LocalValueHitCount should finish the second invocation without any debugger stop"))));
 
 		bPassiveMonitorShouldStop = true;
 		const FPassiveBreakpointMonitorResult PassiveMonitorResult = PassiveMonitorFuture.Get();
