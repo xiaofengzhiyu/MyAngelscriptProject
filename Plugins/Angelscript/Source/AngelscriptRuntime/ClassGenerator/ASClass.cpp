@@ -1208,6 +1208,39 @@ static FORCEINLINE_DEBUGGABLE void ApplyOverrideComponents(const FObjectInitiali
 		ApplyOverrideComponents(Initializer, Actor, ParentClass);
 	}
 }
+static FORCEINLINE_DEBUGGABLE void FillOverrideComponentVariablesForClass(AActor* Actor, UASClass* ScriptClass)
+{
+	for(int32 i = 0, Count = ScriptClass->OverrideComponents.Num(); i < Count; ++i)
+	{
+		auto& Override = ScriptClass->OverrideComponents[i];
+		UActorComponent** VariablePtr = (UActorComponent**)((SIZE_T)Actor + Override.VariableOffset);
+		UActorComponent* OverrideComponent = Cast<UActorComponent>(Actor->GetDefaultSubobjectByName(Override.OverrideComponentName));
+
+		if (OverrideComponent == nullptr)
+		{
+			for (auto* CheckComponent : Actor->GetComponents())
+			{
+				if (CheckComponent->GetFName() == Override.OverrideComponentName)
+				{
+					OverrideComponent = CheckComponent;
+					break;
+				}
+			}
+		}
+
+		if (OverrideComponent != nullptr)
+			*VariablePtr = OverrideComponent;
+	}
+}
+
+static FORCEINLINE_DEBUGGABLE void FillOverrideComponentVariables(AActor* Actor, UASClass* ScriptClass)
+{
+	if (UASClass* ParentClass = Cast<UASClass>(ScriptClass->GetSuperClass()))
+		FillOverrideComponentVariables(Actor, ParentClass);
+
+	FillOverrideComponentVariablesForClass(Actor, ScriptClass);
+}
+
 
 static FORCEINLINE_DEBUGGABLE void CreateDefaultComponents(const FObjectInitializer& Initializer, AActor* Actor, UASClass* ScriptClass)
 {
@@ -1339,20 +1372,7 @@ static FORCEINLINE_DEBUGGABLE void CreateDefaultComponents(const FObjectInitiali
 	}
 
 	// Fill any override component variables with the right components
-	for(int32 i = 0, Count = ScriptClass->OverrideComponents.Num(); i < Count; ++i)
-	{
-		auto& Override = ScriptClass->OverrideComponents[i];
-		UActorComponent** VariablePtr = (UActorComponent**)((SIZE_T)Actor + Override.VariableOffset);
-
-		for (auto* CheckComponent : Actor->GetComponents())
-		{
-			if (CheckComponent->GetFName() == Override.OverrideComponentName)
-			{
-				*VariablePtr = CheckComponent;
-				break;
-			}
-		}
-	}
+	FillOverrideComponentVariablesForClass(Actor, ScriptClass);
 }
 
 //WILL-EDIT
@@ -1413,6 +1433,9 @@ void UASClass::StaticActorConstructor(const FObjectInitializer& Initializer)
 	// Apply any default statements to the object
 	if (bApplyDefaults && !bIsScriptAllocation)
 		ExecuteDefaultsFunctions(Object, Class);
+
+	if (!bIsScriptAllocation)
+		const_cast<FObjectInitializer&>(Initializer).AddPropertyPostInitCallback([Actor, Class]() { FillOverrideComponentVariables(Actor, Class); });
 }
 
 void UASClass::StaticComponentConstructor(const FObjectInitializer& Initializer)
