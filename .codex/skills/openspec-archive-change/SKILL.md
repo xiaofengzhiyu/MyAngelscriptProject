@@ -52,4 +52,3 @@ openspec/changes/archive/YYYY-MM-DD-<name>/
 
 - Do not archive a change without telling the user about incomplete artifacts or tasks.
 - Do not delete or rewrite OpenSpec history outside the selected change.
-- Do not depend on `plan-eng-review-codebuddy`, `proposal-challenger`, or `preci-code-check`.

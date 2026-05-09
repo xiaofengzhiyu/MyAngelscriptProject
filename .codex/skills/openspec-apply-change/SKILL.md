@@ -8,8 +8,6 @@ description: Use when the user wants to implement, continue, verify, or work thr
 Implement tasks from an OpenSpec change. OpenSpec remains the task source; Superpowers provides execution discipline when its trigger conditions apply.
 
 <!-- SUPERPOWER-BEGIN: superpowers-dispatch-rule -->
-Use the current installed Superpowers skills by name instead of copying their instructions here. Load and follow the current skill at the moment it applies.
-
 Phase mapping:
 - Use `superpowers:test-driven-development` for tasks marked `<!-- TDD -->` or for new behavior, bug fixes, behavior changes, and complex logic.
 - Use `superpowers:systematic-debugging` for unexpected test failures, build failures, runtime bugs, or unclear behavior.
@@ -41,7 +39,12 @@ openspec instructions apply --change "<name>" --json
    Read every file listed in `contextFiles`. Do not assume file names; OpenSpec schema output is authoritative.
 
 <!-- SUPERPOWER-BEGIN: plan-as-tasks-md -->
-`tasks.md` is the only implementation plan. Do not invoke `superpowers:writing-plans`, and do not create `docs/plans` or `docs/superpowers/plans`.
+`tasks.md` is the only implementation plan. It is generated during OpenSpec propose; if it uses the planning method from `superpowers:writing-plans`, that output must still be written to OpenSpec `tasks.md`, not to extra plan files.
+
+During apply, read and update only the `tasks.md` under the current OpenSpec change:
+- Do not create `docs/superpowers/plans` or `docs/plans`.
+- Do not write task execution logs, review notes, or temporary commentary into `tasks.md`.
+- Update checkboxes only after the task is actually complete.
 
 If implementation reveals a design or requirement problem, update the relevant OpenSpec artifact for the current change, then continue from the updated task list.
 <!-- SUPERPOWER-END: plan-as-tasks-md -->
@@ -88,12 +91,12 @@ When any verification, build, test, or runtime behavior is unexpected, use `supe
 <!-- SUPERPOWER-BEGIN: verification-gate -->
 Use `superpowers:verification-before-completion` before claiming success.
 
-Fresh evidence must come from the task's verification command. For this repository, use the standard helper scripts when relevant:
-- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label <label> -TimeoutMs 180000`
-- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "<prefix>" -Label <label> -TimeoutMs 600000`
-- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTestSuite.ps1 -Suite <suite> -LabelPrefix <label> -TimeoutMs 600000`
+Fresh evidence must come from the task's verification command. Before running verification, choose the entry point from the project docs for the task scope:
+- Build guidance: `Documents/Guides/Build.md`
+- Test guidance: `Documents/Guides/Test.md`
+- Test naming and organization: `Documents/Guides/TestConventions.md`
 
-Do not use PreCI as a default requirement in this project. If a future environment provides a PreCI skill or command, treat it as optional unless the user explicitly enables it.
+Verification must use the project unified runner or documented entry points. Do not hand-write UBT, Build.bat, RunUBT.bat, or dotnet UnrealBuildTool commands.
 <!-- SUPERPOWER-END: verification-gate -->
 
 7. **Handle review feedback with technical verification**
@@ -117,4 +120,3 @@ Never run broad rollback commands such as `git checkout -- .` or `git reset --ha
 - Keep changes scoped to the current OpenSpec change.
 - Do not skip task verification.
 - Do not mark tasks complete based only on expectation or partial evidence.
-- Do not depend on `plan-eng-review-codebuddy`, `proposal-challenger`, or `preci-code-check`.

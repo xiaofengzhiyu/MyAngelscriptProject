@@ -8,9 +8,7 @@ description: Use when the user starts or updates an OpenSpec change proposal in 
 Create or continue an OpenSpec change. In this project, propose is a design and artifact workflow, not implementation.
 
 <!-- SUPERPOWER-BEGIN: superpowers-dispatch-rule -->
-Use the current installed Superpowers skills by name at the point where they apply. Do not vendor or copy Superpowers instructions into this skill; let Superpowers updates take effect through the active installed skill.
-
-For Codex, use the platform's skill-loading behavior. If a direct skill activation tool is unavailable, load the current `SKILL.md` for the named Superpowers skill from the session skill metadata before following it.
+Use the relevant Superpowers skill at the phase where it applies; this skill only defines the OpenSpec workflow and project override rules.
 <!-- SUPERPOWER-END: superpowers-dispatch-rule -->
 
 <!-- SUPERPOWER-BEGIN: propose-thinking-flow -->
@@ -24,9 +22,15 @@ Apply only the thinking portion of brainstorming:
 
 OpenSpec overrides for brainstorming:
 - Do not write `docs/superpowers/specs`.
-- Do not invoke `superpowers:writing-plans`.
-- Do not create `docs/plans` or `docs/superpowers/plans`.
-- Store the approved design in OpenSpec artifacts instead.
+- Do not create `docs/plans` or `docs/superpowers/plans` during brainstorming.
+- Store the approved design in OpenSpec CLI artifact paths instead of separate documents.
+- When implementation planning is needed, use the `plan-as-tasks-md` rule.
+
+Design consensus mapping:
+- `proposal.md`: why, what changes, and impact.
+- `design.md`: current state, goals/non-goals, technical approach, tradeoffs, and risks.
+- `specs/*`: user-observable requirements as requirements/scenarios.
+- `tasks.md`: executable tasks and verification commands; this is the only implementation plan.
 <!-- SUPERPOWER-END: propose-thinking-flow -->
 
 ## Input
@@ -42,7 +46,7 @@ The user should provide either a kebab-case change name or a description of what
 2. **Check worktree safety**
 
 <!-- SUPERPOWER-BEGIN: worktree-check -->
-Prefer proposing from an isolated feature worktree. Check the current Git context with non-mutating commands such as:
+Choose worktree use from user intent and current workspace state. Check the current Git context with non-mutating commands such as:
 
 ```powershell
 git rev-parse --show-toplevel
@@ -51,10 +55,10 @@ git rev-parse --git-common-dir
 git worktree list --porcelain
 ```
 
-If the current directory is the main repository working tree, stop and offer:
-- create or switch to a feature worktree,
-- continue in the current directory with explicit user approval,
-- cancel.
+Decision rules:
+- If the user explicitly asks to create, switch to, or implement in a worktree, create or switch to a feature worktree before continuing.
+- If the user does not explicitly request a worktree and the current main/master working tree is clean, continue in the current workspace.
+- If the user does not explicitly request a worktree and the current workspace has uncommitted or untracked changes, stop and ask whether to create/switch worktree, continue in the current directory, or cancel.
 
 If the user chooses to create a worktree, use `superpowers:using-git-worktrees` as guidance, but do not silently edit `.gitignore`, commit changes, or move work without explicit confirmation.
 <!-- SUPERPOWER-END: worktree-check -->
@@ -92,7 +96,15 @@ Use the returned `outputPath`, `template`, `instruction`, `context`, `rules`, an
 5. **Use `tasks.md` as the implementation plan**
 
 <!-- SUPERPOWER-BEGIN: plan-as-tasks-md -->
-OpenSpec `tasks.md` is the only implementation plan for this project. Do not invoke `superpowers:writing-plans`, and do not create `docs/plans` or `docs/superpowers/plans`.
+`tasks.md` is created by the OpenSpec propose artifact flow. Get the tasks artifact `outputPath`, `template`, and `instruction` with `openspec instructions <tasks-artifact-id> --change "<name>" --json`, then write to that path.
+
+When generating `tasks.md`, you may use the planning method from `superpowers:writing-plans`: explicit file scope, task size, TDD steps, verification commands, and risk checks.
+
+OpenSpec overrides:
+- Do not use the default `superpowers:writing-plans` save path.
+- Do not create `docs/superpowers/plans` or `docs/plans`.
+- Do not add standalone commit steps; commits are decided by the later development flow.
+- `openspec/changes/<name>/tasks.md` is the only implementation plan.
 
 The plan is complete when:
 - OpenSpec apply-required artifacts are generated through the OpenSpec CLI flow.
@@ -124,10 +136,12 @@ Use non-TDD tasks for documentation, mechanical config, dependency updates, gene
   - [ ] N.M.3 Check completeness and affected references
 ```
 
-For this Unreal project, prefer existing repository verification entry points when relevant:
-- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label <label> -TimeoutMs 180000`
-- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "<prefix>" -Label <label> -TimeoutMs 600000`
-- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTestSuite.ps1 -Suite <suite> -LabelPrefix <label> -TimeoutMs 600000`
+For this Unreal project, do not hardcode verification command templates in the skill. When generating `tasks.md`, choose verification entry points from the project docs for the task scope:
+- Build guidance: `Documents/Guides/Build.md`
+- Test guidance: `Documents/Guides/Test.md`
+- Test naming and organization: `Documents/Guides/TestConventions.md`
+
+Task verification commands must use the project unified runner or documented entry points. Do not hand-write UBT, Build.bat, RunUBT.bat, or dotnet UnrealBuildTool commands.
 <!-- SUPERPOWER-END: tasks-template -->
 
 6. **Finish propose**
@@ -138,5 +152,4 @@ For this Unreal project, prefer existing repository verification entry points wh
 
 - Propose must not edit application code.
 - Keep all generated artifacts under OpenSpec CLI output paths.
-- Do not require `plan-eng-review-codebuddy`, `proposal-challenger`, or `preci-code-check`.
 - If a user asks to implement while still proposing, explain that implementation starts with `/opsx:apply` after artifacts are ready.
