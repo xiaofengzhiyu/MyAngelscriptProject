@@ -117,10 +117,14 @@ Angelscript `.as` example scripts demonstrating core patterns (actor lifecycle, 
 | Hazelight Angelscript | Obtained via `AgentConfig.ini` key `References.HazelightAngelscriptEngineRoot`. See `Reference/README.md` |
 | Hazelight Docs | Pull with `Tools\PullReference\PullReference.bat hazelightdocs`; defaults to `Reference\Docs-UnrealEngine-Angelscript`; use it for the public documentation site source and content structure. See `Reference/README.md` |
 | Hazelight VS Code Angelscript | Pull with `Tools\PullReference\PullReference.bat hazelightvscode`; defaults to `Reference\vscode-unreal-angelscript`; use it to compare VS Code Language Server, Debug Adapter, diagnostics, and breakpoint workflows. See `Reference/README.md` |
+| Aura GAS Course Initial Project | Pull with `Tools\PullReference\PullReference.bat aura`; defaults to `Reference\GameplayAbilitySystem_Aura_Initial`; pinned to the course initial commit for Aura GAS starter assets, UE 5.2 sample content project structure, and asset organization. See `Reference/README.md` |
+| Aura GAS Course C++ Project | Pull with `Tools\PullReference\PullReference.bat auracpp`; defaults to `Reference\GameplayAbilitySystem_Aura_Cpp`; follows `main` for the implemented Aura C++ GAS project, UE 5.3 structure, and GameplayAbilities/MVVM/MotionWarping integration. See `Reference/README.md` |
+| Aura GAS Angelscript Rewrite | Pull with `Tools\PullReference\PullReference.bat auraas`; defaults to `Reference\AngelscriptAura`; follows `main` for the third-party Aura GAS Angelscript rewrite, AS-side GAS script organization, and implementation notes. See `Reference/README.md` |
 | UnrealCSharp | Pull with `Tools\PullReference\PullReference.bat unrealcsharp`; defaults to `Reference\UnrealCSharp`. See `Reference/README.md` |
 | Tencent UnLua | Pull with `Tools\PullReference\PullReference.bat unlua`; defaults to `Reference\UnLua`; use it to compare Lua reflection exposure, event overrides, and sample organization. See `Reference/README.md` |
 | Tencent puerts | Pull with `Tools\PullReference\PullReference.bat puerts`; defaults to `Reference\puerts`; use it to compare TypeScript/JavaScript runtime integration and declaration generation. See `Reference/README.md` |
 | Tencent sluaunreal | Pull with `Tools\PullReference\PullReference.bat sluaunreal`; defaults to `Reference\sluaunreal`; use it to compare Lua static export, performance trade-offs, and hot-update workflow. See `Reference/README.md` |
+| Blender MCP | Pull with `Tools\PullReference\PullReference.bat blendermcp`; defaults to `Reference\blender_mcp`; Blender Forge HTTPS only; use it to reference MCP Server implementation, MCP protocol integration, and DCC toolchain exposure patterns. See `Reference/README.md` |
 
 - When adding new reference repositories, update `Reference/README.md` first, then add an index entry here.
 

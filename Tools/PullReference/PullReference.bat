@@ -10,6 +10,7 @@ set "REPO_SSH="
 set "REPO_HTTPS="
 set "REPO_BRANCH="
 set "REPO_TAG="
+set "REPO_COMMIT="
 
 if "%REFERENCE_KEY%"=="" goto :Usage
 if /I "%REFERENCE_KEY%"=="list" goto :List
@@ -77,6 +78,42 @@ if /I "%REFERENCE_KEY%"=="hazelightvscode" (
     goto :ValidateGit
 )
 
+if /I "%REFERENCE_KEY%"=="aura" (
+    set "REPO_NAME=GameplayAbilitySystem_Aura_Initial"
+    set "REPO_SSH=git@github.com:DruidMech/GameplayAbilitySystem_Aura.git"
+    set "REPO_HTTPS=https://github.com/DruidMech/GameplayAbilitySystem_Aura.git"
+    set "REPO_COMMIT=f778ff39e873a756d5a3f97f263d6f24662fdde9"
+    if "%TARGET_DIR%"=="" set "TARGET_DIR=%PROJECT_ROOT%\Reference\GameplayAbilitySystem_Aura_Initial"
+    goto :ValidateGit
+)
+
+if /I "%REFERENCE_KEY%"=="auracpp" (
+    set "REPO_NAME=GameplayAbilitySystem_Aura_Cpp"
+    set "REPO_SSH=git@github.com:DruidMech/GameplayAbilitySystem_Aura.git"
+    set "REPO_HTTPS=https://github.com/DruidMech/GameplayAbilitySystem_Aura.git"
+    set "REPO_BRANCH=main"
+    if "%TARGET_DIR%"=="" set "TARGET_DIR=%PROJECT_ROOT%\Reference\GameplayAbilitySystem_Aura_Cpp"
+    goto :ValidateGit
+)
+
+if /I "%REFERENCE_KEY%"=="auraas" (
+    set "REPO_NAME=AngelscriptAura"
+    set "REPO_SSH=git@github.com:najoast/AngelscriptAura.git"
+    set "REPO_HTTPS=https://github.com/najoast/AngelscriptAura.git"
+    set "REPO_BRANCH=main"
+    if "%TARGET_DIR%"=="" set "TARGET_DIR=%PROJECT_ROOT%\Reference\AngelscriptAura"
+    goto :ValidateGit
+)
+
+if /I "%REFERENCE_KEY%"=="blendermcp" (
+    set "REPO_NAME=blender_mcp"
+    set "REPO_SSH="
+    set "REPO_HTTPS=https://projects.blender.org/lab/blender_mcp.git"
+    set "REPO_BRANCH=main"
+    if "%TARGET_DIR%"=="" set "TARGET_DIR=%PROJECT_ROOT%\Reference\blender_mcp"
+    goto :ValidateGit
+)
+
 if /I "%REFERENCE_KEY%"=="hazelight" goto :Hazelight
 
 echo Unknown reference key: %REFERENCE_KEY%
@@ -92,6 +129,10 @@ echo   puerts            - Pull Tencent puerts into Reference\puerts
 echo   sluaunreal        - Pull Tencent sluaunreal into Reference\sluaunreal
 echo   hazelightdocs     - Pull Hazelight public docs into Reference\Docs-UnrealEngine-Angelscript
 echo   hazelightvscode   - Pull Hazelight VS Code extension into Reference\vscode-unreal-angelscript
+echo   aura              - Pull Aura GAS course initial project into Reference\GameplayAbilitySystem_Aura_Initial
+echo   auracpp           - Pull Aura GAS course C++ project into Reference\GameplayAbilitySystem_Aura_Cpp
+echo   auraas            - Pull Aura GAS Angelscript rewrite into Reference\AngelscriptAura
+echo   blendermcp        - Pull Blender MCP into Reference\blender_mcp
 echo   hazelight         - Local config only, read AgentConfig.ini
 exit /b 0
 
@@ -114,6 +155,10 @@ echo   Tools\PullReference\PullReference.bat puerts
 echo   Tools\PullReference\PullReference.bat sluaunreal
 echo   Tools\PullReference\PullReference.bat hazelightdocs
 echo   Tools\PullReference\PullReference.bat hazelightvscode
+echo   Tools\PullReference\PullReference.bat aura
+echo   Tools\PullReference\PullReference.bat auracpp
+echo   Tools\PullReference\PullReference.bat auraas
+echo   Tools\PullReference\PullReference.bat blendermcp
 echo   Tools\PullReference\PullReference.bat angelscript "J:\UnrealEngine\AngelscriptProject\Reference\angelscript-v2.38.0"
 echo   Tools\PullReference\PullReference.bat list
 exit /b 1
@@ -136,6 +181,16 @@ if not exist "%TARGET_PARENT%" (
     )
 )
 
+set "CLONE_URL=%REPO_SSH%"
+set "CLONE_LABEL=SSH"
+if not defined REPO_SSH (
+    set "CLONE_URL=%REPO_HTTPS%"
+    set "CLONE_LABEL=HTTPS"
+)
+
+set "SYNC_URL=%REPO_SSH%"
+if not defined REPO_SSH set "SYNC_URL=%REPO_HTTPS%"
+
 if not exist "%TARGET_DIR%\.git" (
     if exist "%TARGET_DIR%" (
         echo Target directory exists but is not a git repository:
@@ -144,15 +199,44 @@ if not exist "%TARGET_DIR%\.git" (
         exit /b 1
     )
 
-    echo Cloning %REPO_NAME% from SSH remote...
-    if defined REPO_TAG (
-        git clone --branch "%REPO_TAG%" --depth 1 "%REPO_SSH%" "%TARGET_DIR%"
+    echo Cloning %REPO_NAME% from %CLONE_LABEL% remote...
+    if defined REPO_COMMIT (
+        mkdir "%TARGET_DIR%"
+        if errorlevel 1 (
+            echo Failed to create target directory:
+            echo   "%TARGET_DIR%"
+            exit /b 1
+        )
+        git -C "%TARGET_DIR%" init
+        if errorlevel 1 (
+            echo Failed to initialize git repository:
+            echo   "%TARGET_DIR%"
+            exit /b 1
+        )
+        git -C "%TARGET_DIR%" remote add origin "%CLONE_URL%"
+        if errorlevel 1 (
+            echo Failed to add %CLONE_LABEL% remote URL.
+            exit /b 1
+        )
+        git -C "%TARGET_DIR%" fetch --depth 1 origin "%REPO_COMMIT%"
+        if errorlevel 1 (
+            echo %CLONE_LABEL% fetch failed.
+            echo Repository:
+            echo   %REPO_HTTPS%
+            exit /b 1
+        )
+        git -C "%TARGET_DIR%" checkout --force FETCH_HEAD
+        if errorlevel 1 (
+            echo Failed to checkout commit %REPO_COMMIT%.
+            exit /b 1
+        )
+    ) else if defined REPO_TAG (
+        git clone --branch "%REPO_TAG%" --depth 1 "%CLONE_URL%" "%TARGET_DIR%"
     ) else (
-        git clone --branch "%REPO_BRANCH%" --depth 1 "%REPO_SSH%" "%TARGET_DIR%"
+        git clone --branch "%REPO_BRANCH%" --depth 1 "%CLONE_URL%" "%TARGET_DIR%"
     )
     if errorlevel 1 (
-        echo SSH clone failed.
-        echo Verify your GitHub SSH key is configured correctly.
+        echo %CLONE_LABEL% clone failed.
         echo Repository:
         echo   %REPO_HTTPS%
         exit /b 1
@@ -184,14 +268,15 @@ if defined HAS_CHANGES (
     exit /b 1
 )
 
-git remote set-url origin "%REPO_SSH%"
+git remote set-url origin "%SYNC_URL%"
 if errorlevel 1 (
-    echo Failed to set SSH remote URL.
+    echo Failed to set remote URL.
     popd >nul
     exit /b 1
 )
 
 if defined REPO_TAG goto :SyncTag
+if defined REPO_COMMIT goto :SyncCommit
 goto :SyncBranch
 
 :SyncTag
@@ -206,6 +291,24 @@ if errorlevel 1 (
 git checkout --force "tags/%REPO_TAG%"
 if errorlevel 1 (
     echo Failed to checkout tag %REPO_TAG%.
+    popd >nul
+    exit /b 1
+)
+
+goto :PrintHead
+
+:SyncCommit
+echo Fetching commit %REPO_COMMIT% from SSH remote...
+git fetch origin "%REPO_COMMIT%" --depth 1
+if errorlevel 1 (
+    echo Failed to fetch commit %REPO_COMMIT% from SSH remote.
+    popd >nul
+    exit /b 1
+)
+
+git checkout --force FETCH_HEAD
+if errorlevel 1 (
+    echo Failed to checkout commit %REPO_COMMIT%.
     popd >nul
     exit /b 1
 )
@@ -238,7 +341,9 @@ if errorlevel 1 (
 :PrintHead
 for /f "delims=" %%I in ('git rev-parse --short HEAD') do set "HEAD_SHA=%%I"
 
-if defined REPO_TAG (
+if defined REPO_COMMIT (
+    echo Synced %REPO_NAME% to %REPO_COMMIT% ^(%HEAD_SHA%^)
+) else if defined REPO_TAG (
     echo Synced %REPO_NAME% to %REPO_TAG% ^(%HEAD_SHA%^)
 ) else (
     echo Synced %REPO_NAME% to %REPO_BRANCH% ^(%HEAD_SHA%^)

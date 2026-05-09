@@ -143,6 +143,10 @@ Invoke-TestCase -Name 'ListIncludesHazelightDocs' -Body {
         -Message ('PullReference list should mention hazelightdocs. Output: {0}' -f $combined)
     Assert-True -Condition ($combined -match 'hazelightvscode\s+- Pull Hazelight VS Code extension into Reference\\vscode-unreal-angelscript') `
         -Message ('PullReference list should mention hazelightvscode. Output: {0}' -f $combined)
+    Assert-True -Condition ($combined -match 'aura\s+- Pull Aura GAS course initial project into Reference\\GameplayAbilitySystem_Aura_Initial') `
+        -Message ('PullReference list should mention aura. Output: {0}' -f $combined)
+    Assert-True -Condition ($combined -match 'auracpp\s+- Pull Aura GAS course C\+\+ project into Reference\\GameplayAbilitySystem_Aura_Cpp') `
+        -Message ('PullReference list should mention auracpp. Output: {0}' -f $combined)
 }
 
 Invoke-TestCase -Name 'UsageIncludesHazelightDocs' -Body {
@@ -158,6 +162,10 @@ Invoke-TestCase -Name 'UsageIncludesHazelightDocs' -Body {
         -Message ('Usage output should include hazelightdocs example. Output: {0}' -f $combined)
     Assert-True -Condition ($combined -match 'Tools\\PullReference\\PullReference\.bat hazelightvscode') `
         -Message ('Usage output should include hazelightvscode example. Output: {0}' -f $combined)
+    Assert-True -Condition ($combined -match 'Tools\\PullReference\\PullReference\.bat aura') `
+        -Message ('Usage output should include aura example. Output: {0}' -f $combined)
+    Assert-True -Condition ($combined -match 'Tools\\PullReference\\PullReference\.bat auracpp') `
+        -Message ('Usage output should include auracpp example. Output: {0}' -f $combined)
 }
 
 Invoke-TestCase -Name 'RemoteCloneHazelightDocs' -Body {

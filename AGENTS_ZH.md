@@ -56,6 +56,9 @@
 | Hazelight Angelscript | 通过 `AgentConfig.ini` 的 `References.HazelightAngelscriptEngineRoot` 获取；详情见 `Reference/README.md` |
 | Hazelight Docs | 使用 `Tools\PullReference\PullReference.bat hazelightdocs` 默认拉取到 `Reference\Docs-UnrealEngine-Angelscript`；用于参考 Hazelight 公开文档站源码与内容组织；详情见 `Reference/README.md` |
 | Hazelight VS Code Angelscript | 使用 `Tools\PullReference\PullReference.bat hazelightvscode` 默认拉取到 `Reference\vscode-unreal-angelscript`；用于参考 VS Code Language Server、Debug Adapter、错误展示与断点调试工作流；详情见 `Reference/README.md` |
+| Aura GAS Course Initial Project | 使用 `Tools\PullReference\PullReference.bat aura` 默认拉取到 `Reference\GameplayAbilitySystem_Aura_Initial`；固定到课程初始提交，用于参考 Aura GAS 练习起始资产、UE 5.2 示例内容工程结构与素材组织；详情见 `Reference/README.md` |
+| Aura GAS Course C++ Project | 使用 `Tools\PullReference\PullReference.bat auracpp` 默认拉取到 `Reference\GameplayAbilitySystem_Aura_Cpp`；跟随 `main` 分支，用于参考 Aura GAS 课程完成态 C++ 实现、UE 5.3 工程结构与 GameplayAbilities/MVVM/MotionWarping 接入；详情见 `Reference/README.md` |
+| Aura GAS Angelscript Rewrite | 使用 `Tools\PullReference\PullReference.bat auraas` 默认拉取到 `Reference\AngelscriptAura`；跟随 `main` 分支，用于参考第三方 Aura GAS Angelscript 改写、AS 侧 GAS 脚本组织与实现笔记；详情见 `Reference/README.md` |
 | UnrealCSharp | 使用 `Tools\PullReference\PullReference.bat unrealcsharp` 默认拉取到 `Reference\UnrealCSharp`；详情见 `Reference/README.md` |
 | Tencent UnLua | 使用 `Tools\PullReference\PullReference.bat unlua` 默认拉取到 `Reference\UnLua`；用于参考 Lua 反射接入、事件覆写与示例组织；详情见 `Reference/README.md` |
 | Tencent puerts | 使用 `Tools\PullReference\PullReference.bat puerts` 默认拉取到 `Reference\puerts`；用于参考 TypeScript/JavaScript 脚本运行时与声明生成；详情见 `Reference/README.md` |
