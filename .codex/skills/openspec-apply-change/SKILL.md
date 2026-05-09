@@ -1,156 +1,120 @@
 ---
 name: openspec-apply-change
-description: Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks.
-license: MIT
-compatibility: Requires openspec CLI.
-metadata:
-  author: openspec
-  version: "1.0"
-  generatedBy: "1.3.1"
+description: Use when the user wants to implement, continue, verify, or work through tasks from an OpenSpec change in AngelscriptProject, including /opsx:apply or /openspec:apply.
 ---
 
-Implement tasks from an OpenSpec change.
+# OpenSpec Apply With Superpowers Adapter
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+Implement tasks from an OpenSpec change. OpenSpec remains the task source; Superpowers provides execution discipline when its trigger conditions apply.
 
-**Steps**
+<!-- SUPERPOWER-BEGIN: superpowers-dispatch-rule -->
+Use the current installed Superpowers skills by name instead of copying their instructions here. Load and follow the current skill at the moment it applies.
 
-1. **Select the change**
+Phase mapping:
+- Use `superpowers:test-driven-development` for tasks marked `<!-- TDD -->` or for new behavior, bug fixes, behavior changes, and complex logic.
+- Use `superpowers:systematic-debugging` for unexpected test failures, build failures, runtime bugs, or unclear behavior.
+- Use `superpowers:verification-before-completion` before claiming a task, change, build, or test run is complete or passing.
+- Use `superpowers:receiving-code-review` before implementing review feedback from a user or reviewer.
+- Use `superpowers:requesting-code-review` when a major feature, shared behavior, or merge-ready change needs review and the environment can support the review workflow.
+- Use `superpowers:finishing-a-development-branch` only after implementation is complete and fresh verification evidence exists.
+<!-- SUPERPOWER-END: superpowers-dispatch-rule -->
 
-   If a name is provided, use it. Otherwise:
-   - Infer from conversation context if the user mentioned a change
-   - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
+## Input
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
+The user may specify a change name. If omitted, infer only when unambiguous. If multiple active changes exist, ask the user to choose.
 
-2. **Check status to understand the schema**
-   ```bash
-   openspec status --change "<name>" --json
-   ```
-   Parse the JSON to understand:
-   - `schemaName`: The workflow being used (e.g., "spec-driven")
-   - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
+## Steps
 
-3. **Get apply instructions**
+1. **Select and inspect the OpenSpec change**
 
-   ```bash
-   openspec instructions apply --change "<name>" --json
-   ```
+   Run:
 
-   This returns:
-   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
-   - Progress (total, complete, remaining)
-   - Task list with status
-   - Dynamic instruction based on current state
-
-   **Handle states:**
-   - If `state: "blocked"` (missing artifacts): show message, suggest using openspec-continue-change
-   - If `state: "all_done"`: congratulate, suggest archive
-   - Otherwise: proceed to implementation
-
-4. **Read context files**
-
-   Read every file path listed under `contextFiles` from the apply instructions output.
-   The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
-
-5. **Show current progress**
-
-   Display:
-   - Schema being used
-   - Progress: "N/M tasks complete"
-   - Remaining tasks overview
-   - Dynamic instruction from CLI
-
-6. **Implement tasks (loop until done or blocked)**
-
-   For each pending task:
-   - Show which task is being worked on
-   - Make the code changes required
-   - Keep changes minimal and focused
-   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
-   - Continue to next task
-
-   **Pause if:**
-   - Task is unclear → ask for clarification
-   - Implementation reveals a design issue → suggest updating artifacts
-   - Error or blocker encountered → report and wait for guidance
-   - User interrupts
-
-7. **On completion or pause, show status**
-
-   Display:
-   - Tasks completed this session
-   - Overall progress: "N/M tasks complete"
-   - If all done: suggest archive
-   - If paused: explain why and wait for guidance
-
-**Output During Implementation**
-
-```
-## Implementing: <change-name> (schema: <schema-name>)
-
-Working on task 3/7: <task description>
-[...implementation happening...]
-✓ Task complete
-
-Working on task 4/7: <task description>
-[...implementation happening...]
-✓ Task complete
+```powershell
+openspec status --change "<name>" --json
+openspec instructions apply --change "<name>" --json
 ```
 
-**Output On Completion**
+   Use the returned schema, task progress, dynamic instruction, and `contextFiles`. If the apply instruction reports a blocked or missing-artifact state, stop and report the missing artifacts.
 
-```
-## Implementation Complete
+2. **Read OpenSpec context files**
 
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Progress:** 7/7 tasks complete ✓
+   Read every file listed in `contextFiles`. Do not assume file names; OpenSpec schema output is authoritative.
 
-### Completed This Session
-- [x] Task 1
-- [x] Task 2
-...
+<!-- SUPERPOWER-BEGIN: plan-as-tasks-md -->
+`tasks.md` is the only implementation plan. Do not invoke `superpowers:writing-plans`, and do not create `docs/plans` or `docs/superpowers/plans`.
 
-All tasks complete! Ready to archive this change.
-```
+If implementation reveals a design or requirement problem, update the relevant OpenSpec artifact for the current change, then continue from the updated task list.
+<!-- SUPERPOWER-END: plan-as-tasks-md -->
 
-**Output On Pause (Issue Encountered)**
+3. **Analyze tasks before editing code**
 
-```
-## Implementation Paused
+<!-- SUPERPOWER-BEGIN: execution-mode-selection -->
+Before implementation, summarize pending tasks and classify them as TDD or non-TDD from `tasks.md` markers and task content.
 
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Progress:** 4/7 tasks complete
+Recommend execution mode:
+- `agent` for up to 5 mostly sequential tasks or tightly coupled changes.
+- `subagent` only for clearly independent tasks or when the user explicitly wants delegated agent work.
 
-### Issue Encountered
-<description of the issue>
+Stop for user selection before spawning subagents. In Codex, use subagents only when explicitly selected or requested by the user.
+<!-- SUPERPOWER-END: execution-mode-selection -->
 
-**Options:**
-1. <option 1>
-2. <option 2>
-3. Other approach
+4. **Execute tasks from `tasks.md`**
 
-What would you like to do?
-```
+<!-- SUPERPOWER-BEGIN: tdd-discipline -->
+For TDD tasks, use `superpowers:test-driven-development` and execute in order:
+1. Write the failing test.
+2. Run the listed command and confirm it fails for the expected reason.
+3. Write the smallest implementation that can pass.
+4. Run the listed command and confirm it passes.
+5. Refactor while keeping verification green.
 
-**Guardrails**
-- Keep going through tasks until done or blocked
-- Always read context files before starting (from the apply instructions output)
-- If task is ambiguous, pause and ask before implementing
-- If implementation reveals issues, pause and suggest artifact updates
-- Keep code changes minimal and scoped to each task
-- Update task checkbox immediately after completing each task
-- Pause on errors, blockers, or unclear requirements - don't guess
-- Use contextFiles from CLI output, don't assume specific file names
+Do not write implementation code for a TDD task before observing the failing test.
+<!-- SUPERPOWER-END: tdd-discipline -->
 
-**Fluid Workflow Integration**
+<!-- SUPERPOWER-BEGIN: non-tdd-discipline -->
+For non-TDD tasks, execute the stated change, run the listed verification command, and check affected references before marking the task complete.
+<!-- SUPERPOWER-END: non-tdd-discipline -->
 
-This skill supports the "actions on a change" model:
+<!-- SUPERPOWER-BEGIN: debugging-discipline -->
+When any verification, build, test, or runtime behavior is unexpected, use `superpowers:systematic-debugging` before attempting fixes. Do not guess at fixes or stack patches without root cause evidence.
+<!-- SUPERPOWER-END: debugging-discipline -->
 
-- **Can be invoked anytime**: Before all artifacts are done (if tasks exist), after partial implementation, interleaved with other actions
-- **Allows artifact updates**: If implementation reveals design issues, suggest updating artifacts - not phase-locked, work fluidly
+5. **Update task checkboxes carefully**
+
+   Update `tasks.md` only after the corresponding task or subtask is actually complete. Prefer a minimal patch that changes only `[ ]` to `[x]` on the relevant line. Do not add logs, review notes, or execution commentary to `tasks.md`.
+
+6. **Verify before completion claims**
+
+<!-- SUPERPOWER-BEGIN: verification-gate -->
+Use `superpowers:verification-before-completion` before claiming success.
+
+Fresh evidence must come from the task's verification command. For this repository, use the standard helper scripts when relevant:
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label <label> -TimeoutMs 180000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "<prefix>" -Label <label> -TimeoutMs 600000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTestSuite.ps1 -Suite <suite> -LabelPrefix <label> -TimeoutMs 600000`
+
+Do not use PreCI as a default requirement in this project. If a future environment provides a PreCI skill or command, treat it as optional unless the user explicitly enables it.
+<!-- SUPERPOWER-END: verification-gate -->
+
+7. **Handle review feedback with technical verification**
+
+<!-- SUPERPOWER-BEGIN: review-policy -->
+When receiving review feedback, use `superpowers:receiving-code-review` before implementing suggestions. Verify the feedback against this codebase, ask when unclear, and push back with technical evidence when a suggestion is wrong or out of scope.
+
+Use `superpowers:requesting-code-review` for major or shared changes when review delegation is available. If no reviewer workflow is available, do a local review pass against OpenSpec requirements, changed files, tests, and integration risks, then report that no external reviewer was used.
+<!-- SUPERPOWER-END: review-policy -->
+
+8. **Finish or pause**
+
+   If all tasks are done, run final verification and then use `superpowers:finishing-a-development-branch` to present branch completion options. If blocked, report the blocker, current progress, and the next decision needed.
+
+<!-- SUPERPOWER-BEGIN: safe-rollback -->
+Never run broad rollback commands such as `git checkout -- .` or `git reset --hard` as part of this workflow. If rollback is requested, show `git status --short` and `git diff --stat`, ask which paths to revert, and only revert explicitly confirmed paths.
+<!-- SUPERPOWER-END: safe-rollback -->
+
+## Guardrails
+
+- Keep changes scoped to the current OpenSpec change.
+- Do not skip task verification.
+- Do not mark tasks complete based only on expectation or partial evidence.
+- Do not depend on `plan-eng-review-codebuddy`, `proposal-challenger`, or `preci-code-check`.

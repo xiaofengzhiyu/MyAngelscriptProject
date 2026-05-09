@@ -1,110 +1,142 @@
 ---
 name: openspec-propose
-description: Propose a new change with all artifacts generated in one step. Use when the user wants to quickly describe what they want to build and get a complete proposal with design, specs, and tasks ready for implementation.
-license: MIT
-compatibility: Requires openspec CLI.
-metadata:
-  author: openspec
-  version: "1.0"
-  generatedBy: "1.3.1"
+description: Use when the user starts or updates an OpenSpec change proposal in AngelscriptProject, including /opsx:propose or /openspec:proposal, and needs Superpowers-backed thinking before OpenSpec artifacts are generated.
 ---
 
-Propose a new change - create the change and generate all artifacts in one step.
+# OpenSpec Propose With Superpowers Adapter
 
-I'll create a change with artifacts:
-- proposal.md (what & why)
-- design.md (how)
-- tasks.md (implementation steps)
+Create or continue an OpenSpec change. In this project, propose is a design and artifact workflow, not implementation.
 
-When ready to implement, run /opsx:apply
+<!-- SUPERPOWER-BEGIN: superpowers-dispatch-rule -->
+Use the current installed Superpowers skills by name at the point where they apply. Do not vendor or copy Superpowers instructions into this skill; let Superpowers updates take effect through the active installed skill.
 
----
+For Codex, use the platform's skill-loading behavior. If a direct skill activation tool is unavailable, load the current `SKILL.md` for the named Superpowers skill from the session skill metadata before following it.
+<!-- SUPERPOWER-END: superpowers-dispatch-rule -->
 
-**Input**: The user's request should include a change name (kebab-case) OR a description of what they want to build.
+<!-- SUPERPOWER-BEGIN: propose-thinking-flow -->
+Before creating or editing OpenSpec artifacts, use `superpowers:brainstorming` for requirement discovery and design confirmation.
 
-**Steps**
+Apply only the thinking portion of brainstorming:
+- Explore the project context first.
+- Ask focused questions until the goal, scope, constraints, and success criteria are clear.
+- Present 2-3 viable approaches with tradeoffs and a recommendation when meaningful.
+- Present the chosen design and wait for explicit user confirmation before writing artifacts.
 
-1. **If no clear input provided, ask what they want to build**
+OpenSpec overrides for brainstorming:
+- Do not write `docs/superpowers/specs`.
+- Do not invoke `superpowers:writing-plans`.
+- Do not create `docs/plans` or `docs/superpowers/plans`.
+- Store the approved design in OpenSpec artifacts instead.
+<!-- SUPERPOWER-END: propose-thinking-flow -->
 
-   Use the **AskUserQuestion tool** (open-ended, no preset options) to ask:
-   > "What change do you want to work on? Describe what you want to build or fix."
+## Input
 
-   From their description, derive a kebab-case name (e.g., "add user authentication" → `add-user-auth`).
+The user should provide either a kebab-case change name or a description of what they want to build or fix. If the request is unclear, ask what change they want and stop until they answer.
 
-   **IMPORTANT**: Do NOT proceed without understanding what the user wants to build.
+## Steps
 
-2. **Create the change directory**
-   ```bash
-   openspec new change "<name>"
-   ```
-   This creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
+1. **Clarify and confirm the design**
 
-3. **Get the artifact build order**
-   ```bash
-   openspec status --change "<name>" --json
-   ```
-   Parse the JSON to get:
-   - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
-   - `artifacts`: list of all artifacts with their status and dependencies
+   Follow the `propose-thinking-flow` adapter block. Do not create files until the user has confirmed the design direction.
 
-4. **Create artifacts in sequence until apply-ready**
+2. **Check worktree safety**
 
-   Use the **TodoWrite tool** to track progress through the artifacts.
+<!-- SUPERPOWER-BEGIN: worktree-check -->
+Prefer proposing from an isolated feature worktree. Check the current Git context with non-mutating commands such as:
 
-   Loop through artifacts in dependency order (artifacts with no pending dependencies first):
+```powershell
+git rev-parse --show-toplevel
+git rev-parse --git-dir
+git rev-parse --git-common-dir
+git worktree list --porcelain
+```
 
-   a. **For each artifact that is `ready` (dependencies satisfied)**:
-      - Get instructions:
-        ```bash
-        openspec instructions <artifact-id> --change "<name>" --json
-        ```
-      - The instructions JSON includes:
-        - `context`: Project background (constraints for you - do NOT include in output)
-        - `rules`: Artifact-specific rules (constraints for you - do NOT include in output)
-        - `template`: The structure to use for your output file
-        - `instruction`: Schema-specific guidance for this artifact type
-        - `outputPath`: Where to write the artifact
-        - `dependencies`: Completed artifacts to read for context
-      - Read any completed dependency files for context
-      - Create the artifact file using `template` as the structure
-      - Apply `context` and `rules` as constraints - but do NOT copy them into the file
-      - Show brief progress: "Created <artifact-id>"
+If the current directory is the main repository working tree, stop and offer:
+- create or switch to a feature worktree,
+- continue in the current directory with explicit user approval,
+- cancel.
 
-   b. **Continue until all `applyRequires` artifacts are complete**
-      - After creating each artifact, re-run `openspec status --change "<name>" --json`
-      - Check if every artifact ID in `applyRequires` has `status: "done"` in the artifacts array
-      - Stop when all `applyRequires` artifacts are done
+If the user chooses to create a worktree, use `superpowers:using-git-worktrees` as guidance, but do not silently edit `.gitignore`, commit changes, or move work without explicit confirmation.
+<!-- SUPERPOWER-END: worktree-check -->
 
-   c. **If an artifact requires user input** (unclear context):
-      - Use **AskUserQuestion tool** to clarify
-      - Then continue with creation
+3. **Create or continue the OpenSpec change**
 
-5. **Show final status**
-   ```bash
-   openspec status --change "<name>"
-   ```
+<!-- SUPERPOWER-BEGIN: openspec-cli-compat -->
+OpenSpec CLI metadata is authoritative. Do not create a bare `openspec/changes/<name>` directory by hand.
 
-**Output**
+For a new change, run:
 
-After completing all artifacts, summarize:
-- Change name and location
-- List of artifacts created with brief descriptions
-- What's ready: "All artifacts created! Ready for implementation."
-- Prompt: "Run `/opsx:apply` or ask me to implement to start working on the tasks."
+```powershell
+openspec new change "<name>"
+```
 
-**Artifact Creation Guidelines**
+Then inspect artifact state:
 
-- Follow the `instruction` field from `openspec instructions` for each artifact type
-- The schema defines what each artifact should contain - follow it
-- Read dependency artifacts for context before creating new ones
-- Use `template` as the structure for your output file - fill in its sections
-- **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
-  - Do NOT copy `<context>`, `<rules>`, `<project_context>` blocks into the artifact
-  - These guide what you write, but should never appear in the output
+```powershell
+openspec status --change "<name>" --json
+```
 
-**Guardrails**
-- Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
-- Always read dependency artifacts before creating a new one
-- If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
-- If a change with that name already exists, ask if user wants to continue it or create a new one
-- Verify each artifact file exists after writing before proceeding to next
+For each ready artifact, get current schema instructions:
+
+```powershell
+openspec instructions <artifact-id> --change "<name>" --json
+```
+
+Use the returned `outputPath`, `template`, `instruction`, `context`, `rules`, and dependency list. Read dependency artifacts before generating dependent artifacts. Preserve `.openspec.yaml` and all OpenSpec CLI state.
+<!-- SUPERPOWER-END: openspec-cli-compat -->
+
+4. **Generate artifacts until apply-ready**
+
+   Continue in dependency order until every artifact required by `applyRequires` is complete. Re-run `openspec status --change "<name>" --json` after each artifact.
+
+5. **Use `tasks.md` as the implementation plan**
+
+<!-- SUPERPOWER-BEGIN: plan-as-tasks-md -->
+OpenSpec `tasks.md` is the only implementation plan for this project. Do not invoke `superpowers:writing-plans`, and do not create `docs/plans` or `docs/superpowers/plans`.
+
+The plan is complete when:
+- OpenSpec apply-required artifacts are generated through the OpenSpec CLI flow.
+- `tasks.md` has explicit, runnable verification commands for each implementation task.
+- TDD and non-TDD tasks are distinguishable.
+- The user has enough context to review and run `/opsx:apply`.
+<!-- SUPERPOWER-END: plan-as-tasks-md -->
+
+<!-- SUPERPOWER-BEGIN: tasks-template -->
+When creating implementation tasks, shape them for Superpowers-backed execution without copying Superpowers docs.
+
+Use TDD tasks for new behavior, bug fixes, behavior changes, and complex logic:
+
+```markdown
+- [ ] N.M <task description>  <!-- TDD -->
+  - [ ] N.M.1 Write a failing test: `<test file or test name>`
+  - [ ] N.M.2 Run verification and confirm the failure is expected: `<command>`
+  - [ ] N.M.3 Implement the smallest change: `<implementation file>`
+  - [ ] N.M.4 Run verification and confirm it passes: `<command>`
+  - [ ] N.M.5 Refactor while keeping verification green
+```
+
+Use non-TDD tasks for documentation, mechanical config, dependency updates, generated files, and other work where a failing behavioral test is not appropriate:
+
+```markdown
+- [ ] N.M <task description>  <!-- Non-TDD -->
+  - [ ] N.M.1 Execute the change: `<file path>`
+  - [ ] N.M.2 Verify no regression: `<command>`
+  - [ ] N.M.3 Check completeness and affected references
+```
+
+For this Unreal project, prefer existing repository verification entry points when relevant:
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label <label> -TimeoutMs 180000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "<prefix>" -Label <label> -TimeoutMs 600000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTestSuite.ps1 -Suite <suite> -LabelPrefix <label> -TimeoutMs 600000`
+<!-- SUPERPOWER-END: tasks-template -->
+
+6. **Finish propose**
+
+   Show the change name, artifact paths, and current OpenSpec status. Tell the user to review the artifacts and run `/opsx:apply <name>` when ready.
+
+## Guardrails
+
+- Propose must not edit application code.
+- Keep all generated artifacts under OpenSpec CLI output paths.
+- Do not require `plan-eng-review-codebuddy`, `proposal-challenger`, or `preci-code-check`.
+- If a user asks to implement while still proposing, explain that implementation starts with `/opsx:apply` after artifacts are ready.
