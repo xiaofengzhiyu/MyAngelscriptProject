@@ -1,7 +1,7 @@
 // AngelscriptGASExtendedBindingsTests.cpp
 // CQTest coverage for AngelscriptGASLibrary, FGameplayAbilitySpec,
 // FGameplayAttribute bindings.
-// Automation IDs: Angelscript.TestModule.Bindings.GASExtended.*
+// Automation IDs: Angelscript.GAS.Bindings.GASExtended.*
 
 #include "CQTest.h"
 #include "Shared/AngelscriptTestMacros.h"
@@ -19,7 +19,7 @@ static const FBindingsCoverageProfile GGASExtProfile{
 };
 
 TEST_CLASS_WITH_FLAGS(FAngelscriptGASExtendedBindingsTest,
-	"Angelscript.TestModule.Bindings.GASExtended",
+	"Angelscript.GAS.Bindings.GASExtended",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL() { ASTEST_CREATE_ENGINE(); }

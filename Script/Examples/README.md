@@ -68,5 +68,5 @@ UE5 Enhanced Input System 集成示例：
 
 以下 Hazelight 基线中的示例类别当前不包含在本目录中：
 
-- **GASExamples**（Gameplay Ability System）— 当前插件的 GAS 集成测试尚未完善
+- **GASExamples**（Gameplay Ability System）— GAS 支持已拆到可选 `Plugins/AngelscriptGAS/` 插件，示例会随 Aura/GAS 工作流成熟后单独补齐
 - **EditorExamples**（编辑器扩展脚本）— 暂不作为必做范围

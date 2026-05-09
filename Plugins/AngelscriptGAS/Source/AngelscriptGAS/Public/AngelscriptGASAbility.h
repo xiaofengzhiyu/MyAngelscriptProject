@@ -10,7 +10,7 @@ class AGameplayCueNotify_Actor;
 class AGameplayCueNotify_Static;
 
 UCLASS(abstract, Blueprintable)
-class ANGELSCRIPTRUNTIME_API UAngelscriptGASAbility : public UGameplayAbility
+class ANGELSCRIPTGAS_API UAngelscriptGASAbility : public UGameplayAbility
 {
 	GENERATED_BODY()
 

@@ -30,23 +30,25 @@ AngelscriptRuntime  (Runtime, 无插件内依赖)
     |
     +--> AngelscriptEditor  (Editor, public 依赖 Runtime)
     |
-    +--> AngelscriptLoader  (Runtime, public 依赖 Runtime;
-    |                        负责 Editor / Commandlet 启动期初始化)
-    |
     +--> AngelscriptTest    (Editor, public 依赖 Runtime,
-                             私有依赖 Editor/Loader [仅 bBuildEditor])
+                             私有依赖 Editor [仅 bBuildEditor])
+
+AngelscriptGAS      (Runtime, 独立插件; public 依赖 AngelscriptRuntime,
+                     GameplayAbilities / GameplayTasks / GameplayTags)
+    |
+    +--> AngelscriptGASTest (Editor, GAS 专项测试)
 
 AngelscriptUHTTool  (C# UBT 插件, 独立; 接入 Unreal Header Tool 流水线)
 ```
 
-四个 UE 模块都在 `PostDefault` 阶段加载。
+UE 模块默认在 `PostDefault` 阶段加载。`GameplayTags` 仍保留在主 `Angelscript` 插件；`GameplayAbilities` / `GameplayTasks` 支持拆到可选的 `AngelscriptGAS` 插件。
 
 ### 核心子系统（AngelscriptRuntime）
 
 | 子系统 | 目录 | 关键能力 |
 |--------|------|---------|
 | **引擎核心** | `Core/` | `AngelscriptEngine` 单例、4 阶段编译流（parse → preprocess → compile → link）、AS 与 UE 类型映射 |
-| **类型绑定** | `Binds/` | **124** 个 `Bind_*.cpp` 暴露 UE 类型（数学/Actor/Component/Physics/UMG/Delegate/Container/JSON/GAS/EnhancedInput 等）+ `BlueprintCallableReflectiveFallback` 兜底 |
+| **类型绑定** | `Binds/` | **124** 个 `Bind_*.cpp` 暴露 UE 类型（数学/Actor/Component/Physics/UMG/Delegate/Container/JSON/GameplayTags/EnhancedInput 等）+ `BlueprintCallableReflectiveFallback` 兜底 |
 | **类生成器** | `ClassGenerator/` | AS class → 活跃 UClass/UStruct，支持属性布局、函数 stub、热重载版本链 |
 | **预处理器** | `Preprocessor/` | `#include` / `#if` / 条件编译 / 注释式文档提取 |
 | **Static JIT** | `StaticJIT/` | AS 字节码 → 优化的近原生执行；`PrecompiledData` 负责模块持久化 |
@@ -55,8 +57,14 @@ AngelscriptUHTTool  (C# UBT 插件, 独立; 接入 Unreal Header Tool 流水线)
 | **函数库** | `FunctionLibraries/` | 21+ Mixin 库为数学类型/Actor/Component/GameplayTag/Widget 等增加辅助方法 |
 | **状态导出** | `Dump/` | 27+ CSV 表导出器；纯外部观察者，不入侵运行时 |
 | **代码覆盖率** | `CodeCoverage/` | AngelScript 行级覆盖率追踪 + HTML/JSON 报告 |
-| **GAS 集成** | `Core/GAS/` | 18 文件：脚本可继承的 GAS 基类与工具库 |
 | **第三方 AS 内核** | `ThirdParty/angelscript/` | Vendored AngelScript 2.33 源码 + 本地补丁 |
+
+### 可选扩展插件（AngelscriptGAS）
+
+| 插件 | 目录 | 关键能力 |
+|------|------|---------|
+| **AngelscriptGAS** | `Plugins/AngelscriptGAS/Source/AngelscriptGAS/` | 脚本可继承的 GAS 基类、Ability/Attribute/Effect/Task 绑定与工具库 |
+| **AngelscriptGASTest** | `Plugins/AngelscriptGAS/Source/AngelscriptGASTest/` | `Angelscript.GAS.*` 自动化测试 |
 
 ### 编辑器子系统（AngelscriptEditor）
 
@@ -92,9 +100,9 @@ AngelscriptProject/
 │   └── Source/
 │       ├── AngelscriptRuntime/  # Runtime 核心
 │       ├── AngelscriptEditor/   # 编辑器集成
-│       ├── AngelscriptLoader/   # 启动期 Loader
 │       ├── AngelscriptTest/     # 测试模块
 │       └── AngelscriptUHTTool/  # UBT C# 插件
+├── Plugins/AngelscriptGAS/      # 可选 GAS 扩展插件
 ├── Source/AngelscriptProject/   # Host Project 模块（最小化，仅为给 UE 一个有效 Target）
 ├── Script/                      # AngelScript 示例脚本（Examples/Core, EnhancedInput, Extended）
 ├── Documents/                   # 项目文档

@@ -11,7 +11,7 @@
 #include "AngelscriptAbilityAsyncLibrary.generated.h"
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptAbilityAsyncLibrary : public UBlueprintFunctionLibrary
+class ANGELSCRIPTGAS_API UAngelscriptAbilityAsyncLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:

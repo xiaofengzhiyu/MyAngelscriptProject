@@ -13,7 +13,7 @@
 #include "AngelscriptGameplayCueUtils.generated.h"
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptGameplayCueUtils : public UBlueprintFunctionLibrary
+class ANGELSCRIPTGAS_API UAngelscriptGameplayCueUtils : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

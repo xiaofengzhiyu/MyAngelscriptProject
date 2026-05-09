@@ -31,7 +31,7 @@ public:
 };
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptAttributeSet : public UAttributeSet
+class ANGELSCRIPTGAS_API UAngelscriptAttributeSet : public UAttributeSet
 {
 	GENERATED_BODY()
 

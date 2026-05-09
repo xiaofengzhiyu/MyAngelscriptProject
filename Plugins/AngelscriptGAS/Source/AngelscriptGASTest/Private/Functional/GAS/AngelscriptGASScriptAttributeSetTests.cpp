@@ -1,7 +1,7 @@
 #include "Shared/AngelscriptFunctionalTestUtils.h"
 #include "Shared/AngelscriptTestMacros.h"
 
-#include "Core/GAS/AngelscriptAttributeSet.h"
+#include "AngelscriptAttributeSet.h"
 #include "CQTest.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/UnrealType.h"
@@ -12,7 +12,7 @@
 using namespace AngelscriptTestSupport;
 
 TEST_CLASS_WITH_FLAGS(FAngelscriptGASScriptAttributeSetTests,
-	"Angelscript.TestModule.Functional.GAS.ScriptAttributeSet",
+	"Angelscript.GAS.Functional.ScriptAttributeSet",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	TEST_METHOD(SubclassRegistersAttributeFieldsAndOnRepFunction)

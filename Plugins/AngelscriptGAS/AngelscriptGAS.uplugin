@@ -2,47 +2,38 @@
 	"FileVersion": 1,
 	"Version": 1,
 	"VersionName": "1.0",
-	"FriendlyName": "Angelscript",
-	"Description": "Angelscript Integration for Unreal Engine ",
+	"FriendlyName": "Angelscript GAS",
+	"Description": "Gameplay Ability System support for Unreal Engine Angelscript.",
 	"Category": "Scripting",
 	"CreatedBy": "Hazelight Games",
 	"CreatedByURL": "http://angelscript.hazelight.se",
 	"DocsURL": "",
 	"MarketplaceURL": "",
 	"SupportURL": "",
-	"EnabledByDefault": true,
+	"EnabledByDefault": false,
 	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"Installed": false,
 
 	"Modules": [
 		{
-			"Name": "AngelscriptRuntime",
+			"Name": "AngelscriptGAS",
 			"Type": "Runtime",
 			"LoadingPhase": "PostDefault"
 		},
 		{
-			"Name": "AngelscriptEditor",
-			"Type": "Editor",
-			"LoadingPhase": "PostDefault"
-		},
-		{
-			"Name": "AngelscriptTest",
+			"Name": "AngelscriptGASTest",
 			"Type": "Editor",
 			"LoadingPhase": "PostDefault"
 		}
 	],
 	"Plugins": [
 		{
-			"Name": "StructUtils",
+			"Name": "Angelscript",
 			"Enabled": true
 		},
 		{
-			"Name": "PropertyBindingUtils",
-			"Enabled": true
-		},
-		{
-			"Name": "EnhancedInput",
+			"Name": "GameplayAbilities",
 			"Enabled": true
 		}
 	]

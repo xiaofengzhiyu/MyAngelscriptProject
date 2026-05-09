@@ -1,7 +1,5 @@
 #include "BlueprintImpact/AngelscriptBlueprintImpactScanner.h"
 
-#include "GAS/AngelscriptAbilitySystemComponent.h"
-
 #include "GameFramework/Actor.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
@@ -77,10 +75,10 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptBlueprintImpactScannerCoreT
 		return DelegateDesc;
 	}
 
-	UDelegateFunction* FindAbilitySystemDelegateSignature(FAutomationTestBase& Test, const FName PropertyName)
+	UDelegateFunction* FindActorDelegateSignature(FAutomationTestBase& Test, const FName PropertyName)
 	{
 		const FMulticastDelegateProperty* DelegateProperty =
-			FindFProperty<FMulticastDelegateProperty>(UAngelscriptAbilitySystemComponent::StaticClass(), PropertyName);
+			FindFProperty<FMulticastDelegateProperty>(AActor::StaticClass(), PropertyName);
 		if (!Test.TestNotNull(*FString::Printf(TEXT("BlueprintImpact.BuildImpactSymbols should find delegate property %s"), *PropertyName.ToString()), DelegateProperty))
 		{
 			return nullptr;
@@ -100,9 +98,9 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptBlueprintImpactScannerCoreT
 bool FAngelscriptBlueprintImpactBuildImpactSymbolsDelegateFilteringTest::RunTest(const FString& Parameters)
 {
 	using namespace AngelscriptEditor_Private_Tests_AngelscriptBlueprintImpactScannerCoreTests_Private;
-	UDelegateFunction* SignatureFunction = FindAbilitySystemDelegateSignature(
+	UDelegateFunction* SignatureFunction = FindActorDelegateSignature(
 		*this,
-		GET_MEMBER_NAME_CHECKED(UAngelscriptAbilitySystemComponent, OnAbilityGiven));
+		GET_MEMBER_NAME_CHECKED(AActor, OnActorBeginOverlap));
 	if (SignatureFunction == nullptr)
 	{
 		return false;

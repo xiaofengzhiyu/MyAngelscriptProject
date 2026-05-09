@@ -10,7 +10,7 @@
 #include "AngelscriptGameplayEffectUtils.generated.h"
 
 USTRUCT(BlueprintType)
-struct ANGELSCRIPTRUNTIME_API FGameplayEffectExecutionParameters
+struct ANGELSCRIPTGAS_API FGameplayEffectExecutionParameters
 {
 	GENERATED_BODY()
 
@@ -20,7 +20,7 @@ public:
 
 //UCLASS(Meta = (ScriptMixin = "FGameplayEffectExecutionParameters"))
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UGameplayEffectExecutionParametersMixinLibrary : public UObject
+class ANGELSCRIPTGAS_API UGameplayEffectExecutionParametersMixinLibrary : public UObject
 {
 	GENERATED_BODY()
 
@@ -64,7 +64,7 @@ public:
 };
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptGameplayEffectUtils : public UBlueprintFunctionLibrary
+class ANGELSCRIPTGAS_API UAngelscriptGameplayEffectUtils : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

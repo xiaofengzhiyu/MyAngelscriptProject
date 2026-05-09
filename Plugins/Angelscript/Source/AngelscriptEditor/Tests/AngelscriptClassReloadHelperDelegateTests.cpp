@@ -1,10 +1,10 @@
 #include "HotReload/ClassReloadHelper.h"
 #include "BlueprintImpact/AngelscriptBlueprintImpactScanner.h"
 
-#include "GAS/AngelscriptAbilitySystemComponent.h"
 #include "AngelscriptEngine.h"
 
 #include "EdGraph/EdGraph.h"
+#include "GameFramework/Actor.h"
 #include "Engine/Blueprint.h"
 #include "HAL/IConsoleManager.h"
 #include "K2Node_Event.h"
@@ -59,10 +59,10 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptClassReloadHelperDelegateTe
 		RootedObjects.Add(Object);
 	}
 
-	UDelegateFunction* FindAbilitySystemDelegateSignature(FAutomationTestBase& Test, const FName PropertyName)
+	UDelegateFunction* FindActorDelegateSignature(FAutomationTestBase& Test, const FName PropertyName)
 	{
 		const FMulticastDelegateProperty* DelegateProperty =
-			FindFProperty<FMulticastDelegateProperty>(UAngelscriptAbilitySystemComponent::StaticClass(), PropertyName);
+			FindFProperty<FMulticastDelegateProperty>(AActor::StaticClass(), PropertyName);
 		if (!Test.TestNotNull(*FString::Printf(TEXT("ClassReloadHelper.DelegateReinstance test should find delegate property %s"), *PropertyName.ToString()), DelegateProperty))
 		{
 			return nullptr;
@@ -206,8 +206,8 @@ bool FAngelscriptClassReloadHelperPerformReinstanceDelegateDependencyTest::RunTe
 		UseUnrealReloadCVar->Set(0, ECVF_SetByCode);
 	}
 
-	UDelegateFunction* OldDelegate = FindAbilitySystemDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(UAngelscriptAbilitySystemComponent, OnAbilityGiven));
-	UDelegateFunction* NewDelegate = FindAbilitySystemDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(UAngelscriptAbilitySystemComponent, OnAbilityRemoved));
+	UDelegateFunction* OldDelegate = FindActorDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(AActor, OnActorBeginOverlap));
+	UDelegateFunction* NewDelegate = FindActorDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(AActor, OnActorEndOverlap));
 	if (OldDelegate == nullptr || NewDelegate == nullptr)
 	{
 		return false;

@@ -12,7 +12,7 @@
 
 // @DEPRECATED - Part of the deprecated RegisterCallbackForAttribute API. Can remove this after Epic merges the exposed FOnAttributeChanged USTRUCT decorators...
 USTRUCT(BlueprintType)
-struct ANGELSCRIPTRUNTIME_API FAngelscriptModifiedAttribute
+struct ANGELSCRIPTGAS_API FAngelscriptModifiedAttribute
 {
 	GENERATED_BODY()
 
@@ -32,7 +32,7 @@ public:
 
 // It's a shame we have to wrap. But it's not a hot path, and it's better than doing an engine mod. Best would of course be if AS type binds were made aware to UHT so binding worked here.
 USTRUCT(BlueprintType)
-struct ANGELSCRIPTRUNTIME_API FAngelscriptInputBindData
+struct ANGELSCRIPTGAS_API FAngelscriptInputBindData
 {
 	GENERATED_BODY()
 
@@ -71,7 +71,7 @@ public:
 // The RegisterAttributeChangedCallback functions use this as their parameter, not the wrapped one!
 // Since no type checking occurs for delegates, this still works as the base offset of the wrapper and the wrapped are the same.
 USTRUCT(BlueprintType)
-struct ANGELSCRIPTRUNTIME_API FAngelscriptAttributeChangedData
+struct ANGELSCRIPTGAS_API FAngelscriptAttributeChangedData
 {
 	GENERATED_BODY()
 
@@ -171,7 +171,7 @@ private:
 
 //UCLASS(Meta = (ScriptMixin = "FAngelscriptAttributeChangedData"))
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptAttributeChangedDataMixinLibrary : public UObject
+class ANGELSCRIPTGAS_API UAngelscriptAttributeChangedDataMixinLibrary : public UObject
 {
 	GENERATED_BODY()
 
@@ -237,7 +237,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FAttributeSetRegisteredDelegate, cla
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOwnedTagUpdatedDelegate, const FGameplayTag&, Tag, bool, TagExists);
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptAbilitySystemComponent : public UAbilitySystemComponent
+class ANGELSCRIPTGAS_API UAngelscriptAbilitySystemComponent : public UAbilitySystemComponent
 {
 	GENERATED_BODY()
 

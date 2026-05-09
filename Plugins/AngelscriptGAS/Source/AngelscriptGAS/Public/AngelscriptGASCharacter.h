@@ -6,15 +6,15 @@
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
 
-#include "AngelscriptGASPawn.generated.h"
+#include "AngelscriptGASCharacter.generated.h"
 
 UCLASS(abstract, meta = (ChildCanTick))
-class ANGELSCRIPTRUNTIME_API AAngelscriptGASPawn : public APawn, public IAbilitySystemInterface
+class ANGELSCRIPTGAS_API AAngelscriptGASCharacter : public ACharacter, public IAbilitySystemInterface, public IGameplayTagAssetInterface
 {
 	GENERATED_BODY()
 
 public:
-	AAngelscriptGASPawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	AAngelscriptGASCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AbilitySystem")
@@ -22,7 +22,7 @@ public:
 
 public:
 	UFUNCTION(BlueprintImplementableEvent)
-	void SetupPawnInput(class UInputComponent* PlayerInputComponent);
+	void SetupCharacterInput(class UInputComponent* PlayerInputComponent);
 
 	/************************************************************************/
 	/* APawn                                                                */
@@ -35,4 +35,10 @@ public:
 	/************************************************************************/
 public:
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+
+	/************************************************************************/
+	/* IGameplayTagAssetInterface                                           */
+	/************************************************************************/
+public:
+	virtual void GetOwnedGameplayTags(FGameplayTagContainer& TagContainer) const override;
 };

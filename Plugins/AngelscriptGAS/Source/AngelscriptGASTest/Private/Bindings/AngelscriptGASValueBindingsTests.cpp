@@ -2,7 +2,7 @@
 // AngelscriptGASValueBindingsTests.cpp
 //
 // GAS value-type binding null-guard coverage — CQTest refactor. Automation IDs:
-//   Angelscript.TestModule.Bindings.GASValue.FAngelscriptGASValueBindingsTest.*
+//   Angelscript.GAS.Bindings.GASValue.FAngelscriptGASValueBindingsTest.*
 //
 // Sections:
 //   GameplayEffectSpecNullDefGuard   — null UGameplayEffect should raise script exception
@@ -47,7 +47,7 @@ static const FBindingsCoverageProfile GGASValueProfile{
 // ----------------------------------------------------------------------------
 
 TEST_CLASS_WITH_FLAGS(FAngelscriptGASValueBindingsTest,
-	"Angelscript.TestModule.Bindings.GASValue",
+	"Angelscript.GAS.Bindings.GASValue",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 {
 	BEFORE_ALL()

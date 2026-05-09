@@ -42,7 +42,7 @@
 #include "AngelscriptAbilityTaskLibrary.generated.h"
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptAbilityTaskLibrary : public UBlueprintFunctionLibrary
+class ANGELSCRIPTGAS_API UAngelscriptAbilityTaskLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

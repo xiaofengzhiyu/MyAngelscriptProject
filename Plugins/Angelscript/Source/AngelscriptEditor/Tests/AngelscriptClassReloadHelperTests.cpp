@@ -1,7 +1,6 @@
 #include "HotReload/ClassReloadHelper.h"
 
 #include "AngelscriptEngine.h"
-#include "GAS/AngelscriptAbilitySystemComponent.h"
 
 #include "Engine/DataTable.h"
 #include "GameFramework/Actor.h"
@@ -66,10 +65,10 @@ namespace AngelscriptEditor_Private_Tests_AngelscriptClassReloadHelperTests_Priv
 		}
 	}
 
-	UDelegateFunction* FindAbilitySystemDelegateSignature(FAutomationTestBase& Test, const FName PropertyName)
+	UDelegateFunction* FindActorDelegateSignature(FAutomationTestBase& Test, const FName PropertyName)
 	{
 		const FMulticastDelegateProperty* DelegateProperty =
-			FindFProperty<FMulticastDelegateProperty>(UAngelscriptAbilitySystemComponent::StaticClass(), PropertyName);
+			FindFProperty<FMulticastDelegateProperty>(AActor::StaticClass(), PropertyName);
 		if (!Test.TestNotNull(*FString::Printf(TEXT("ClassReloadHelper.ReloadState should find delegate property %s"), *PropertyName.ToString()), DelegateProperty))
 		{
 			return nullptr;
@@ -236,8 +235,8 @@ bool FAngelscriptClassReloadHelperReloadStateTest::RunTest(const FString& Parame
 		FClassReloadHelper::ReloadState() = SavedState;
 	};
 
-	UDelegateFunction* OldDelegate = FindAbilitySystemDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(UAngelscriptAbilitySystemComponent, OnAbilityGiven));
-	UDelegateFunction* NewDelegate = FindAbilitySystemDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(UAngelscriptAbilitySystemComponent, OnAbilityRemoved));
+	UDelegateFunction* OldDelegate = FindActorDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(AActor, OnActorBeginOverlap));
+	UDelegateFunction* NewDelegate = FindActorDelegateSignature(*this, GET_MEMBER_NAME_CHECKED(AActor, OnActorEndOverlap));
 	if (OldDelegate == nullptr || NewDelegate == nullptr)
 	{
 		return false;

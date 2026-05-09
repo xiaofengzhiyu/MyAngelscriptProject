@@ -44,21 +44,21 @@ namespace AngelscriptTestSupport
 		FString Filename;
 	};
 
-	bool CompileModuleWithResult(FAngelscriptEngine* Engine, ECompileType CompileType, FName ModuleName, FString Filename, FString Script, ECompileResult& OutCompileResult);
-	bool CompileModuleWithSummary(FAngelscriptEngine* Engine, ECompileType CompileType, FName ModuleName, FString Filename, FString Script, bool bUsePreprocessor, FAngelscriptCompileTraceSummary& OutSummary, bool bSuppressCompileErrorLogs = false);
-	bool AnalyzeReloadFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script, FAngelscriptClassGenerator::EReloadRequirement& OutReloadRequirement, bool& bOutWantsFullReload, bool& bOutNeedsFullReload);
-	bool CompileModuleFromDiskPath(FAngelscriptEngine* Engine, FName ModuleName, const FString& AbsolutePath);
-	bool CompileModuleFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script);
-	bool CompileAnnotatedModuleFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script);
-	bool GenerateStaticJITSourceText(FAngelscriptEngine* Engine, FName ModuleName, FString& OutSourceText, bool bEmitDebugMetadata, FString* OutError = nullptr);
-	bool SaveAndReloadPrecompiledData(FAngelscriptEngine* Engine, FAngelscriptPrecompiledData& SourceData, const FString& Filename, TUniquePtr<FAngelscriptPrecompiledData>& OutLoadedData, FString* OutError = nullptr);
-	bool ExecuteIntFunction(FAngelscriptEngine* Engine, FString Filename, FName ModuleName, FString Decl, int32& OutResult);
-	bool ExecuteGeneratedIntEventOnGameThread(FAngelscriptEngine* Engine, UObject* Object, UFunction* Function, int32& OutResult);
+	ANGELSCRIPTTEST_API bool CompileModuleWithResult(FAngelscriptEngine* Engine, ECompileType CompileType, FName ModuleName, FString Filename, FString Script, ECompileResult& OutCompileResult);
+	ANGELSCRIPTTEST_API bool CompileModuleWithSummary(FAngelscriptEngine* Engine, ECompileType CompileType, FName ModuleName, FString Filename, FString Script, bool bUsePreprocessor, FAngelscriptCompileTraceSummary& OutSummary, bool bSuppressCompileErrorLogs = false);
+	ANGELSCRIPTTEST_API bool AnalyzeReloadFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script, FAngelscriptClassGenerator::EReloadRequirement& OutReloadRequirement, bool& bOutWantsFullReload, bool& bOutNeedsFullReload);
+	ANGELSCRIPTTEST_API bool CompileModuleFromDiskPath(FAngelscriptEngine* Engine, FName ModuleName, const FString& AbsolutePath);
+	ANGELSCRIPTTEST_API bool CompileModuleFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script);
+	ANGELSCRIPTTEST_API bool CompileAnnotatedModuleFromMemory(FAngelscriptEngine* Engine, FName ModuleName, FString Filename, FString Script);
+	ANGELSCRIPTTEST_API bool GenerateStaticJITSourceText(FAngelscriptEngine* Engine, FName ModuleName, FString& OutSourceText, bool bEmitDebugMetadata, FString* OutError = nullptr);
+	ANGELSCRIPTTEST_API bool SaveAndReloadPrecompiledData(FAngelscriptEngine* Engine, FAngelscriptPrecompiledData& SourceData, const FString& Filename, TUniquePtr<FAngelscriptPrecompiledData>& OutLoadedData, FString* OutError = nullptr);
+	ANGELSCRIPTTEST_API bool ExecuteIntFunction(FAngelscriptEngine* Engine, FString Filename, FName ModuleName, FString Decl, int32& OutResult);
+	ANGELSCRIPTTEST_API bool ExecuteGeneratedIntEventOnGameThread(FAngelscriptEngine* Engine, UObject* Object, UFunction* Function, int32& OutResult);
 	inline bool ExecuteGeneratedIntEventOnGameThread(UObject* Object, UFunction* Function, int32& OutResult)
 	{
 		return ExecuteGeneratedIntEventOnGameThread(FAngelscriptEngine::TryGetCurrentEngine(), Object, Function, OutResult);
 	}
-	bool ExecuteIntFunction(FAngelscriptEngine* Engine, FName ModuleName, FString Decl, int32& OutResult);
-	UClass* FindGeneratedClass(FAngelscriptEngine* Engine, FName ClassName);
-	UFunction* FindGeneratedFunction(UClass* OwnerClass, FName FuncName);
+	ANGELSCRIPTTEST_API bool ExecuteIntFunction(FAngelscriptEngine* Engine, FName ModuleName, FString Decl, int32& OutResult);
+	ANGELSCRIPTTEST_API UClass* FindGeneratedClass(FAngelscriptEngine* Engine, FName ClassName);
+	ANGELSCRIPTTEST_API UFunction* FindGeneratedFunction(UClass* OwnerClass, FName FuncName);
 }

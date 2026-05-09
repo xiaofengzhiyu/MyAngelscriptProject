@@ -1,4 +1,4 @@
-#include "GAS/AngelscriptAbilityAsyncLibrary.h"
+#include "AngelscriptAbilityAsyncLibrary.h"
 #include "AngelscriptBinds.h"
 
 AS_FORCE_LINK const FAngelscriptBinds::FBind Bind_AngelscriptGAS

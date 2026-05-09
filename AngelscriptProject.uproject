@@ -28,6 +28,14 @@
 		{
 			"Name": "PropertyBindingUtils",
 			"Enabled": true
+		},
+		{
+			"Name": "Angelscript",
+			"Enabled": true
+		},
+		{
+			"Name": "AngelscriptGAS",
+			"Enabled": true
 		}
 	]
 }

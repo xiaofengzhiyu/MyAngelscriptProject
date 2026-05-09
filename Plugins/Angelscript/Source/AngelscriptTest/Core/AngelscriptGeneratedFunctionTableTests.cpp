@@ -143,46 +143,6 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGeneratedFunctionTableTests,
 		TestRunner->TestTrue(TEXT("Generated function table startup pass should leave at least one callable generated AActor entry in ClassFuncMaps"), bHasCallableActorEntry);
 	}
 
-	TEST_METHOD(PreservesHandwrittenGASEntries)
-	{
-		using namespace AngelscriptTest_Core_AngelscriptGeneratedFunctionTableTests_Private;
-		if (!FAngelscriptEngine::IsInitialized()) { TestRunner->AddInfo(TEXT("Production engine not initialized in headless mode, skipping")); return; }
-
-		UClass* AbilityAsyncLibraryClass = FindObject<UClass>(nullptr, TEXT("/Script/AngelscriptRuntime.AngelscriptAbilityAsyncLibrary"));
-		if (!TestRunner->TestNotNull(TEXT("Generated GAS compatibility test should locate UAngelscriptAbilityAsyncLibrary"), AbilityAsyncLibraryClass))
-		{
-			return;
-		}
-
-		const TMap<UClass*, TMap<FString, FFuncEntry>>& ClassFuncMaps = FAngelscriptBinds::GetClassFuncMaps();
-		const TMap<FString, FFuncEntry>* AsyncLibraryFunctionMap = ClassFuncMaps.Find(AbilityAsyncLibraryClass);
-		if (!TestRunner->TestNotNull(TEXT("Generated GAS compatibility test should expose the async ability helper class in ClassFuncMaps"), AsyncLibraryFunctionMap))
-		{
-			return;
-		}
-
-		const FFuncEntry* WaitForAttributeChangedEntry = AsyncLibraryFunctionMap->Find(TEXT("WaitForAttributeChanged"));
-		if (!TestRunner->TestNotNull(TEXT("Generated GAS compatibility test should keep the handwritten WaitForAttributeChanged function entry"), WaitForAttributeChangedEntry))
-		{
-			return;
-		}
-
-		FGenericFuncPtr WaitForAttributeChangedPointer = WaitForAttributeChangedEntry->FuncPtr;
-		if (!TestRunner->TestTrue(TEXT("Generated GAS compatibility test should preserve the handwritten direct-call pointer for WaitForAttributeChanged"), WaitForAttributeChangedPointer.IsBound()))
-		{
-			return;
-		}
-
-		const FFuncEntry* WaitGameplayTagRemoveEntry = AsyncLibraryFunctionMap->Find(TEXT("WaitGameplayTagRemoveFromActor"));
-		if (!TestRunner->TestNotNull(TEXT("Generated GAS compatibility test should expose WaitGameplayTagRemoveFromActor under its own key"), WaitGameplayTagRemoveEntry))
-		{
-			return;
-		}
-
-		FGenericFuncPtr WaitGameplayTagRemovePointer = WaitGameplayTagRemoveEntry->FuncPtr;
-		TestRunner->TestTrue(TEXT("Generated GAS compatibility test should keep WaitGameplayTagRemoveFromActor bound after handwritten registration"), WaitGameplayTagRemovePointer.IsBound());
-	}
-
 	TEST_METHOD(EditorOutputsUseWithEditorGuard)
 	{
 		using namespace AngelscriptTest_Core_AngelscriptGeneratedFunctionTableTests_Private;
@@ -254,7 +214,6 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGeneratedFunctionTableTests,
 			{ TEXT("/Script/Engine.KismetSystemLibrary"), TEXT("UKismetSystemLibrary") },
 			{ TEXT("/Script/UMG.UserWidget"), TEXT("UUserWidget") },
 			{ TEXT("/Script/AssetRegistry.AssetRegistryHelpers"), TEXT("UAssetRegistryHelpers") },
-			{ TEXT("/Script/AngelscriptRuntime.AngelscriptAbilityAsyncLibrary"), TEXT("UAngelscriptAbilityAsyncLibrary") },
 		};
 
 		for (const FRepresentativeClassExpectation& Expectation : Expectations)
@@ -382,31 +341,7 @@ TEST_CLASS_WITH_FLAGS(FAngelscriptGeneratedFunctionTableTests,
 			return;
 		}
 
-		UClass* AbilityAsyncLibraryClass = FindObject<UClass>(nullptr, TEXT("/Script/AngelscriptRuntime.AngelscriptAbilityAsyncLibrary"));
-		if (!TestRunner->TestNotNull(TEXT("Generated reflective fallback stats test should locate UAngelscriptAbilityAsyncLibrary"), AbilityAsyncLibraryClass))
-		{
-			return;
-		}
-
-		const TMap<FString, FFuncEntry>* AsyncLibraryFunctionMap = ClassFuncMaps.Find(AbilityAsyncLibraryClass);
-		if (!TestRunner->TestNotNull(TEXT("Generated reflective fallback stats test should expose handwritten GAS entries in ClassFuncMaps"), AsyncLibraryFunctionMap))
-		{
-			return;
-		}
-
-		const FFuncEntry* WaitForAttributeChangedEntry = AsyncLibraryFunctionMap->Find(TEXT("WaitForAttributeChanged"));
-		if (!TestRunner->TestNotNull(TEXT("Generated reflective fallback stats test should keep WaitForAttributeChanged present"), WaitForAttributeChangedEntry))
-		{
-			return;
-		}
-
-		FGenericFuncPtr WaitForAttributeChangedPointer = WaitForAttributeChangedEntry->FuncPtr;
-		if (!TestRunner->TestTrue(TEXT("Generated reflective fallback stats test should keep handwritten GAS entries on the direct path"), WaitForAttributeChangedPointer.IsBound()))
-		{
-			return;
-		}
-
-		TestRunner->TestTrue(TEXT("Generated reflective fallback stats test should not reclassify handwritten GAS entries as reflective fallback"), !WaitForAttributeChangedEntry->bReflectiveFallbackBound);
+		TestRunner->AddInfo(TEXT("Generated function table stats verified for main Angelscript modules; GAS handwritten entries are covered by AngelscriptGASTest."));
 	}
 
 	TEST_METHOD(SummaryOutput)

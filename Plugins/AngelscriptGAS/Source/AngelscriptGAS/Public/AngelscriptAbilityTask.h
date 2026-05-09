@@ -7,7 +7,7 @@
 #include "AngelscriptAbilityTask.generated.h"
 
 UCLASS()
-class ANGELSCRIPTRUNTIME_API UAngelscriptAbilityTask : public UAbilityTask
+class ANGELSCRIPTGAS_API UAngelscriptAbilityTask : public UAbilityTask
 {
 	GENERATED_BODY()
 
