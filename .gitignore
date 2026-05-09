@@ -111,7 +111,7 @@ DerivedDataCache/*
 .claude-internal/
 
 # Codex local config (machine-specific MCP paths)
-.codex/config.toml
+.codex/
 
 # Local git worktrees
 .worktrees/
