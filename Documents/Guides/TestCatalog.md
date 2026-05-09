@@ -47,6 +47,7 @@
   - [12.1 Actor 生命周期](#121-actor-生命周期)
   - [12.2 Actor 交互](#122-actor-交互)
   - [12.3 Actor 属性](#123-actor-属性)
+  - [12.3.5 Actor 组件管理](#1235-actor-组件管理)
   - [12.4 ScriptClass 创建](#124-scriptclass-创建)
   - [12.5 ScriptActor 重载执行](#125-scriptactor-重载执行)
   - [12.6 BlueprintSubclass 蓝图子类化](#126-blueprintsubclass-蓝图子类化)
@@ -786,6 +787,21 @@
 | Actor.UFunction | `GetHealth` 经 `ExecuteGeneratedIntEventOnGameThread` 返回与 `Health` 一致（100） |
 | Actor.DefaultValues | `default PrimaryActorTick.TickInterval = 0.5f` 生效 |
 
+### 12.3.5 Actor 组件管理
+
+> 源文件：`Actor/AngelscriptActorComponentTests.cpp`、`Actor/AngelscriptActorComponentManagementTests.cpp`
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| Actor.Component.CreateComponent | `CreateComponent` 从脚本创建并注册组件，随后可通过组件枚举查到 |
+| Actor.Component.GetComponent | `GetComponent` 能按 class/name 查找，缺失类型返回 null |
+| Actor.Component.GetOrCreateComponent | `GetOrCreateComponent` 首次创建、同名再次调用复用实例 |
+| Actor.Component.GetAllComponents | `GetAllComponents` 按 class/subclass 过滤返回正确数量 |
+| Actor.Component.Management.CreateSceneComponentsRegistersRootAndAttachment | 动态创建的第一个 `USceneComponent` 成为 root，第二个自动 attach 到 root，二者 owner/registered 状态正确 |
+| Actor.Component.Management.StaticTypedAccessorsCreateGetAndReuse | 预处理器生成的 `UComponent::Create/Get/GetOrCreate` typed 入口创建、查找并复用同一个组件实例 |
+| Actor.Component.Management.NameAndClassFilteringAreStrict | `GetComponent` 同时要求名称与 class 匹配，类型不匹配或缺失名称返回 null |
+| Actor.Component.Management.GetAllComponentsFiltersSubclassesAndAppends | `GetAllComponents` 覆盖 subclass 过滤，并确认当前 API 语义为 append 到输出数组 |
+
 ### 12.4 ScriptClass 创建
 
 > 源文件：`ClassGenerator/AngelscriptScriptClassCreationTests.cpp`
@@ -855,15 +871,23 @@
 | Component.Tick | 启用组件 Tick 后多次世界 tick，`TickCount` ≥ 5 |
 | Component.ReceiveEndPlay | 宿主 Actor 销毁后组件 `EndPlay` 将 `bCleanedUp` 置 true |
 | Component.ActorOwner | 组件 `BeginPlay` 中 `Cast` 宿主脚本 Actor 并读取 `OwnerValue` 为 42 |
+| Component.LifecycleExtended.HasBegunPlayTransitionsInWorld | 脚本组件 BeginPlay 前后 `HasBegunPlay()` 状态转换正确，且 BeginPlay 中可读 owner |
+| Component.LifecycleExtended.ComponentTickDispatchIsExact | `DispatchComponentTick` 精确派发 N 次，脚本组件 `TickCount == N` |
+| Component.LifecycleExtended.DestroyComponentUnregistersRuntimeComponent | 脚本调用 `DestroyComponent()` 后组件进入 destroying 且 unregister |
+| Component.LifecycleExtended.EndPlayReceivesDestroyedReason | 宿主 Actor 销毁时组件 `EndPlay` 调用一次并收到 `EEndPlayReason::Destroyed` |
 
 ### 12.9 DefaultComponent 默认组件
 
-> 源文件：`Component/AngelscriptComponentTests.cpp`
+> 源文件：`Component/AngelscriptComponentTests.cpp`、`Component/AngelscriptComponentLifecycleExtendedTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
 | DefaultComponent.Basic | `DefaultComponent`+`RootComponent` 生成正确类型的根组件 |
 | DefaultComponent.Multiple | 根 Scene + 子 Billboard 默认组件存在且父子附着关系正确 |
+| DefaultComponent.Extended.DefaultComponentPropertiesPointToInstances | `DefaultComponent` 属性指针指向实际实例，root/child 附着、名称和 creation method 正确 |
+| DefaultComponent.Extended.AttachSocketPersistsAtRuntime | `AttachSocket` metadata 进入运行时 `GetAttachSocketName()` |
+| DefaultComponent.Extended.OverrideComponentMaterializesReplacement | 子类 `OverrideComponent` 用替换类型 materialize 基类组件，并保持基类组件名和附着关系 |
+| DefaultComponent.Extended.NativeActorExtraComponentAttachesToInheritedRoot | 脚本继承 native actor 时额外默认组件 attach 到 inherited root，不替换 native root |
 
 ### 12.10 Inheritance 继承场景
 
