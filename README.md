@@ -282,6 +282,5 @@ Tools\PullReference\PullReference.bat <name>
 
 ## 联系与反馈
 
-- 仓库 Issue / MR：通过工蜂内部仓库提交
 - 项目状态分析：`Documents/ProjectStatusAnalysis.md`
 - 当前优先级路线图：`Documents/Plans/Plan_StatusPriorityRoadmap.md`
