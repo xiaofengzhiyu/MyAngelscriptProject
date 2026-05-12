@@ -1123,6 +1123,7 @@
 | `Angelscript.TestModule.Core.Performance.ArtifactGeneration` | metrics.json 与目录结构落盘验证 |
 | `Angelscript.TestModule.CppTests.CodeCoverage.HtmlReport.Generation` | 报告产物写出能力邻近回归 |
 | `Angelscript.TestModule.CppTests.StaticJIT.PrecompiledData.*` | 预编译数据产物与 round-trip 稳定性 |
+| `Angelscript.TestModule.StaticJIT.AOT.*` | StaticJIT AOT 生成物 verify、生成 C++ 注册、`jitFunction` 附着、`Context->Execute()` 进入生成入口、多 engine 顺序加载诊断 |
 
 ### 15.6 Performance — 运行期微基准
 

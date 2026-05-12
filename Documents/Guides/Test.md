@@ -220,6 +220,20 @@ D:\Tmp\TestRuns\Tests\<Label>\<RunId>\
 3. 需要 world / actor / subsystem 的集成回归：`AngelscriptFunctional`
 4. 编辑器相关：`AngelscriptEditor`
 
+### Commandlet 相关回归
+
+本仓库的标准 commandlet 入口是 `Tools\RunCommandlet.ps1`。需要跑项目 commandlet 时，优先使用这个 runner，让 `AgentConfig.ini`、日志路径、超时和 worktree 单飞锁保持一致。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunCommandlet.ps1 -Commandlet AngelscriptBlueprintImpactScan -Label blueprint-impact-scan -TimeoutMs 600000
+```
+
+额外 commandlet 参数通过 `-ExtraArgs` 传入：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunCommandlet.ps1 -Commandlet AngelscriptBlueprintImpactScan -Label blueprint-impact-changed -TimeoutMs 600000 -ExtraArgs "-ChangedScript=Foo.as;Bar.as"
+```
+
 ### Blueprint impact commandlet 相关回归
 
 新增 Blueprint impact 相关功能后，优先使用以下入口：
@@ -239,11 +253,29 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -Test
 - commandlet 手工验证：
 
 ```powershell
-J:\UnrealEngine\UERelease\Engine\Binaries\Win64\UnrealEditor-Cmd.exe <ProjectFile> -run=AngelscriptBlueprintImpactScan -stdout -FullStdOutLogOutput -Unattended -NoPause -NoSplash -NullRHI
-J:\UnrealEngine\UERelease\Engine\Binaries\Win64\UnrealEditor-Cmd.exe <ProjectFile> -run=AngelscriptBlueprintImpactScan -ChangedScript="Foo.as;Bar.as" -stdout -FullStdOutLogOutput -Unattended -NoPause -NoSplash -NullRHI
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunCommandlet.ps1 -Commandlet AngelscriptBlueprintImpactScan -Label blueprint-impact-scan -TimeoutMs 600000
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunCommandlet.ps1 -Commandlet AngelscriptBlueprintImpactScan -Label blueprint-impact-changed -TimeoutMs 600000 -ExtraArgs "-ChangedScript=Foo.as;Bar.as"
 ```
 
-其中 `<ProjectFile>` 应由当前 worktree 的 `AgentConfig.ini` 提供，不要在常规执行说明里写死其他 worktree 的 `.uproject` 路径。
+`Tools\RunCommandlet.ps1` 会从当前 worktree 的 `AgentConfig.ini` 读取 `<ProjectFile>`，不要在常规执行说明里写死其他 worktree 的 `.uproject` 路径。
+
+### StaticJIT AOT 相关回归
+
+StaticJIT AOT 测试验证的是“生成 C++ → 二次构建 → 运行时注册和执行”整条链路。标准流程固定为：
+
+1. 先构建一次，让 AOT commandlet 与生成 helper 进入 `AngelscriptTest` 模块。
+2. 运行 `AngelscriptStaticJITAotTest` commandlet 的 `Generate` 模式，更新 `Plugins/Angelscript/Source/AngelscriptTest/StaticJIT/AOT/Generated/` 下的 `.jit.cpp`、`.jit.hpp`，并在同目录生成本地 `StaticJITAotFixture.Cache`。
+3. 再构建一次，让 UBT 自动发现并编译生成的 `.jit.cpp` 文件。
+4. 运行 `Angelscript.TestModule.StaticJIT.AOT` 或更宽的 `Angelscript.TestModule.StaticJIT` 前缀。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label staticjit-aot-build -TimeoutMs 180000
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunCommandlet.ps1 -Commandlet AngelscriptStaticJITAotTest -Label staticjit-aot-generate -TimeoutMs 600000 -ExtraArgs "-Mode=Generate"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label staticjit-aot-generated -TimeoutMs 180000
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.StaticJIT.AOT" -Label staticjit-aot -TimeoutMs 600000
+```
+
+生成物校验由 `Angelscript.TestModule.StaticJIT.AOT.GeneratedOutputVerify` 覆盖：源码文本严格比对；`StaticJITAotFixture.Cache` 是本地生成产物，不提交到 git，但测试会要求它存在，并按 fixture GUID、build id、模块与函数元数据做语义校验。cache 内部保存旧指针引用，因此不能用裸文件 hash 作为 stale 判断依据。fresh checkout 后需要先执行 generate -> rebuild -> test 流程，不能直接只跑 AOT runtime 测试。
 
 常用具名 suite 以 `Tools\RunTestSuite.ps1 -ListSuites` 的输出为准，当前重点包括：
 

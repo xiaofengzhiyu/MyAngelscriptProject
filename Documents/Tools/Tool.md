@@ -2,12 +2,13 @@
 
 ## 官方入口
 
-标准入口只保留四类：
+标准入口只保留五类：
 
 - `Tools\Bootstrap\BootstrapWorktree.bat`：初始化或规范化当前 worktree 的 `AgentConfig.ini`
 - `Tools\Diagnostics\ResolveAgentCommandTemplates.bat`：生成给 AI Agent/脚本使用的官方命令模板
 - `Tools\RunBuild.ps1`：标准构建入口
 - `Tools\RunTests.ps1` / `Tools\RunTestSuite.ps1`：标准自动化测试入口
+- `Tools\RunCommandlet.ps1`：标准 commandlet 入口
 
 其它脚本只承担诊断、摘要、兼容或自测职责，不应在新文档中取代官方入口。
 
@@ -20,6 +21,7 @@
 | RunBuild | `Tools\RunBuild.ps1` | 标准 UBT 构建入口，支持多 worktree 并发与引擎级串行锁 | `Tools\RunBuild.ps1 -Label agent-build -TimeoutMs 180000` | `Saved/Build/<Label>/<RunId>/` | 自动写 `Build.log`、`UBT.log` 与 `RunMetadata.json`；内建 `-NoXGE`，并显式禁止 `-UniqueBuildEnvironment` |
 | RunTests | `Tools\RunTests.ps1` | 标准自动化测试入口，负责日志、报告、摘要与超时清理 | `Tools\RunTests.ps1 -Group AngelscriptSmoke -Label smoke -TimeoutMs 600000` | `Saved/Tests/<Label>/<RunId>/` | 自动写 `Automation.log`、`Report/`、`Summary.json` |
 | RunTestSuite | `Tools\RunTestSuite.ps1` | 按具名 suite 顺序执行一组标准测试前缀 | `Tools\RunTestSuite.ps1 -Suite Smoke -LabelPrefix smoke -TimeoutMs 600000` | 多个 `Saved/Tests/<Label>/<RunId>/` 子目录 | 只做调度，底层仍调用 `RunTests.ps1` |
+| RunCommandlet | `Tools\RunCommandlet.ps1` | 标准 commandlet 入口，负责配置解析、日志、超时与进程树清理 | `Tools\RunCommandlet.ps1 -Commandlet AngelscriptStaticJITAotTest -Label staticjit-aot-generate -TimeoutMs 600000 -ExtraArgs "-Mode=Generate"` | `Saved/Commandlet/<Label>/<RunId>/` | 用于生成类 commandlet 和手工 commandlet 验证；不要手写 `UnrealEditor-Cmd.exe` |
 | Get-UbtProcess | `Tools\Diagnostics\powershell\Get-UbtProcess.ps1` | 枚举本机 UBT / `Build.bat` / `RunUBT.bat` 相关进程，帮助排查争用 | `Tools\Diagnostics\Get-UbtProcess.bat -CurrentWorktreeOnly` | 控制台列表 | 用于定位旧流程或残留进程 |
 | GetAutomationReportSummary | `Tools\GetAutomationReportSummary.ps1` | 根据 `Report/` 与 `Automation.log` 生成轻量摘要 | `Tools\GetAutomationReportSummary.ps1 -ReportPath <dir> -LogPath <log>` | `Summary.json` 或 stdout 对象 | 用于识别假绿与失败详情 |
 | PullReference | `Tools\PullReference\PullReference.bat` | 拉取或同步参考仓库 | `Tools\PullReference\PullReference.bat angelscript` / `hazelightdocs` / `unrealcsharp` / `unlua` / `puerts` / `sluaunreal` | `Reference\...` | 不参与默认 build/test 流程 |
@@ -120,6 +122,23 @@ Tools\RunBuild.ps1 -Label noxge -TimeoutMs 180000 -NoXGE
 Tools\RunTests.ps1 -Group AngelscriptSmoke -Label smoke -TimeoutMs 600000
 Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Bindings." -Label bindings -TimeoutMs 600000
 Tools\RunTests.ps1 -Group AngelscriptFunctional -Label functional -TimeoutMs 900000 -Render
+```
+
+## RunCommandlet.ps1
+
+| 项目 | 说明 |
+| --- | --- |
+| 工具路径 | `Tools\RunCommandlet.ps1` |
+| 主要用途 | 通过当前 worktree 的 `AgentConfig.ini` 执行项目 commandlet |
+| 关键参数 | `-Commandlet`、`-Label`、`-OutputRoot`、`-TimeoutMs`、`-Render`、`-ExtraArgs` |
+| 默认输出 | `Saved/Commandlet/<Label>/<RunId>/Commandlet.log`、`RunMetadata.json` |
+| 关键保护 | `TargetInfo.json` 预热、旧 `Build.bat` 锁防御等待、worktree 单飞锁、超时后清理进程树 |
+
+示例：
+
+```powershell
+Tools\RunCommandlet.ps1 -Commandlet AngelscriptStaticJITAotTest -Label staticjit-aot-generate -TimeoutMs 600000 -ExtraArgs "-Mode=Generate"
+Tools\RunCommandlet.ps1 -Commandlet AngelscriptBlueprintImpactScan -Label blueprint-impact-scan -TimeoutMs 600000
 ```
 
 ## RunTestSuite.ps1
