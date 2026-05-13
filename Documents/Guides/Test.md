@@ -210,7 +210,6 @@ D:\Tmp\TestRuns\Tests\<Label>\<RunId>\
 - `AngelscriptFast`
 - `AngelscriptFunctional`
 - `AngelscriptEditor`
-- `AngelscriptExamples`
 
 常用 suite 以 `Tools\RunTestSuite.ps1 -ListSuites` 输出为准，当前重点包括：
 推荐顺序：

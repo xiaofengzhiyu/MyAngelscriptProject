@@ -333,7 +333,6 @@ RuntimeFloatCurve_.Method(
 
 | Automation | 文件 | 验证内容 |
 |---|---|---|
-| `Angelscript.TestModule.ScriptExamples.MixinMethods` | `Examples/AngelscriptScriptExampleMixinMethodsTest.cpp` | `Example_MixinMethods.as` 完整编译通过 |
 | `Angelscript.TestModule.AngelScriptSDK.ASSDK.OOP.MixinNamespace` | `AngelScriptSDK/AngelscriptASSDKOOPTests.cpp` | ASSDK 风格 native 直测：`mixin void AddToCounter(Counter& Self, int Delta)` 编译 + 运行结果断言 |
 | `Angelscript.TestModule.Angelscript.Inheritance.Mixin` | `Angelscript/AngelscriptInheritanceTests.cpp` | **负向**断言 `mixin class SharedValueMixin {}` 编译失败，守住 fork 不接受 `mixin class` 这条边界 |
 
