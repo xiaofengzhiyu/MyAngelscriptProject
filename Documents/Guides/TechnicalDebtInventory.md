@@ -125,8 +125,8 @@
 - `Angelscript.TestModule.Editor.SourceNavigation.Functions`
   - 失败摘要：`Unable to open script file .../Saved/Automation/Automation/RuntimeFunctionNavigationTest.as`，随后 `Generated function navigation class should exist` 断言失败。
   - 归因判断：属于 editor/source-navigation 测试文件生成或清理路径问题，与 `BlueprintEvent`、`DebugServer`、`StaticJIT` 修复面无直接交集。
-- `Angelscript.TestModule.ScriptExamples.Actor`
-  - 失败摘要：`Cannot declare class AExampleActorType in module ScriptExamples.Example_Actor. A class with this name already exists in module Example_Actor.`
+- retired example-layer actor case
+  - 失败摘要：示例 Actor 模块命名冲突，`AExampleActorType` 已在另一个模块中存在。
   - 归因判断：属于 script example 模块命名 / 清理冲突，未触及本轮 `P1` 改动面。
 
 ## 10. Phase 2 验证快照
@@ -149,8 +149,8 @@
 - `Angelscript.TestModule.Editor.SourceNavigation.Functions`
   - 失败摘要：`Unable to open script file .../Saved/Automation/Automation/RuntimeFunctionNavigationTest.as`，随后 `Generated function navigation class should exist` 断言失败。
   - 归因判断：editor/source-navigation 测试文件生成或清理路径问题，未触及 `P2` 的 ThirdParty hash / StaticJIT 警告压制 / Restore 负向覆盖改动面。
-- `Angelscript.TestModule.ScriptExamples.Actor`
-  - 失败摘要：`Cannot declare class AExampleActorType in module ScriptExamples.Example_Actor. A class with this name already exists in module Example_Actor.`
+- retired example-layer actor case
+  - 失败摘要：示例 Actor 模块命名冲突，`AExampleActorType` 已在另一个模块中存在。
   - 归因判断：script example 模块命名或清理冲突，未触及本轮 `P2` 改动面。
 
 ## 11. Phase 3 验证快照
@@ -160,7 +160,7 @@
   - `Angelscript.TestModule.Shared.EngineHelper`：PASS
   - `Angelscript.TestModule.AngelScriptSDK.Restore.*`：PASS
 - `P3.3` 主题化集成 focused regression：`Actor`、`BlueprintChild`、`Component`、`Delegate`、`GC`、`HotReload`、`Inheritance`、`Interface`、`WorldSubsystem`、`ClassGenerator`：PASS（已知旧失败项未增加）。
-- `P3.4` 行为 / Bindings / FileSystem / Editor / ScriptExamples focused regression：helper 改名未新增失败；仍保留与此前一致的 4 个已知失败项。
+- `P3.4` 行为 / Bindings / FileSystem / Editor / retired example-layer focused regression：helper 改名未新增失败；仍保留与此前一致的 4 个已知失败项。
 - `Automation RunTests Angelscript.TestModule` 全量回归结果：**仍未全绿**，失败项与 Phase 2 结束时一致，没有新增 helper 命名迁移相关失败。
 
 ### Phase 3 完成后的 full-suite 保留失败项（2026-04-03）
@@ -174,8 +174,8 @@
 - `Angelscript.TestModule.Editor.SourceNavigation.Functions`
   - 失败摘要：`Unable to open script file .../Saved/Automation/Automation/RuntimeFunctionNavigationTest.as`，随后 `Generated function navigation class should exist` 断言失败。
   - 归因判断：editor/source-navigation 测试文件生成或清理路径问题，helper 命名迁移未触及该路径。
-- `Angelscript.TestModule.ScriptExamples.Actor`
-  - 失败摘要：`Cannot declare class AExampleActorType in module ScriptExamples.Example_Actor. A class with this name already exists in module Example_Actor.`
+- retired example-layer actor case
+  - 失败摘要：示例 Actor 模块命名冲突，`AExampleActorType` 已在另一个模块中存在。
   - 归因判断：script example 模块命名或清理冲突，helper 命名迁移未触及该路径。
 
 ## 12. Phase 4 验证快照
@@ -230,8 +230,8 @@
   - `Angelscript.TestModule.Editor.SourceNavigation.Functions`
     - 失败摘要：`Unable to open script file .../Saved/Automation/Automation/RuntimeFunctionNavigationTest.as`，随后 `Generated function navigation class should exist` 断言失败。
     - 证据：`Saved/Logs/AngelscriptProject.log:4784`。
-  - `Angelscript.TestModule.ScriptExamples.Actor`
-    - 失败摘要：`Cannot declare class AExampleActorType in module ScriptExamples.Example_Actor. A class with this name already exists in module Example_Actor.`
+  - retired example-layer actor case
+    - 失败摘要：示例 Actor 模块命名冲突，`AExampleActorType` 已在另一个模块中存在。
     - 证据：`Saved/Logs/AngelscriptProject.log:7225`。
 - 结论：`P6` 最终回归确认本轮技术债关闭工作没有引入新的 full-suite 回归；剩余失败项继续作为独立测试输入 / 路径 / 示例模块冲突问题保留，不回退为本计划中的开放技术债。
 
@@ -250,7 +250,7 @@
 - 背景：`Plan_TestEngineIsolation.md` 重构引入了 `FAngelscriptEngineScope` 机制和共享测试引擎 scope 自动管理，同时修复了 `asCScriptEngine::~asCScriptEngine()` 析构循环中的 TOCTOU bug。
 - 全量回归：`Automation RunTests Angelscript.TestModule`，443 测试中 **436 通过 / 7 失败 / 0 跳过**，无崩溃。
 - 相比 Phase 6.3 的 4 个已知失败，本轮变化：
-  - **已修复**：`NativeScriptHotReload.Phase2A`、`Phase2B`、`Editor.SourceNavigation.Functions`、`ScriptExamples.Actor`（这 4 个之前的失败已在中间迭代中修复或不再复现）
+  - **已修复**：`NativeScriptHotReload.Phase2A`、`Phase2B`、`Editor.SourceNavigation.Functions`、retired example-layer actor case（这 4 个之前的失败已在中间迭代中修复或不再复现）
   - **新增 7 个已知失败**：均为功能待补齐或测试 expectation 问题，非 crash 或回归
 
 ### 已知失败项清单

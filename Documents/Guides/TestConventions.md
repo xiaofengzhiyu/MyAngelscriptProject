@@ -22,7 +22,6 @@
 | UE 功能测试层 | `Plugins/Angelscript/Source/AngelscriptTest/Actor/`、`Blueprint/`、`Component/`、`Delegate/`、`GC/`、`HotReload/`、`Interface/`、`Subsystem/` 等 | `Angelscript.TestModule.<Theme>.*` | 在 UObject / World / Actor / Component / HotReload 语义中验证最终行为 | `Shared/AngelscriptFunctionalTestUtils.h` + `Shared/AngelscriptTestWorld.h`（actor / world tick / 完整生命周期） |
 | Learning | `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/`、`Learning/Runtime/` | `Angelscript.TestModule.Learning.<Layer>.*` | 结构化 trace / 教学型可观测测试 | `Shared/AngelscriptLearningTrace.*` |
 | Bindings Coverage (CQTest) | `Plugins/Angelscript/Source/AngelscriptTest/Bindings/` | `Angelscript.TestModule.Bindings.<Type>.*` | 按类型的绑定覆盖，CQTest `TEST_CLASS_WITH_FLAGS` + `BEFORE_ALL/AFTER_ALL` + `FCoverageModuleScope` RAII | `CQTest.h` + `Bindings/Shared/AngelscriptBindings*.h` |
-| Examples | `Plugins/Angelscript/Source/AngelscriptTest/Examples/` | `Angelscript.TestModule.ScriptExamples.*` | 示例脚本的编译/行为验证 | 示例脚本夹具 |
 
 ### 2. 文件命名规则
 
@@ -77,7 +76,6 @@
 
 以下前缀是当前项目已经大面积使用、且对外可见性较强的历史前缀，本轮不强制整体改名，但后续新增 case 仍需沿用其现有家族：
 
-- `Angelscript.TestModule.ScriptExamples.*`
 - `Angelscript.TestModule.WorldSubsystem.*`
 - `Angelscript.TestModule.GameInstanceSubsystem.*`
 
@@ -143,5 +141,5 @@
 2. **把规范写成文档**：由这份文档统一说明层级、命名和典型场景。
 3. **修正典型命名异常**：优先处理 ASSDK Native 文件名和缺少 `Angelscript` 前缀的 Preprocessor 测试文件。
 
-更大范围的批量重命名（例如 `ScriptExamples`、`WorldSubsystem`、`GameInstanceSubsystem` 这类历史前缀）仍保持兼容优先，后续若要整体改，需要单独计划、分批迁移、并同步更新回归入口与文档。
+更大范围的批量重命名（例如 `WorldSubsystem`、`GameInstanceSubsystem` 这类历史前缀）仍保持兼容优先，后续若要整体改，需要单独计划、分批迁移、并同步更新回归入口与文档。
 
