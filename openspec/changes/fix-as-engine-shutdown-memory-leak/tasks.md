@@ -3,47 +3,52 @@
 ### 1. Shutdown 路径 UASClass RemoveFromRoot <!-- Non-TDD -->
 
 - **File**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`
-- **Change**: 在 `Shutdown()` 的 UASClass 清理循环（line ~1590-1608）中追加 `ASClass->RemoveFromRoot()` + `ASClass->ClearFlags(RF_Standalone)`
-- **Verification**: `Tools\RunBuild.ps1 -Target AngelscriptProject -Config Development -Platform Win64`
-- [ ] 完成
+- **Change**: 在 `Shutdown()` 的 UASClass 清理循环中追加 `ASClass->RemoveFromRoot()` + `ASClass->ClearFlags(RF_Standalone)`
+- **Verification**: 编译通过
+- [x] 完成
 
 ### 2. Shutdown 路径 UASStruct/UDelegateFunction/UUserDefinedEnum RemoveFromRoot <!-- Non-TDD -->
 
 - **File**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`
-- **Change**: 在 Shutdown UASClass 循环后，增加对 AngelscriptPackage 内 UASStruct、UDelegateFunction、UUserDefinedEnum 的遍历，调用 `RemoveFromRoot()` + `ClearFlags(RF_Standalone)`
-- **Verification**: `Tools\RunBuild.ps1 -Target AngelscriptProject -Config Development -Platform Win64`
-- [ ] 完成
+- **Change**: 在 Shutdown UASClass 循环后，增加 `ForEachObjectWithPackage` 遍历 AngelscriptPackage 内所有相关类型，调用 `RemoveFromRoot()` + `ClearFlags(RF_Standalone)`
+- **Verification**: 编译通过
+- [x] 完成
 
 ### 3. GBlueprintEventsByScriptName Shutdown 清理 <!-- Non-TDD -->
 
 - **File**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`
-- **Change**: 在 `ReleaseOwnedSharedStateResources()` 末尾 `extern` 引用并 `Empty()` 该全局容器
+- **Change**: 在 `ReleaseOwnedSharedStateResources()` 中 `extern` 引用并 `Empty()`
 - **Verification**: 编译通过
-- [ ] 完成
+- [x] 完成
 
-### 4. AngelscriptGameplayTagsLookup Shutdown 清理 <!-- Non-TDD -->
+### 4. AngelscriptGameplayTagsLookup — 保留不清理 <!-- Non-TDD -->
 
-- **File**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`
-- **Change**: 在 `ReleaseOwnedSharedStateResources()` 末尾 `extern` 引用并 `Empty()` 该全局容器
-- **Verification**: 编译通过
-- [ ] 完成
+- **决策变更**: 原计划清理，实施后触发 `GameplayTagNamespaceGlobals` 测试回归（`asNAME_TAKEN`）。分析确认 UE GameplayTag 注册是进程级不可逆操作，此 TSet 作为重复注册 guard 必须跨引擎周期保留。已移除 `Empty()` 调用并添加注释说明。
+- [x] 完成（不清理）
 
 ### 5. CachedEditorClasses 重置 <!-- Non-TDD -->
 
 - **File**: `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/Bind_BlueprintType.cpp`
-- **Change**: 在 `IsEditorOnlyClass` 函数的 static TMap 改为可通过外部调用清理（添加清理函数），或在 bind 入口 `#if WITH_EDITOR` 块中 `Reset()`
+- **Change**: 将 `IsEditorOnlyClass` 函数内 `static TMap` 提升为文件作用域 `GCachedEditorClasses`，新增 `ResetCachedEditorClasses()` 暴露清理入口，在 `ReleaseOwnedSharedStateResources()` 中 `#if WITH_EDITOR` 调用
 - **Verification**: 编译通过
-- [ ] 完成
+- [x] 完成
 
-### 6. 编译验证 <!-- Non-TDD -->
+### 6. Package unroot <!-- Non-TDD -->
 
-- **Verification**: `Tools\RunBuild.ps1 -Target AngelscriptProject -Config Development -Platform Win64`
-- [ ] 完成
+- **File**: `Plugins/Angelscript/Source/AngelscriptRuntime/Core/AngelscriptEngine.cpp`
+- **Change**: Shutdown 末尾对 `AngelscriptPackage` 和 `AssetsPackage` 调用 `RemoveFromRoot()` + `ClearFlags(RF_Standalone)`
+- **Verification**: 编译通过
+- [x] 完成
 
-### 7. 运行 GC 主题测试验证 <!-- Non-TDD -->
+### 7. 编译验证 <!-- Non-TDD -->
 
-- **Verification**: `Tools\RunTests.ps1 -Group GC -TimeoutMs 300000`
-- [ ] 完成
+- **Verification**: `Build.bat AngelscriptProjectEditor Win64 Development` — 成功
+- [x] 完成
+
+### 8. 运行测试回归验证 <!-- Non-TDD -->
+
+- **Verification**: 全量测试套件运行，识别并修复 GameplayTag 回归
+- [x] 完成
 
 ### 8. GScriptNativeForms 泄漏修复（Phase 2） <!-- Non-TDD -->
 

@@ -105,3 +105,104 @@ AngelscriptGameplayTagsLookup.Empty();
 - **热重载兼容性**：`CleanupRemovedClass` 和新的 shutdown 清理可能存在执行顺序冲突。需确保 shutdown 路径只处理 `OwnerScriptEngine == Engine` 的对象。
 - **多引擎共享实例**：SharedState 的 `ActiveParticipants` 机制已存在，shutdown 清理需要在所有参与者都退出后才执行全局容器清理。
 - **测试行为变化**：清理后 GC 可能回收之前残留的对象，导致某些依赖残留状态的测试行为变化。
+
+## 调查过程：内存插桩策略与决策记录
+
+### 插桩目的
+
+全量测试运行时进程内存峰值达 ~12.9GB，每引擎周期增长 ~51.6MB。为区分"真实泄漏"与"分配器保留/UE 架构性增长"，在以下位置添加了临时内存插桩：
+
+### 插桩 1：Init 阶段逐步追踪（`AngelscriptEngine.cpp` Initialize_GameThread）
+
+```cpp
+auto LogPhaseMemory = [this](const TCHAR* Phase)
+{
+    FPlatformMemoryStats MemStats = FPlatformMemory::GetStats();
+    UE_LOG(Angelscript, Display, TEXT("[InitPhase:%s] engine=%p PhysMB=%llu VirtMB=%llu"),
+        Phase, this,
+        MemStats.UsedPhysical / (1024 * 1024),
+        MemStats.UsedVirtual / (1024 * 1024));
+};
+```
+
+在 `PreInitialize`、`EnsureSharedStateCreated`、`BindScriptTypes`、`InitializeOwnedSharedState`、`DebugServer` 各阶段后调用。
+
+**发现**：单次 bind 阶段（121 个 Bind_*.cpp）贡献 ~800-1200MB，是主要的内存消耗者，但这些是合理的业务数据。
+
+### 插桩 2：Shutdown 阶段逐步追踪（`AngelscriptEngine.cpp` Shutdown）
+
+```cpp
+auto LogShutdownPhaseMemory = [this](const TCHAR* Phase)
+{
+    FPlatformMemoryStats MemStats = FPlatformMemory::GetStats();
+    UE_LOG(Angelscript, Display, TEXT("[ShutdownPhase:%s] engine=%p PhysMB=%llu VirtMB=%llu"),
+        Phase, this,
+        MemStats.UsedPhysical / (1024 * 1024),
+        MemStats.UsedVirtual / (1024 * 1024));
+};
+```
+
+在 Shutdown 开始、Release 前后调用。
+
+**发现**：AS 引擎 `ShutDownAndRelease()` 后 PhysMB 基本不降，说明分配器未归还页面。
+
+### 插桩 3：Release 阶段逐步追踪（`AngelscriptEngine.cpp` ReleaseOwnedSharedStateResources）
+
+```cpp
+auto LogReleaseMem = [](const TCHAR* Phase)
+{
+    FPlatformMemoryStats MemStats = FPlatformMemory::GetStats();
+    UE_LOG(Angelscript, Display, TEXT("[ReleasePhase:%s] PhysMB=%llu VirtMB=%llu"),
+        Phase,
+        MemStats.UsedPhysical / (1024 * 1024),
+        MemStats.UsedVirtual / (1024 * 1024));
+};
+```
+
+在 AS 引擎释放、TypeDB/BindState/BindDB/StaticNames 各 Reset、全局容器清理、JIT/Docs 清理各步后调用。同时输出 AS 引擎对象统计和 Docs TMap 计数。
+
+**发现**：
+- `TypeDatabase.Reset()` 和 `BindDatabase.Reset()` 可释放少量内存
+- 全局容器清理本身内存影响微小，但消除了悬垂指针风险
+- 分配器整体不归还——`FMemory::Trim(true)` 对 mimalloc 效果有限
+
+### 插桩 4：Bind 逐项追踪（`AngelscriptBinds.cpp` CallBinds）
+
+```cpp
+const FPlatformMemoryStats BindsStartMem = FPlatformMemory::GetStats();
+// ... per-bind tracking ...
+const uint64 PrePhys = FPlatformMemory::GetStats().UsedPhysical / (1024 * 1024);
+Bind.Function();
+const uint64 PostPhys = FPlatformMemory::GetStats().UsedPhysical / (1024 * 1024);
+if (PostPhys > PrePhys)
+{
+    UE_LOG(Angelscript, Display, TEXT("[BindMem] #%03d '%s' +%lluMB (total %lluMB)"),
+        BindIndex, *Bind.BindName.ToString(), PostPhys - PrePhys, PostPhys);
+}
+```
+
+**发现**：识别出内存消耗最大的几个 bind（蓝图类型注册、Actor 绑定等），但这些都是合理的业务逻辑。
+
+### 插桩 5：内存生命周期测试（`AngelscriptEngineMemoryLifecycleTests.cpp`）
+
+新增 ~555 行的测试文件，在 `Source/AngelscriptTest/GC/` 下，包含：
+- `FMemorySnapshot` 结构体：采集进程内存、UObject 计数、按类型分类的 UObject 统计
+- 各阶段前后对比输出
+- 创建→销毁→GC 全周期内存追踪
+
+**发现**：提供了量化证据证明 UObject 泄漏和全局容器累积的存在。
+
+### 移除决策
+
+所有插桩在完成诊断后被移除，原因：
+1. **性能开销**：每个 bind（121 次）都调用 `FPlatformMemory::GetStats()` 增加不必要的系统调用
+2. **日志噪音**：正常运行不需要这些输出，会干扰有意义的日志
+3. **诊断目的已达成**：真实泄漏已定位并修复，剩余增长确认为 UE 架构性行为
+
+保留的有意义代码（~131 行）聚焦于修复本身，不包含任何诊断日志。
+
+### 修复后回归验证
+
+修复提交后执行了全量编译验证（Build succeeded）和测试回归。发现一个回归：
+
+- **GameplayTagNamespaceGlobals 测试失败**：最初 `AngelscriptGameplayTagsLookup.Empty()` 导致后续引擎周期重复注册 GameplayTag 触发 `asNAME_TAKEN`。根因是 UE 的 GameplayTag 注册是进程级一次性操作，清除 guard 后无法安全重注册。修复方案是保留 `AngelscriptGameplayTagsLookup` 不清理，并添加注释说明其作为进程级 guard 的必要性。
