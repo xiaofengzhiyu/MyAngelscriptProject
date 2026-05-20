@@ -106,8 +106,10 @@ DerivedDataCache/*
 # CodeBuddy local plans
 .codebuddy/
 
-# Claude local working data
-.claude/
+# Claude local working data (ignore everything except project-shared skills/commands)
+.claude/*
+!.claude/skills/
+!.claude/commands/
 .claude-internal/
 
 # Codex local config (machine-specific MCP paths)
