@@ -27,6 +27,36 @@
 - If the change spans multiple modules, you may omit `Scope` or choose the most important affected area.
 - If the commit needs additional context to be understood, add a `body`. Otherwise, the title line alone is enough.
 
+## Branch Naming
+
+Use slash-separated branch names with one of these type prefixes:
+
+```text
+feature/<slug>
+fix/<slug>
+refactor/<slug>
+test/<slug>
+docs/<slug>
+chore/<slug>
+```
+
+- `<slug>` uses lowercase words separated by hyphens.
+- Match the branch prefix to the primary intent of the work.
+- For OpenSpec-backed work, use the same slug as the change name when practical. Example: `test-as-static-jit-engine-state` maps to `test/as-static-jit-engine-state`.
+- When changing `Plugins/Angelscript`, use the same branch name inside the submodule as the root repository branch.
+
+## Worktree Location
+
+Create local git worktrees under the repository-local `.worktrees/` directory:
+
+```text
+.worktrees/<change-name>
+```
+
+- Do not create project worktrees in sibling directories, `worktrees/`, or user-global locations unless the user explicitly requests it.
+- Use the OpenSpec change name as the worktree directory name when the work is OpenSpec-backed.
+- `.worktrees/` is ignored by git and is the canonical local workspace root for parallel branches in this repository.
+
 ## Examples
 
 ```text

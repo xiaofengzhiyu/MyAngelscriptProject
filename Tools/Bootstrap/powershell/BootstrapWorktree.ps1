@@ -158,6 +158,92 @@ function Get-BootstrapConfigTemplate {
     }
 }
 
+function Invoke-SubmoduleInit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WorktreeRoot
+    )
+
+    $gitmodulesPath = Join-Path $WorktreeRoot '.gitmodules'
+    if (-not (Test-Path -LiteralPath $gitmodulesPath -PathType Leaf)) {
+        return
+    }
+
+    $submoduleNames = @()
+    foreach ($line in (Get-Content -LiteralPath $gitmodulesPath)) {
+        if ($line -match '^\s*path\s*=\s*(.+)$') {
+            $submoduleNames += $Matches[1].Trim()
+        }
+    }
+
+    if ($submoduleNames.Count -eq 0) {
+        return
+    }
+
+    Write-Host ("[bootstrap] Found {0} submodule(s): {1}" -f $submoduleNames.Count, ($submoduleNames -join ', '))
+
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $initOutput = & git -C $WorktreeRoot submodule init 2>&1
+    $initExitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    if ($initExitCode -ne 0) {
+        Write-Warning "[bootstrap] git submodule init had warnings (exit $initExitCode): $initOutput"
+    }
+
+    foreach ($subPath in $submoduleNames) {
+        $subFullPath = Join-Path $WorktreeRoot $subPath
+        $subSourceDir = Join-Path $subFullPath 'Source'
+
+        if ((Test-Path -LiteralPath $subSourceDir -PathType Container)) {
+            Write-Host ("[bootstrap] Submodule already populated: {0}" -f $subPath)
+            continue
+        }
+
+        Write-Host ("[bootstrap] Updating submodule: {0}" -f $subPath)
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $updateOutput = & git -C $WorktreeRoot submodule update -- $subPath 2>&1
+        $updateExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+        if ($updateExitCode -eq 0) {
+            Write-Host ("[bootstrap] Submodule updated: {0}" -f $subPath)
+            continue
+        }
+
+        Write-Warning ("[bootstrap] git submodule update failed for {0} (exit {1}): {2}" -f $subPath, $updateExitCode, $updateOutput)
+        Write-Warning ("[bootstrap] Fallback: checking if local submodule object store can provide a worktree...")
+
+        $commonDir = & git -C $WorktreeRoot rev-parse --git-common-dir 2>$null
+        if ([string]::IsNullOrWhiteSpace($commonDir)) {
+            Write-Warning ("[bootstrap] Cannot resolve git-common-dir for fallback. Submodule {0} left uninitialized." -f $subPath)
+            continue
+        }
+
+        $normalizedSubPath = $subPath.Replace('\', '/')
+        $submoduleGitDir = Join-Path (Resolve-Path $commonDir).Path "modules/$normalizedSubPath"
+        if (-not (Test-Path -LiteralPath $submoduleGitDir -PathType Container)) {
+            Write-Warning ("[bootstrap] No local object store at {0}. Submodule {1} left uninitialized." -f $submoduleGitDir, $subPath)
+            continue
+        }
+
+        $worktreeBranch = (Split-Path $WorktreeRoot -Leaf)
+        Write-Host ("[bootstrap] Creating submodule worktree from local object store: {0} -> {1}" -f $submoduleGitDir, $subFullPath)
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $wtOutput = & git --git-dir $submoduleGitDir worktree add $subFullPath -b $worktreeBranch 2>&1
+        $wtExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+        if ($wtExitCode -eq 0) {
+            Write-Host ("[bootstrap] Submodule worktree created: {0} (branch: {1})" -f $subPath, $worktreeBranch)
+        }
+        else {
+            Write-Warning ("[bootstrap] Submodule worktree creation failed for {0} (exit {1}): {2}" -f $subPath, $wtExitCode, $wtOutput)
+            Write-Warning ("[bootstrap] Submodule {0} left uninitialized. Manual setup required — see Documents/Guides/SubmoduleWorktreeWorkflow.md" -f $subPath)
+        }
+    }
+}
+
 function Invoke-WorktreeBootstrap {
     param(
         [Parameter(Mandatory = $true)]
@@ -191,6 +277,8 @@ function Invoke-WorktreeBootstrap {
     else {
         Write-Host ("[bootstrap] AgentConfig.ini already normalized: {0}" -f $configPath)
     }
+
+    Invoke-SubmoduleInit -WorktreeRoot $resolvedWorktreeRoot
 
     if ($SkipPrewarm) {
         return
