@@ -1,0 +1,11 @@
+{
+  "repo": "Hazelight/UnrealEngine-Angelscript",
+  "branch": "angelscript-master",
+  "lastReviewedHeadSha": null,
+  "lastReviewedAt": null,
+  "lastAuditBaseSha": null,
+  "lastAuditHeadSha": null,
+  "lastAuthors": [],
+  "lastUnrealEngineFollowSignals": [],
+  "notes": "Set lastReviewedHeadSha only after a human-reviewed audit checkpoint."
+}
