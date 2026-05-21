@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the lifecycle and behavioral requirements for `FAngelscriptTestEngine`, the test-module-owned engine subclass that replaces the Clone mechanism for test isolation.
+Defines the lifecycle and behavioral requirements for `FAngelscriptTestEngine`, the test-module-owned helper struct that replaces the Clone mechanism for test isolation.
 
 ## ADDED Requirements
 
@@ -86,6 +86,6 @@ Defines the lifecycle and behavioral requirements for `FAngelscriptTestEngine`, 
 ## Testing Requirements
 
 - Target test layer: Unit + Integration (Automation framework)
-- Expected Automation prefix: `ASTest.Engine.TestEngine.`
+- Expected Automation prefix: `Angelscript.TestModule.CppTests.Engine.TestEngine.` (consistent with existing `AngelscriptTest` module suites)
 - Recommended helpers/harnesses: `FAngelscriptTestEngine`, `AngelscriptTestMacros.h`
-- Verification entry points: `powershell.exe -File Tools\RunTests.ps1 -TestPrefix "ASTest." -Label "TestEngine lifecycle"`
+- Verification entry points: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.CppTests.Engine" -Label "TestEngine lifecycle" -TimeoutMs 900000`

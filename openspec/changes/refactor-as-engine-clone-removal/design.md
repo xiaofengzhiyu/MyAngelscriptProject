@@ -65,13 +65,72 @@ When Phase 3 removes the enum, `GetCreationModeString` and the `CreationMode` co
 
 Rationale: Treating the dump as a downstream consumer of the enum (rather than a dependency that constrains the refactor) keeps Phase 3's runtime API removal self-contained.
 
-### D6: Dump system follows the enum, not the other way around
+### D7: Inline `FAngelscriptOwnedSharedState` into `FAngelscriptEngine`
 
-`AngelscriptStateDump.cpp` references `EAngelscriptEngineCreationMode` only through the read-only `GetCreationModeString` helper to print a `CreationMode` column in the CSV state dump. There are no other consumers of the `CreationMode` field, and the dump is purely a diagnostic artefact.
+The struct existed solely to be the unit of "what gets shared between Full + Clones" — multiple engines could hold the same `TSharedPtr<FAngelscriptOwnedSharedState>` and observe the same type/bind databases. With Clone removed (Phases 3-4), the struct collapses to a single-owner value aggregate that just adds indirection (`SharedState->X` vs `X`).
 
-When Phase 3 removes the enum, `GetCreationModeString` and the `CreationMode` column in the CSV output are deleted alongside it. No replacement is required because the column was tautological once Clone is gone (every engine is Full).
+Three things become removable in one pass:
 
-Rationale: Treating the dump as a downstream consumer of the enum (rather than a dependency that constrains the refactor) keeps Phase 3's runtime API removal self-contained.
+1. **5 mirror fields** (`ScriptEngine`, `PrimaryContext`, `PrecompiledData`, `StaticJIT`, `DebugServer`): These duplicate state that already lives on `FAngelscriptEngine` (`Engine`, `PrecompiledData`, `StaticJIT`, `DebugServer`) or `GameThreadTLD->primaryContext`. The duplication only existed because Clone needed to "see" the source engine's resources through the shared struct; now there's exactly one owner. The mirror fields, `InitializeOwnedSharedState()` (which assigns them), and the 4 dual-ownership guards in `Shutdown()` (lines 1426/1433/1439/1445 of pre-refactor `AngelscriptEngine.cpp`) all go away together.
+
+2. **`EnsureSharedStateCreated()` lazy init**: Once the struct is gone, the 7 owned members live as direct `TUniquePtr<...>` fields on `FAngelscriptEngine`. They are constructed inside `Initialize()` / `InitializeWithoutInitialCompile()` at the same point `EnsureSharedStateCreated()` previously fired — no behavior change, one less indirection.
+
+3. **`ReleaseOwnedSharedStateResources()`**: The free-function helper that walks the struct on shutdown collapses into `Shutdown()` directly, since the engine now releases its own fields.
+
+Rationale: Continuing the clone-removal cleanup in the same change keeps the refactor coherent — the struct is a Clone-era artifact and its removal is the natural conclusion of D3 (TSharedPtr → TUniquePtr). The 30+ `SharedState->X` access sites become `X`, and 50+ `SharedState.IsValid() ? SharedState->X.Get() : nullptr` accessors become `X.Get()` (equivalent semantics: both return nullptr pre-init). No public API or test surface changes.
+
+Risks: Build-time blast radius (~30-50 mechanical replacements in `AngelscriptEngine.cpp`); easily caught by the existing build verification step at the end of Section 6.
+
+### D8: Single `Create()` factory driven by `FAngelscriptEngineConfig::bSkipInitialCompile`
+
+After Phase 6 has flattened SharedState, the runtime still exposes two static factory functions on `FAngelscriptEngine`:
+
+```cpp
+static TUniquePtr<FAngelscriptEngine> Create(const FAngelscriptEngineConfig&, const FAngelscriptEngineDependencies&);            // Initialize() with initial compile
+static TUniquePtr<FAngelscriptEngine> CreateUncompiled(const FAngelscriptEngineConfig&, const FAngelscriptEngineDependencies&);  // InitializeWithoutInitialCompile() — no initial compile pass
+```
+
+Surveying after Phase 2 lands: `CreateUncompiled` has 47+ direct callers (33 in `AngelscriptTest/Core`, 12 in `AngelscriptEditor/Tests`, 2 in `AngelscriptTest/Shared` wrappers), `Create` has exactly 1 (the test-engine wrapper, which currently delegates to `CreateUncompiled`). Both factories perform the same construction (`MakeUnique<FAngelscriptEngine>(Config, Deps)`) and the same initialization down to the *single* difference of whether the post-init initial-compile pass runs — that pass is itself already gated by `Config.bGeneratePrecompiledData` / `Config.bDevelopmentMode`. The two factories are a behavior toggle, not two ownership / lifecycle paths.
+
+We collapse them into a single factory:
+
+```cpp
+static TUniquePtr<FAngelscriptEngine> Create(const FAngelscriptEngineConfig& InConfig, const FAngelscriptEngineDependencies& InDependencies)
+{
+    TUniquePtr<FAngelscriptEngine> Engine = MakeUnique<FAngelscriptEngine>(InConfig, InDependencies);
+    if (InConfig.bSkipInitialCompile)
+    {
+        Engine->InitializeWithoutInitialCompile();
+    }
+    else
+    {
+        Engine->Initialize();
+    }
+    return Engine;
+}
+```
+
+The toggle lives on the existing `FAngelscriptEngineConfig` struct as a new field `bSkipInitialCompile = false` (default reflects the production path: full Initialize). `FAngelscriptTestEngine::Create()` constructs a config copy with the flag flipped to `true`, then delegates to `FAngelscriptEngine::Create()`.
+
+**Caller migration shape:**
+
+| Caller group | Count | Migration |
+|---|---|---|
+| `AngelscriptTest/Core/*` and `AngelscriptTest/Functional/*` | 33 | Replace `FAngelscriptEngine::CreateUncompiled(Config, Deps)` with `FAngelscriptTestEngine::Create(Config, Deps)`. The wrapper sets the flag internally so call sites stay short. |
+| `AngelscriptTest/Shared/AngelscriptTestUtilities.h` and `AngelscriptTestEngineHelper.h` | 2 | Replace with `FAngelscriptTestEngine::Create()` (these *are* the test wrappers). |
+| `AngelscriptEditor/Tests/*` | 12 | Cannot use `FAngelscriptTestEngine` (no `AngelscriptTest` dependency). Set `Config.bSkipInitialCompile = true;` inline before calling `FAngelscriptEngine::Create(Config, Deps)`. |
+
+After migration, `FAngelscriptEngine::CreateUncompiled` is deleted from the header and `.cpp`.
+
+**Why this lands now, not later:** The CreateUncompiled migration in Phase 2 (task 2.6) already touched 9 of these call sites to pivot them off the Clone-mode `CreateUncompiledWithMode` API. Doing the final factory consolidation immediately after — while Phase 2's migration is still in working memory and `git blame` already points at this change — keeps related churn in a single commit history. Deferring it would mean touching the same caller bodies twice across two changes.
+
+**Why a config flag, not two methods:** The two factories already shared 100% of construction and 95% of initialization. The "do I want initial compile?" axis is data, not control flow. Putting it on `FAngelscriptEngineConfig` keeps factories at the single-entry-point pattern UE uses for engine construction (e.g. `FAutomationFrameworkSpec::CreateAutomationContext`), and the flag is naturally adjacent to the other initialization toggles already on the struct (`bSkipThreadedInitialize`, `bForceThreadedInitialize`, etc.).
+
+**Why not delete `Create` instead:** `Create` is the production-shaped factory (full initialize). Deleting it and renaming `CreateUncompiled` would require renaming 1 production-adjacent caller and the test wrapper, plus the cognitive cost of "uncompiled" being the default. The flag-on-default-`Create` shape matches caller intuition: production code calls `Create(Config)` with default flags; test code sets the explicit flag.
+
+Risks:
+- **Caller blast radius**: ~47 call sites change in this section. Mitigated by the test-module wrapper absorbing 33 of them, leaving only 12 editor sites + 2 wrapper sites needing inline flag changes.
+- **Silent behavioral drift if a caller forgets the flag**: A test caller that meant to skip initial compile but forgets to set the flag would suddenly run the full compile pass (slower but correct). Mitigated by the test-module wrapper being the only path test code uses; direct `FAngelscriptEngine::Create` calls are limited to the 12 editor sites which all set the flag inline at the construction point.
 
 ## Risks / Trade-offs
 
@@ -98,5 +157,7 @@ Rationale: Treating the dump as a downstream consumer of the enum (rather than a
 1. **Phase 1** (Additive): Create `FAngelscriptTestEngine` with `ResetModules()` and `GetSharedEngine()`. Old macros/utilities still work.
 2. **Phase 2** (Test-side): Update macros and utilities to route through `FAngelscriptTestEngine`. Replace 15 `CreateCloneFrom` calls. Validate all 421 tests pass.
 3. **Phase 3** (Runtime removal): Delete Clone API from `FAngelscriptEngine`. Simplify `Shutdown()`. Remove the `GetCreationModeString` helper and the `CreationMode` column from `Dump/AngelscriptStateDump.cpp` (see D6).
-4. **Phase 4** (SharedState): Change `TSharedPtr` → `TUniquePtr`, remove reference-counting fields.
+4. **Phase 4** (SharedState lifecycle): Change `TSharedPtr` → `TUniquePtr`, remove reference-counting fields.
 5. **Phase 5** (Cleanup): Migrate helper functions from `AngelscriptTestEngineHelper.h` into `FAngelscriptTestEngine` methods. Evaluate moving `AngelscriptRuntime/Testing/` code to test module.
+6. **Phase 6** (SharedState flatten — see D7): Inline the 7 owned data members of `FAngelscriptOwnedSharedState` directly onto `FAngelscriptEngine`; delete the 5 duplicate mirror fields, `EnsureSharedStateCreated()`, `InitializeOwnedSharedState()`, `ReleaseOwnedSharedStateResources()`, and the `FAngelscriptOwnedSharedState` struct itself.
+7. **Phase 7** (Factory consolidation — see D8): Add `FAngelscriptEngineConfig::bSkipInitialCompile`; rewrite `FAngelscriptEngine::Create` to dispatch on the flag; migrate ~47 `CreateUncompiled` call sites (33 `AngelscriptTest/Core` + 2 `AngelscriptTest/Shared` wrappers via `FAngelscriptTestEngine::Create`; 12 `AngelscriptEditor/Tests` via inline flag set + `FAngelscriptEngine::Create`); delete `CreateUncompiled` from the runtime API.
