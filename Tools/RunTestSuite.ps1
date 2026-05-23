@@ -51,8 +51,8 @@ $suiteDefinitions = [ordered]@{
         @{ Prefix = "Angelscript.TestModule.AngelScriptSDK"; Label = "AngelScriptSDK" }
     )
     "RuntimeCpp" = @(
-        @{ Prefix = "Angelscript.CppTests"; Label = "LegacyCppTests" }
-        @{ Prefix = "Angelscript.TestModule.CppTests"; Label = "CppTests" }
+        @{ Prefix = "Angelscript.TestModule.Engine"; Label = "Engine" }
+        @{ Prefix = "Angelscript.TestModule.CppTests"; Label = "CppTestsLegacy" }
     )
     "Bindings" = @(
         @{ Prefix = "Angelscript.TestModule.Bindings"; Label = "Bindings" }
@@ -77,7 +77,6 @@ $suiteDefinitions = [ordered]@{
         @{ Prefix = "Angelscript.TestModule.Interface"; Label = "Interface" }
     )
     "All" = @(
-        @{ Prefix = "Angelscript.CppTests"; Label = "LegacyCppTests" }
         @{ Prefix = "Angelscript.Editor"; Label = "Editor" }
         @{ Prefix = "Angelscript.GAS"; Label = "GAS" }
         @{ Prefix = "Angelscript.Template"; Label = "Template" }
@@ -89,7 +88,6 @@ $suiteDefinitions = [ordered]@{
         @{ Prefix = "Angelscript.TestModule.Compiler"; Label = "Compiler" }
         @{ Prefix = "Angelscript.TestModule.Component"; Label = "Component" }
         @{ Prefix = "Angelscript.TestModule.Core"; Label = "Core" }
-        @{ Prefix = "Angelscript.TestModule.CppTests"; Label = "CppTests" }
         @{ Prefix = "Angelscript.TestModule.Debugger"; Label = "Debugger" }
         @{ Prefix = "Angelscript.TestModule.Delegate"; Label = "Delegate" }
         @{ Prefix = "Angelscript.TestModule.Dump"; Label = "Dump" }
