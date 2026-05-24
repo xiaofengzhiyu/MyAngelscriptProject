@@ -376,7 +376,7 @@ RuntimeFloatCurve_.Method(
 - `GameplayTagMixinLibrary.h`（注释 `ScriptMixin = "FGameplayTag"`）
 - `GameplayTagContainerMixinLibrary.h`（注释 `ScriptMixin = "FGameplayTagContainer"`）
 - `InputComponentScriptMixinLibrary.h` 三个子类（注释 `UInputComponent` / `APlayerController` / `UPlayerInput`）
-- `AngelscriptMathLibrary.h` 内 `UAngelscriptFVectorMixinLibrary` 等 8 个数学子类
+- `AngelscriptMathLibrary.h` 内 `UAngelscriptFVectorMixinLibrary` 等数学子类（已在 Math 现代化中切回 Hazelight 风格 `ScriptMixin`；保留在此列表的历史表述不再适用）
 - `Core/GAS/AngelscriptAbilitySystemComponent.h` 内的 `UAngelscriptAttributeChangedDataMixinLibrary`
 - `AngelscriptHitResultLibrary.h`、`AngelscriptWorldLibrary.h` 等
 
@@ -414,11 +414,11 @@ RuntimeFloatCurve_.Method(
 - **类 2：走 `BlueprintCallableReflectiveFallback` 反射兜底**（fork 内当前实例数为 0）。理论上：函数没有 native function pointer entry，由 `Bind_BlueprintCallable.cpp:74-91` 的 `BindBlueprintCallableReflectiveFallback` 接住。**P4.1 审计结论**：fork 候选 5 个文件（Math / Hit / TagContainer / Tag / AssetMgr）的 static 函数都是 `.h` 内 inline 实现、native function pointer 始终有效 —— 全部不会走 ReflectiveFallback。本类暂无实例。
 - **类 3：仅静态命名空间形式可见**。函数没被任何路径绑定为成员方法，AS 脚本里只能写 `Lib::Func(target, ...)`。**P4.x 实测进一步细分两个亚类**：
   - **类 3 净增益**（fork 测试 / 脚本用 `target.Func(...)` 实例形式）：HitResult / Tag / TagContainer / AssetMgr 共 4 处文件 / 5 处锚点，2026-04-28 P4.2 / P4.3 重启后零回归，对齐 Hazelight 上游。
-  - **类 3 namespace-regression**（fork 测试 / 脚本用 `Lib::Func(target, ...)` 静态形式）：MathLibrary 8 处锚点（FVector / FVector3f / FRotator / FRotator3f / FQuat / FQuat4f / FTransform / FTransform3f）。fork 测试代码 `AngelscriptMathFunctionLibraryTests.cpp:412-424` / `AngelscriptMathOrientationFunctionLibraryTests.cpp:164-181` 依赖 fork-only `AngelscriptFVectorMixin::Size2D(vec, normal)` / `FRotator::GetForwardVector(rot)` 等 namespace 静态调用形式，启用 ScriptMixin 后类级注入路径会**剥除第一参数并改写为成员方法形式**，原 namespace 静态形式编译失败。Hazelight 上游不存在此问题（其测试一律用 `vec.Size2D(normal)` 实例方法形式），但 fork 重启需配套迁移测试 + 用户脚本。**P4.3 实测**：试启 8 处 Math 锚点 → 3 个 Math 测试编译失败 → 全部回退保留禁用。**已切出独立专项 [`Plan_MathScriptMixinReenablement.md`](../../Plans/Plan_MathScriptMixinReenablement.md)** 系统性推进调用形式迁移与 mixin 重启。
+  - **类 3 namespace-regression（已收口：MathLibrary）**：MathLibrary 8 处锚点（FVector / FVector3f / FRotator / FRotator3f / FQuat / FQuat4f / FTransform / FTransform3f）曾依赖 fork-only `Type::Func(target, ...)` 静态调用形式。Math 现代化已将测试迁移到 Hazelight 风格实例调用（如 `vec.Size2D(normal)`、`rot.GetForwardVector()`），并启用这些 `ScriptMixin` 元数据。`FQuat` / `FRotator` / `FTransform` 的 `GetDelta`、`ApplyDelta`、`GetRelative`、`ApplyRelative` 等关系 helper 仍保留在 `ScriptName` static library 中，按 `Type::Func(A, B)` 调用。
 
 判断启发式：grep `Plugins/Angelscript/Source/AngelscriptRuntime/Binds/` 下哪些 `Bind_*.cpp` `#include` 了对应 `FunctionLibraries/*.h`，命中即类 1 / 类 1.5；不命中且仓内有 `<Lib名>::<Func>(target, ...)` 静态调用形式 → 类 3 namespace-regression（重启需配套脚本迁移）；都不命中 → 类 3 净增益（重启即对齐 Hazelight）。独立审计矩阵已删除，保留结论以内联分类和 `Plan_FunctionLibrariesCleanup.md` 实施记录为准。
 
-P4.x 实施进度（2026-04-28）：**16 处锚点中 8 处已重启 / 8 处保留禁用**。重启项：HitResult（P4.2 试点）+ World（P4.4 类 1 迁移）+ Tag/TagContainer/AssetMgr/Input × 3（P4.3 批量）= 8 处。保留禁用项：MathLibrary 8 处（namespace-regression），由独立专项 [`Plan_MathScriptMixinReenablement.md`](../../Plans/Plan_MathScriptMixinReenablement.md) 推进；`Plan_FunctionLibrariesCleanup.md` 已 5 个 Phase 全部收口。
+P4.x 历史实施进度（2026-04-28）曾为 **16 处锚点中 8 处已重启 / 8 处保留禁用**。当前 Math 现代化已收口 MathLibrary 8 处 namespace-regression，Math 类型扩展重新对齐 Hazelight 的 `ScriptMixin`/`ScriptName` 分流模型；`Plan_FunctionLibrariesCleanup.md` 的历史结论仅作为迁移背景保留。
 
 ---
 
