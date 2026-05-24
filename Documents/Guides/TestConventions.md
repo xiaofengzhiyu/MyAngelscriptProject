@@ -21,7 +21,7 @@
 | Debugger 场景 | `Plugins/Angelscript/Source/AngelscriptTest/Debugger/` | `Angelscript.TestModule.Debugger.*` | 附着运行中的 production-like engine，验证握手、断点、步进等调试链路 | `Shared/AngelscriptDebuggerTestSession.*` / `Shared/AngelscriptDebuggerTestClient.*` / `Shared/AngelscriptDebuggerScriptFixture.*` |
 | UE 功能测试层 | `Plugins/Angelscript/Source/AngelscriptTest/Actor/`、`Blueprint/`、`Component/`、`Delegate/`、`GC/`、`HotReload/`、`Interface/`、`Subsystem/` 等 | `Angelscript.TestModule.<Theme>.*` | 在 UObject / World / Actor / Component / HotReload 语义中验证最终行为 | `Shared/AngelscriptFunctionalTestUtils.h` + `Shared/AngelscriptTestWorld.h`（actor / world tick / 完整生命周期） |
 | Learning | `Plugins/Angelscript/Source/AngelscriptTest/Learning/Native/`、`Learning/Runtime/` | `Angelscript.TestModule.Learning.<Layer>.*` | 结构化 trace / 教学型可观测测试 | `Shared/AngelscriptLearningTrace.*` |
-| Bindings Coverage (CQTest) | `Plugins/Angelscript/Source/AngelscriptTest/Bindings/` | `Angelscript.TestModule.Bindings.<Type>.*` | 按类型的绑定覆盖，CQTest `TEST_CLASS_WITH_FLAGS` + `BEFORE_ALL/AFTER_ALL` + `FCoverageModuleScope` RAII | `CQTest.h` + `Bindings/Shared/AngelscriptBindings*.h` |
+| Bindings Coverage (CQTest) | `Plugins/Angelscript/Source/AngelscriptTest/Bindings/` | `Angelscript.TestModule.Bindings.<Type>.*` | 按类型的绑定覆盖，CQTest `TEST_CLASS_WITH_FLAGS` + `BEFORE_ALL/AFTER_ALL` + `FScopedAngelscriptModule` RAII | `CQTest.h` + `Shared/AngelscriptTestModuleScope.h` + `Shared/AngelscriptTestExecute.h` + 按需 `Bindings/Angelscript*TestHelpers.h` |
 
 ### 2. 文件命名规则
 
@@ -113,7 +113,7 @@
 - UE 功能测试：`Shared/AngelscriptFunctionalTestUtils.h`
 - UE 功能测试 actor / world tick / 完整生命周期：`Shared/AngelscriptTestWorld.h::FAngelscriptTestWorld`（`SpawnActorOfClass` / `BeginPlay` / `Tick` / `TickViaManager` / `DispatchActorTick` / `DispatchComponentTick` / `DestroyAndDrain`，详见 `Documents/Guides/Test.md` "Actor / World Tick 测试推荐 harness" 章节，模板见 `Template_WorldTick.cpp` / `Template_GameLifetime.cpp`）
 - Learning：`Shared/AngelscriptLearningTrace.*`
-- CQTest 绑定覆盖：`CQTest.h` + `Shared/AngelscriptTestMacros.h` + `Bindings/Shared/AngelscriptBindings*.h`（详见 `Documents/Guides/Test.md` CQTest 章节）
+- CQTest 绑定覆盖：`CQTest.h` + `Shared/AngelscriptTestMacros.h` + `Shared/AngelscriptTestModuleScope.h` + `Shared/AngelscriptTestExecute.h`（详见 `Plugins/Angelscript/Source/AngelscriptTest/TESTING_GUIDE.md` 与 `Shared/README.md`）
 
 ### Step 5：同步流程入口和文档
 
@@ -131,7 +131,7 @@
 | UE 功能测试 Actor / Component | `Actor/`、`Component/` | `Angelscript.TestModule.Actor.*` / `Angelscript.TestModule.Component.*` | `FAngelscriptTestWorld W(*TestRunner, Engine)` → `W.SpawnActorOfClass` → `W.BeginPlay` → `W.Tick` / `W.DispatchActorTick` / `W.DispatchComponentTick` → `ReadPropertyValue` 读回断言 | `.\Tools\RunTestSuite.ps1 -Suite FunctionalSamples` |
 | UE 完整 Actor 生命周期 | `Actor/` 或主题目录 | `Angelscript.TestModule.Actor.Lifecycle.*` 等 | `FAngelscriptTestWorld` → `SpawnActorOfClass`（触发 `UserConstructionScript`）→ `BeginPlay` → `Tick` × N → `DestroyAndDrain`（同步派发 `EndPlay(Destroyed) + Destroyed`）→ 断言计数 / 顺序 / `LastEndPlayReason` | `.\Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Actor."` |
 | HotReload 回归 | `HotReload/` | `Angelscript.TestModule.HotReload.*` | 编译 V1 → 生成对象/状态 → 编译 V2 → 断言 soft/full reload 结果与状态保持 | `.\Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.HotReload"` |
-| 绑定覆盖 (CQTest) | `Bindings/` | `Angelscript.TestModule.Bindings.<Type>.*` | CQTest `BEFORE_ALL` 获取引擎 → 每个 `TEST_METHOD` 编译 AS 模块 → `ExpectGlobalInts` / `ExpectGlobalReturnCustom` / `FASGlobalFunctionInvoker` 验证 → `FCoverageModuleScope` RAII 清理 | `.\Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Bindings."` |
+| 绑定覆盖 (CQTest) | `Bindings/` | `Angelscript.TestModule.Bindings.<Type>.*` | CQTest `BEFORE_ALL` 获取引擎 → 每个 `TEST_METHOD` 用 `FScopedAngelscriptModule` 编译 AS 模块 → `ExpectGlobalInt` / `FAngelscriptTestExecutor` / `ExecuteAndExpect*` 验证 | `.\Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Bindings."` |
 
 ## 本轮规范化落点
 
