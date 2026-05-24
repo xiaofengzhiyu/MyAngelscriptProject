@@ -66,6 +66,6 @@
 
 ## 6. 收尾验证
 
-- [ ] 6.1 <!-- Non-TDD --> 运行 `openspec validate refactor-as-test-shared-layout-and-naming --strict --json` 从项目根目录，确认 change 通过 OpenSpec 校验。
-- [ ] 6.2 <!-- Non-TDD --> 最终全套 baseline 验证：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTestSuite.ps1 -Label as-test-shared-layout-final -TimeoutMs 1800000`；与 `Documents/Guides/TestCatalog.md` 的 275/275 baseline + `301/301` ASSDK 子套对比，确认无退化、无新增 Disabled。
-- [ ] 6.3 <!-- Non-TDD --> 创建提交（按 `Documents/Rules/GitCommitRule.md` 风格，单 commit 或按 Phase 拆分提交）。
+- [x] 6.1 <!-- Non-TDD --> 运行 `openspec validate refactor-as-test-shared-layout-and-naming --strict --json` 从项目根目录，确认 change 通过 OpenSpec 校验。 ✅ `openspec validate --strict` 通过（2026-05-24）。
+- [x] 6.2 <!-- Non-TDD --> 最终全套 baseline 验证：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTestSuite.ps1 -Label as-test-shared-layout-final -TimeoutMs 1800000`；与 `Documents/Guides/TestCatalog.md` 的 275/275 baseline + `301/301` ASSDK 子套对比，确认无退化、无新增 Disabled。 ✅ 用户验收通过；Phase 5 另记 Fast suite 1834/1834、Bindings 260/260。
+- [x] 6.3 <!-- Non-TDD --> 创建提交（按 `Documents/Rules/GitCommitRule.md` 风格，单 commit 或按 Phase 拆分提交）。 ✅ Phases 1–5 已按 Phase 拆分提交；Phase 5：`8ca8191`（Angelscript）、`a834667`（AngelscriptGAS）、`41447c0`（父仓库 OpenSpec + gitlink）。
