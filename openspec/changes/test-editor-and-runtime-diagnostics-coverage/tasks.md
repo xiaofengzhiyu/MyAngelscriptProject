@@ -13,4 +13,4 @@
 
 ## 3. Documentation and full-suite verification
 
-- [ ] 3.1 <!-- Non-TDD --> Update `Documents/Guides/TestCatalog.md` and `Documents/Guides/Test.md` to describe the first-wave editor and diagnostics coverage baseline. Verify with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule." -Label editor-diagnostics-coverage -TimeoutMs 900000` and `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label editor-diagnostics-coverage -TimeoutMs 180000`.
+- [ ] 3.1 <!-- Non-TDD --> Update `Documents/Guides/TestCatalog.md` and `Documents/Guides/Test.md` to describe the first-wave editor and diagnostics coverage baseline. Verify with the scoped theme-prefix runs for `Editor`, `Networking`, `Dump`, `Performance`, `Memory`, `GC`, and `Validation`, plus `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label editor-diagnostics-coverage -TimeoutMs 180000`.

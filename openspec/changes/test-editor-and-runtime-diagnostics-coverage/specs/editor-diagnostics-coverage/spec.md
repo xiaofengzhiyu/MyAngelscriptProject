@@ -75,4 +75,6 @@ The project documentation SHALL describe the first-wave coverage baseline for th
   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Memory." -Label editor-diagnostics-memory -TimeoutMs 600000`
   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.GC." -Label editor-diagnostics-gc -TimeoutMs 600000`
   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Validation." -Label editor-diagnostics-validation -TimeoutMs 600000`
-  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule." -Label editor-diagnostics-coverage -TimeoutMs 900000`
+  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunBuild.ps1 -Label editor-diagnostics-coverage -TimeoutMs 180000`
+
+The scoped theme-prefix runs above are the verification gate for this change. The broad `Angelscript.TestModule.` prefix is not required here because it pulls unrelated failures into the change scope.

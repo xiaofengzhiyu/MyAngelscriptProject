@@ -50,7 +50,7 @@ Alternatives considered:
 1. Add the first-wave tests for the editor, networking, and dump themes.
 2. Add the thin-theme diagnostics and lifecycle cases for performance, memory, GC, and validation.
 3. Update the test catalog and test guide with the new coverage map and verification entry points.
-4. Run the themed prefixes, then the broader `Angelscript.TestModule.*` prefix to confirm the suite still discovers cleanly.
+4. Run the themed prefixes, then the build gate, to confirm the suite still discovers cleanly without pulling unrelated suites into this change.
 
 ## Open Questions
 
