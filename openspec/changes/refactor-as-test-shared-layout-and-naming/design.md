@@ -1,6 +1,6 @@
 ## Context
 
-`Plugins/Angelscript/Source/AngelscriptTest/Shared/` 当前有 47 个文件、9 个职责簇混在一起。其中 `AngelscriptTestUtilities.h` 是 967 行的「上帝头」，把 7 段不同职责（引擎获取/Cleanup/内存探针/共享重置/模块编译/AS 执行/夹具）全部 inline 在同一文件内；同时把 `BlueprintActionDatabase.h`、`K2Node_GetSubsystem.h`、AS SDK 三件套通过 umbrella 传染给 400+ 测试 TU。
+`Plugins/Angelscript/Source/AngelscriptTest/Shared/` 当前有 47 个文件、9 个职责簇混在一起。其中 `AngelscriptTestUtilities.h` 是 1093 行的「上帝头」，把 7 段不同职责（引擎获取/Cleanup/内存探针/共享重置/模块编译/AS 执行/夹具）全部 inline 在同一文件内；同时把 `BlueprintActionDatabase.h`、`K2Node_GetSubsystem.h`、AS SDK 三件套通过 umbrella 传染给 400+ 测试 TU。
 
 另一方面，"调用 AS 函数"这件事在 `Shared/AngelscriptBindingsAssertions.h`（378 行，9 个 `Expect*`）+ `Shared/AngelscriptGlobalFunctionInvoker.h`（408 行，`FASGlobalFunctionInvoker` fluent 类）+ `AngelscriptTestUtilities.h` 873-1015 段（`ExecuteIntFunction*` / `ExecuteInt64Function`）+ 各 Bindings/*.cpp 内 4-5 份文件私有 helper（Math / Orientation / Curve / WorldFunc 等的 `ExecuteValueFunction` / `ExecuteIntFunctionWithAddressArg` / `ExecuteFunctionExpectingException`）之间有 **≥7 个并行入口**。命名族（`Expect*` / `Execute*Function*` / `.Call()` / `.CallAndReturn`）互不对齐，与 UE 风格 / AS 底层 `asIScriptContext::Execute()` 也不一致。
 
@@ -10,7 +10,7 @@
 
 **Goals:**
 
-1. 把 `AngelscriptTestUtilities.h` 967 行拆成 6 个主题头 + 1 个 .cpp，umbrella 缩为 ~40 行纯 include。
+1. 把 `AngelscriptTestUtilities.h` 1093 行拆成 6 个主题头 + 1 个 .cpp，umbrella 缩为 ~40 行纯 include。
 2. 把"AS 函数执行"的所有入口收口到 `Shared/AngelscriptTestExecute.h` 单文件：包含底层 `FAngelscriptTestExecutor` 类 + `Execute*` 自由函数族 + `Compile*` 独立族 + 全部旧符号 inline alias / 旧头 forward。
 3. 建立以 `Execute` 为根动词、词位 `Execute[AndGet|AndExpect|AndValidate|BatchAndExpect|(空)][Near|AtLeast|(空)][<Type>|<T>]` 的命名族契约（spec 强制）。
 4. `FBindingsCoverageProfile` 字段全词化通过**双字段并存**落地（C++ alias 能覆盖的部分）。
@@ -209,7 +209,7 @@ AS 不允许同名函数同时存在于 namespace 内外，无兼容期可走。
 
 | 簇 | 关键文件 | 行数 | 本 change 是否动 |
 |----|---------|------|------------------|
-| 上帝头 | `AngelscriptTestUtilities.h` | 967 | **拆** |
+| 上帝头 | `AngelscriptTestUtilities.h` | 1093 | **拆** |
 | Bindings 工具 | `AngelscriptBindingsAssertions.h` / `BindingsCoverage.h` / `BindingsModuleBuilder.h` / `BindingsExampleSection.h` / `GlobalFunctionInvoker.h` | 1058 | **部分合并** |
 | 反射访问 | `AngelscriptReflectiveAccess.h` | 979 | 不动 |
 | Debugger 套件 | 10 个 `Debugger*` / `MockDebugServer*` | ~3088 | 不动 |
@@ -221,7 +221,7 @@ AS 不允许同名函数同时存在于 namespace 内外，无兼容期可走。
 
 各 Bindings/*.cpp 内还散落 4-5 份私有 `Execute*Function*` helper（Math / Orientation / Curve / WorldFunc）。
 
-### B. `AngelscriptTestUtilities.h` 内部切线（967 行实地行号）
+### B. `AngelscriptTestUtilities.h` 内部切线（1093 行实地行号）
 
 | 段 | 行段 | 主要符号 | Phase 1 去向 |
 |----|------|---------|--------------|

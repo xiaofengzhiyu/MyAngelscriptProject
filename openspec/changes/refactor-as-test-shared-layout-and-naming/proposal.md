@@ -1,6 +1,6 @@
 ## Why
 
-`Plugins/Angelscript/Source/AngelscriptTest/Shared/AngelscriptTestUtilities.h` 已经膨胀为 **967 行的"上帝头"**，在同一头里 inline 实现了 7 段不同职责（生产/隔离/瞬态引擎获取、UASClass + BP Action DB 的 GC 清理、内存探针、shared engine 重置 + 调试日志、模块编译/函数查找、AS 函数执行/异常断言、`FAngelscriptTestFixture`），并把 `BlueprintActionDatabase.h`、`K2Node_GetSubsystem.h` 以及 SDK 三件套传染给 **400+ 个测试 `.cpp`**。同时 `Shared/` 目录另存在 4 个纯转发别名（`GetSharedTestEngine` / `GetResetSharedTestEngine` / `AcquireFreshSharedCloneEngine` / `ResetSharedInitializedTestEngine`，共 ~46 个 callsite）是历史迁移残留。
+`Plugins/Angelscript/Source/AngelscriptTest/Shared/AngelscriptTestUtilities.h` 已经膨胀为 **1093 行的"上帝头"**，在同一头里 inline 实现了 7 段不同职责（生产/隔离/瞬态引擎获取、UASClass + BP Action DB 的 GC 清理、内存探针、shared engine 重置 + 调试日志、模块编译/函数查找、AS 函数执行/异常断言、`FAngelscriptTestFixture`），并把 `BlueprintActionDatabase.h`、`K2Node_GetSubsystem.h` 以及 SDK 三件套传染给 **400+ 个测试 `.cpp`**。同时 `Shared/` 目录另存在 4 个纯转发别名（`GetSharedTestEngine` / `GetResetSharedTestEngine` / `AcquireFreshSharedCloneEngine` / `ResetSharedInitializedTestEngine`，共 ~46 个 callsite）是历史迁移残留。
 
 与此同时，`AngelscriptTest/Bindings/` 71 个 `.cpp` 文件里"调用 AS 函数"这件事的入口高度分散：`Shared/AngelscriptBindingsAssertions.h` 提供 9 个 `Expect*` 一行式断言、`Shared/AngelscriptGlobalFunctionInvoker.h` 提供底层 `FASGlobalFunctionInvoker` fluent 类、各 Bindings/*.cpp 内还散落 4-5 份私有 `Execute*Function*` helper（Math/Orientation/Curve/WorldFunc 等），加上 `AngelscriptTestUtilities.h` 自带的 `ExecuteIntFunction*` / `ExecuteInt64Function`，**同一意图至少 7 个并行入口**，命名族（`Expect*` / `Execute*Function*` / `.Call()` / `.CallAndReturn`）互不对齐，与 UE 风格 / AS 底层 `asIScriptContext::Execute()` 也不一致。
 
@@ -10,7 +10,7 @@
 
 ### Header 拆分（沿用原 proposal 范围 + 1 个主题头改名）
 
-- 拆 `AngelscriptTestUtilities.h` 967 行 inline 实现为 **6 个主题头 + 1 个 .cpp**（全部平铺在 `Shared/`）：`AngelscriptTestEngineAcquisition.h/.cpp`、`AngelscriptTestEngineCleanup.h`、`AngelscriptTestMemoryProbe.h`、`AngelscriptTestModuleBuilder.h`、**`AngelscriptTestExecute.h`**（改名 — 原 proposal 中的 `AngelscriptTestExecution.h` 直接命名为 `AngelscriptTestExecute.h`，与下文新命名族收口名对齐）、`AngelscriptTestFixture.h`。
+- 拆 `AngelscriptTestUtilities.h` 1093 行 inline 实现为 **6 个主题头 + 1 个 .cpp**（全部平铺在 `Shared/`）：`AngelscriptTestEngineAcquisition.h/.cpp`、`AngelscriptTestEngineCleanup.h`、`AngelscriptTestMemoryProbe.h`、`AngelscriptTestModuleBuilder.h`、**`AngelscriptTestExecute.h`**（改名 — 原 proposal 中的 `AngelscriptTestExecution.h` 直接命名为 `AngelscriptTestExecute.h`，与下文新命名族收口名对齐）、`AngelscriptTestFixture.h`。
 - `AngelscriptTestUtilities.h` 缩成 **~40 行的纯聚合入口头**，只 `#include` 上面 6 个新头 + 现有 `AngelscriptTestEngine.h` + `Misc/AutomationTest.h`，不再放任何函数实现。继续作为 400+ 测试 `.cpp` 的兼容包含入口。
 - **BREAKING（测试模块内部）**：退役 4 个纯转发别名 `GetSharedTestEngine` / `GetResetSharedTestEngine` / `AcquireFreshSharedCloneEngine` / `ResetSharedInitializedTestEngine`，~46 个 callsite 替换为 `GetOrCreateSharedCloneEngine` / `AcquireCleanSharedCloneEngine` / `ResetSharedCloneEngine`。**不影响外部插件**（`AngelscriptGAS` 等），因 audit 显示这些别名仅在 `AngelscriptTest` 模块内部被调用。
 - 把 `WITH_EDITOR` 的 `BlueprintActionDatabase` / `K2Node_*` 依赖**收敛到 `AngelscriptTestEngineCleanup.h` 一个文件**，不再透传给所有测试 TU（主要的编译时间收益）。
@@ -92,7 +92,7 @@
 
 ## Impact
 
-- **代码（拆分）**：`Plugins/Angelscript/Source/AngelscriptTest/Shared/AngelscriptTestUtilities.h`（主拆分目标，967 行 → ~40 行）；新增 `AngelscriptTestEngineAcquisition.h/.cpp`、`AngelscriptTestEngineCleanup.h`、`AngelscriptTestMemoryProbe.h`、`AngelscriptTestModuleBuilder.h`、`AngelscriptTestExecute.h`、`AngelscriptTestFixture.h`、`Shared/README.md`。
+- **代码（拆分）**：`Plugins/Angelscript/Source/AngelscriptTest/Shared/AngelscriptTestUtilities.h`（主拆分目标，1093 行 → ~40 行）；新增 `AngelscriptTestEngineAcquisition.h/.cpp`、`AngelscriptTestEngineCleanup.h`、`AngelscriptTestMemoryProbe.h`、`AngelscriptTestModuleBuilder.h`、`AngelscriptTestExecute.h`、`AngelscriptTestFixture.h`、`Shared/README.md`。
 - **代码（命名族）**：`Shared/AngelscriptTestExecute.h` 含 `FAngelscriptTestExecutor` 类 + `Execute*` 自由函数族 + 全部旧符号 inline alias（约 1100 行）；`Shared/AngelscriptGlobalFunctionInvoker.h`（408 行 → ~3 行 forward）；`Shared/AngelscriptBindingsAssertions.h`（378 行 → ~3 行 forward）；`Shared/AngelscriptBindingsCoverage.h`（104 行 → ~140 行，双字段并存）。
 - **代码（标记）**：71 个 Bindings/*.cpp 中含私有 `Execute*Function*` helper 的 4-5 份（Math / Orientation / Curve / WorldFunc 等）顶部加 `// TODO(refactor-as-test-shared-layout-and-naming)` 标记。
 - **代码（callsite 改名）**：仅 `AngelscriptBindingsExampleSection.h` 内示例（~80 行）改为新命名作为官方示范。
