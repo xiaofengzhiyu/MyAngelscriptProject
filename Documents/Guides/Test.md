@@ -208,8 +208,71 @@ Tools\RunTestSuite.ps1 -Suite FunctionalSamples -LabelPrefix functional -Timeout
 - `-TimeoutMs`：透传给每个 `RunTests` 子 run 的超时
 - `-OutputRoot`：透传给每个 `RunTests` 子 run 的输出父目录
 - `-NoReport`：透传给每个 `RunTests` 子 run
+- `-ContinueOnFail`：某个前缀失败后继续跑剩余前缀（默认遇错即停）
 - `-ListSuites`：列出内置 suite 与对应前缀
 - `-DryRun`：只打印将要执行的命令
+
+### `Tools\RunTestSuiteFast.ps1`（推荐：全量 ~5–8 分钟）
+
+**不要开 RHI。** 默认已是 `-NullRHI`（关闭渲染、只用 CPU），比真实 RHI 更快。`-Render` 仅用于必须 GPU 的测试。
+
+全量测试的瓶颈是 **36 次 UE Editor 冷启动**，不是单个测试本身。Fast 入口改为 **4 路粗分片并行**（4 次冷启动，wall time ≈ 最慢分片）：
+
+```powershell
+Tools\RunTestSuiteFast.ps1 -LabelPrefix all-fast -TimeoutMs 900000 -ContinueOnFail
+```
+
+等价于：
+
+```powershell
+Tools\RunTestSuiteParallel.ps1 -Strategy Coarse -Fast -MaxParallelHeavy 4 -ContinueOnFail -TimeoutMs 900000
+```
+
+4 个分片：`Angelscript.TestModule` / `Angelscript.Editor` / `Angelscript.GAS` / `Angelscript.Template`
+
+`-Fast` 追加启动参数：`-NoLoadStartupPackages`、`-NoLiveCoding`、`-NoScreenMessages`、`-DisableAutomaticShaderCompilerLaunch`（均与 `-NullRHI` 叠加）。
+
+**耗时预期（Development Editor，NullRHI，warm 机器）：**
+
+| 模式 | 冷启动次数 | 典型 wall time |
+|------|-----------|----------------|
+| `RunTestSuite.ps1 -Suite All`（串行 36 前缀） | 36 | 30–60+ min |
+| `RunTestSuiteParallel -Strategy Fine` | 36 | 15–30 min |
+| `RunTestSuiteFast` / `Strategy Coarse` | 4 | **~5–8 min** |
+| `Strategy Monolithic`（单次 `Angelscript` 前缀） | 1 | ~6–12 min |
+
+Debugger / Performance / HotReload 可能拖慢 `TestModule` 分片；CI 门禁可单独跑 Fast，慢套件夜间跑。
+
+单次快速验证也可：
+
+```powershell
+Tools\RunTests.ps1 -TestPrefix Angelscript -Fast -Label all-monolithic -TimeoutMs 900000
+```
+
+### `Tools\RunTestSuiteParallel.ps1`
+
+全量/大 suite 的并行入口。Light 前缀默认 4 路并发；Heavy 前缀（完整引擎、大绑定面、GAS、Debugger 等）默认单进程独占 slot，避免多个 full engine 同时抢资源。
+
+```powershell
+Tools\RunTestSuiteParallel.ps1 -Suite All -LabelPrefix all-parallel -TimeoutMs 900000 -ContinueOnFail
+Tools\RunTestSuiteParallel.ps1 -Suite All -MaxParallelLight 4 -MaxParallelHeavy 1 -DryRun
+```
+
+- `-MaxParallelLight`：Light tier 最大并发 worker 数，默认 `4`
+- `-MaxParallelHeavy`：Heavy tier 最大并发 worker 数，默认 `1`
+- `-ContinueOnFail`：某个 shard 失败后继续调度剩余前缀
+- 每个 worker 通过 `RunTests.ps1 -ExecutionSlot <N>` 使用独立 mutex，可在同一 worktree 上并行
+- 汇总写入 `Saved/Tests/<LabelPrefix>_<timestamp>/ParallelSuiteSummary.json`
+
+串行全量仍可用 `RunTestSuite.ps1 -Suite All -ContinueOnFail`；耗时高时优先用 Parallel 版本。
+
+### `RunTests.ps1` 并行 slot
+
+```powershell
+Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.Syntax" -Label syntax-slot2 -ExecutionSlot 2 -TimeoutMs 600000
+```
+
+- `-ExecutionSlot`：并行 worker 编号（`0`=默认单进程模式）。同一 slot 仍互斥，不同 slot 可并行。
 
 ## 输出与产物
 
