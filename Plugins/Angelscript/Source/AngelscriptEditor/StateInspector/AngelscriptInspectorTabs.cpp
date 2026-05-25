@@ -14,7 +14,7 @@
 
 namespace
 {
-	constexpr int32 InspectorTabCount = 6;
+	constexpr int32 InspectorTabCount = 7;
 	TWeakPtr<SWindow> GInspectorWindows[InspectorTabCount];
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -31,6 +31,8 @@ namespace
 		using namespace AngelscriptEditor::StateInspector;
 		switch (Tab)
 		{
+		case EInspectorTab::ModuleBrowser:
+			return LOCTEXT("ModuleBrowserTitle", "Angelscript Module Browser");
 		case EInspectorTab::ScriptClassBrowser:
 			return LOCTEXT("ScriptClassBrowserTitle", "Angelscript Script Class Browser");
 		case EInspectorTab::BindingExplorer:
@@ -53,6 +55,10 @@ namespace
 		using namespace AngelscriptEditor::StateInspector;
 		switch (Tab)
 		{
+		case EInspectorTab::ModuleBrowser:
+			return SNew(SAngelscriptEngineStateWidget)
+				.InitialSection(SAngelscriptEngineStateWidget::ESection::Modules)
+				.bShowSectionNavigation(false);
 		case EInspectorTab::ScriptClassBrowser:
 			return SNew(SAngelscriptEngineStateWidget)
 				.InitialSection(SAngelscriptEngineStateWidget::ESection::ScriptClasses)
@@ -74,6 +80,11 @@ namespace
 		default:
 			return SNew(STextBlock).Text(LOCTEXT("UnknownInspectorContent", "Unknown Angelscript inspector."));
 		}
+	}
+
+	void OpenModuleBrowser()
+	{
+		AngelscriptEditor::StateInspector::OpenInspectorTab(AngelscriptEditor::StateInspector::EInspectorTab::ModuleBrowser);
 	}
 
 	void OpenScriptClassBrowser()
@@ -105,6 +116,11 @@ namespace
 	{
 		AngelscriptEditor::StateInspector::OpenInspectorTab(AngelscriptEditor::StateInspector::EInspectorTab::StateDumpBrowser);
 	}
+
+	FAutoConsoleCommand GOpenModuleBrowserCommand(
+		TEXT("as.OpenModuleBrowser"),
+		TEXT("Open the Angelscript Module Browser inspector window."),
+		FConsoleCommandDelegate::CreateStatic(&OpenModuleBrowser));
 
 	FAutoConsoleCommand GOpenScriptClassBrowserCommand(
 		TEXT("as.OpenScriptClassBrowser"),

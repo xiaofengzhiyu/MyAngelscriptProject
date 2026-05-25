@@ -50,6 +50,7 @@ public:
 	static void ShowAssetListPopup(const TArray<FString>& AssetPaths, class UASClass* BaseClass);
 	static void ShowCreateBlueprintPopup(class UASClass* Class);
 	static void ShowEngineStateWindow();
+	static void OpenStandaloneDebugger();
 
 	static void GenerateNativeBinds();
 	static void GenerateBindDatabases();	

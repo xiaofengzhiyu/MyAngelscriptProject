@@ -26,6 +26,7 @@
 #include "Framework/Application/MenuStack.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "HAL/IConsoleManager.h"
 #include "LevelEditor.h"
 #include "GameplayTagsModule.h"
 #include "Misc/ScopedSlowTask.h"
@@ -389,6 +390,61 @@ namespace
 
 		return FPlatformMisc::OsExecute(CommandType, Command, CommandLine);
 	}
+
+	FString QuoteDebuggerArgument(const FString& Value)
+	{
+		return FString::Printf(TEXT("\"%s\""), *Value.Replace(TEXT("\""), TEXT("\\\"")));
+	}
+
+	FString ResolveStandaloneDebuggerExecutable()
+	{
+		const FString ProjectBinaryDirectory = FPaths::ProjectDir() / TEXT("Binaries") / FPlatformProcess::GetBinariesSubdirectory();
+		const FString EngineBinaryDirectory = FPaths::EngineDir() / TEXT("Binaries") / FPlatformProcess::GetBinariesSubdirectory();
+
+		const FString Candidates[] = {
+			ProjectBinaryDirectory / TEXT("AngelscriptDebugger.exe"),
+			ProjectBinaryDirectory / TEXT("AngelscriptDebugger-Win64-Development.exe"),
+			ProjectBinaryDirectory / TEXT("AngelscriptDebugger-Win64-DebugGame.exe"),
+			EngineBinaryDirectory / TEXT("AngelscriptDebugger.exe"),
+			EngineBinaryDirectory / TEXT("AngelscriptDebugger-Win64-Development.exe"),
+			EngineBinaryDirectory / TEXT("AngelscriptDebugger-Win64-DebugGame.exe"),
+		};
+
+		for (const FString& Candidate : Candidates)
+		{
+			if (IFileManager::Get().FileExists(*Candidate))
+			{
+				return Candidate;
+			}
+		}
+
+		return ProjectBinaryDirectory / TEXT("AngelscriptDebugger.exe");
+	}
+
+	int32 ResolveStandaloneDebuggerPort()
+	{
+		if (FAngelscriptEngine* CurrentEngine = FAngelscriptEngine::TryGetCurrentEngine())
+		{
+			return CurrentEngine->GetRuntimeConfig().DebugServerPort;
+		}
+
+		return 27099;
+	}
+
+	FString ResolveStandaloneDebuggerScriptRoot()
+	{
+		if (FAngelscriptEngine::TryGetCurrentEngine() != nullptr)
+		{
+			return FAngelscriptEngine::GetScriptRootDirectory();
+		}
+
+		return FPaths::ProjectDir() / TEXT("Script");
+	}
+
+	FAutoConsoleCommand GOpenAngelscriptStandaloneDebuggerCommand(
+		TEXT("as.OpenASDebugger"),
+		TEXT("Open the standalone Angelscript debugger process."),
+		FConsoleCommandDelegate::CreateStatic(&FAngelscriptEditorModule::OpenStandaloneDebugger));
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -1049,6 +1105,21 @@ void FAngelscriptEditorModule::ShowAssetListPopup(const TArray<FString>& AssetPa
 	}
 }
 
+void FAngelscriptEditorModule::OpenStandaloneDebugger()
+{
+	const FString DebuggerExe = ResolveStandaloneDebuggerExecutable();
+	const int32 DebuggerPort = ResolveStandaloneDebuggerPort();
+	const FString ScriptRoot = ResolveStandaloneDebuggerScriptRoot();
+
+	const FString CommandLine = FString::Printf(
+		TEXT("-host=127.0.0.1 -port=%d -project=%s -scriptroot=%s -autoconnect"),
+		DebuggerPort,
+		*QuoteDebuggerArgument(FPaths::GetProjectFilePath()),
+		*QuoteDebuggerArgument(ScriptRoot));
+
+	ExecutePlatformCommandForEditorModule(nullptr, *DebuggerExe, *CommandLine);
+}
+
 void FAngelscriptEditorModule::ShutdownModule()
 {
 	UnregisterGameplayTagDelegates();
@@ -1171,6 +1242,11 @@ void FAngelscriptEditorModule::RegisterToolsMenuEntries()
 			InspectorAction);
 	};
 
+	AddInspectorEntry(
+		"ASOpenModuleBrowser",
+		NSLOCTEXT("Angelscript", "OpenModuleBrowser.Label", "Module Browser"),
+		NSLOCTEXT("Angelscript", "OpenModuleBrowser.ToolTip", "Inspect Angelscript script modules, imports, files, symbols, diagnostics, and tests."),
+		AngelscriptEditor::StateInspector::EInspectorTab::ModuleBrowser);
 	AddInspectorEntry(
 		"ASOpenScriptClassBrowser",
 		NSLOCTEXT("Angelscript", "OpenScriptClassBrowser.Label", "Script Class Browser"),

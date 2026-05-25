@@ -48,6 +48,23 @@ struct FAngelscriptStateInspectorBindDetailsFilter
 	bool MatchesMethod(const FAngelscriptStateBindMethodSnapshot& Method) const;
 };
 
+struct FAngelscriptStateInspectorModuleDetailsFilter
+{
+	FString RawText;
+	TArray<FString> PlainTerms;
+	TArray<FString> KindTerms;
+	TArray<FString> FileTerms;
+	TArray<FString> SymbolTerms;
+	TArray<FString> DiagnosticTerms;
+	TArray<FString> ImportTerms;
+
+	static FAngelscriptStateInspectorModuleDetailsFilter Parse(const FString& InText);
+	bool MatchesFile(const FAngelscriptStateModuleFileSnapshot& File) const;
+	bool MatchesSymbol(const FAngelscriptStateModuleSymbolSnapshot& Symbol) const;
+	bool MatchesDiagnostic(const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic) const;
+	bool MatchesImport(const FString& ImportName) const;
+};
+
 class SAngelscriptEngineStateWidget : public SCompoundWidget
 {
 public:
@@ -78,6 +95,7 @@ private:
 	FReply SelectSection(ESection Section);
 	void OnSearchTextChanged(const FText& NewText);
 	void OnBindDetailsSearchTextChanged(const FText& NewText);
+	void OnModuleDetailsSearchTextChanged(const FText& NewText);
 	void RefreshSnapshotData();
 	void RebuildContent();
 	void RebuildRows();
@@ -112,6 +130,7 @@ private:
 	bool bShowSectionNavigation = true;
 	FString SearchText;
 	FString BindDetailsSearchText;
+	FString ModuleDetailsSearchText;
 	FName SortColumn;
 	EColumnSortMode::Type SortMode = EColumnSortMode::Ascending;
 	TArray<TSharedPtr<FAngelscriptStateInspectorRow>> FilteredRows;
@@ -121,6 +140,7 @@ private:
 	TSharedPtr<SScrollBox> DetailsBox;
 	TSharedPtr<SSearchBox> SearchBox;
 	TSharedPtr<SSearchBox> BindDetailsSearchBox;
+	TSharedPtr<SSearchBox> ModuleDetailsSearchBox;
 	TSharedPtr<STextBlock> SummaryText;
 	bool bBindShowProperties = true;
 	bool bBindShowMethods = true;

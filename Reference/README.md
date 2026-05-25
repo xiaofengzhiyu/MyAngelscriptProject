@@ -17,6 +17,7 @@
 | Tencent UnLua | 使用 `Tools\PullReference\PullReference.bat unlua` 默认拉取到当前项目的 `Reference\UnLua`；GitHub `https://github.com/Tencent/UnLua.git`；SSH `git@github.com:Tencent/UnLua.git`；用于参考 Lua 脚本方案的 UE 反射接入、事件覆写、调试和教程组织 |
 | Tencent puerts | 使用 `Tools\PullReference\PullReference.bat puerts` 默认拉取到当前项目的 `Reference\puerts`；GitHub `https://github.com/Tencent/puerts.git`；SSH `git@github.com:Tencent/puerts.git`；用于参考 TypeScript/JavaScript 脚本运行时、声明生成和多后端工程组织 |
 | Tencent sluaunreal | 使用 `Tools\PullReference\PullReference.bat sluaunreal` 默认拉取到当前项目的 `Reference\sluaunreal`；GitHub `https://github.com/Tencent/sluaunreal.git`；SSH `git@github.com:Tencent/sluaunreal.git`；用于参考另一套成熟 Lua 方案的静态导出、性能取舍和热更新工作流 |
+| RAD Debugger | 使用 `Tools\PullReference\PullReference.bat raddebugger` 默认拉取到当前项目的 `Reference\raddebugger`；GitHub `https://github.com/TDGameStudio/raddebugger.git`；SSH `git@github.com:TDGameStudio/raddebugger.git`；分支 `develop`；用于参考原生调试器、调试信息、源码导航和诊断交互设计 |
 
 ## 参考源说明
 
@@ -106,12 +107,29 @@
 - 该参考源主要用于观察另一套成熟 Lua 插件如何结合 Blueprint 反射、静态代码生成与 CppBinding，以及如何围绕热更新、性能分析与调试器形成完整工作流。
 - 当需要比较腾讯内部两条 Lua 路线的差异时，可把 `sluaunreal` 视为偏“静态导出 / 性能 / 线上热更新”的对照项。
 
+### 8. RAD Debugger
+
+- 默认路径：当前项目的 `Reference\raddebugger`
+- GitHub：`https://github.com/TDGameStudio/raddebugger.git`
+- SSH：`git@github.com:TDGameStudio/raddebugger.git`
+- 分支：`develop`
+- 拉取命令：`Tools\PullReference\PullReference.bat raddebugger`
+- 重点目录：
+- `Reference\raddebugger\src\raddbg\`
+- `Reference\raddebugger\src\dbg_engine\`
+- `Reference\raddebugger\src\ui\`
+- `Reference\raddebugger\src\eval\`
+- `Reference\raddebugger\src\lib_rdi\`
+- 该参考源用于观察成熟原生调试器如何组织调试会话、断点与线程进程状态、源码导航、表达式求值、调试信息解析和诊断 UI。
+- 它不是 Unreal 脚本插件参考源；用于调试器、诊断体验和工具链设计对照时再优先查看。
+
 ## 如何选择参考源
 
 - AngelScript 语言或运行时本体问题，优先参考 `angelscript-v2.38.0`。
 - Unreal 集成、绑定策略、编辑器交互、测试工程组织问题，优先参考 `HazelightAngelscriptEngineRoot` 指向的 Hazelight 参考仓库。
 - 涉及引擎级补丁、引擎内扩展点或插件无法独立解释的底层行为时，同样优先参考 `HazelightAngelscriptEngineRoot` 指向的仓库。
 - 需要确认 Hazelight 对外文档、能力描述、教程结构或站点内容组织时，优先看 `Docs-UnrealEngine-Angelscript`。
+- 需要参考原生调试器、调试信息解析、源码导航、表达式求值或诊断 UI 设计时，优先看 `raddebugger`。
 - 跨语言但同属 Unreal 脚本插件架构、模块边界、工程组织问题，可额外参考 `UnrealCSharp`。
 - 需要参考 Lua 反射接入、Blueprint 事件覆写、教程组织时，优先看 `UnLua`。
 - 需要参考 JavaScript / TypeScript 运行时、声明生成、脚本后端切换时，优先看 `puerts`。
@@ -125,6 +143,7 @@
 - 对于 `Docs-UnrealEngine-Angelscript`，同样按“每个项目各自拉取到自己的 `Reference/` 目录”处理。
 - 对于 `UnrealCSharp`，同样按“每个项目各自拉取到自己的 `Reference/` 目录”处理。
 - 对于 `UnLua`、`puerts`、`sluaunreal`，同样按“每个项目各自拉取到自己的 `Reference/` 目录”处理。
+- 对于 `raddebugger`，默认固定跟踪 `develop` 分支，并按“每个项目各自拉取到自己的 `Reference/` 目录”处理。
 - 本地配置来源的参考仓库，使用前先读取 `AgentConfig.ini`，不要在通用文档或脚本中写死机器路径。
 - 当前本地配置来源包括：`HazelightAngelscriptEngineRoot`。
 - 如果不同参考源之间存在差异，应显式区分“语言本体行为”“UE 插件集成差异”“引擎侧改造差异”，不要混写。

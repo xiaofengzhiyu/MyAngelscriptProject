@@ -6,6 +6,7 @@ namespace AngelscriptEditor::StateInspector
 {
 	enum class EInspectorTab : uint8
 	{
+		ModuleBrowser,
 		ScriptClassBrowser,
 		BindingExplorer,
 		CompileDiagnostics,

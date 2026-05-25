@@ -67,25 +67,43 @@ namespace AngelscriptEditor_StateInspectorTests_Private
 		TArray<FAngelscriptStructBind> SavedStructs;
 	};
 
-	bool CompileStateInspectorScript(FAutomationTestBase& Test, FAngelscriptEngine& Engine, const FString& ModuleName, const FString& ScriptSource)
+	struct FStateInspectorScriptInput
 	{
-		const FString RelativeFilename = FString::Printf(TEXT("%s.as"), *ModuleName);
-		const FString AbsoluteFilename = FPaths::Combine(
+		FString RelativeFilename;
+		FString ScriptSource;
+	};
+
+	bool CompileStateInspectorScripts(
+		FAutomationTestBase& Test,
+		FAngelscriptEngine& Engine,
+		const TArray<FStateInspectorScriptInput>& Scripts,
+		TMap<FString, FString>* OutAbsoluteFilenames = nullptr)
+	{
+		const FString RootDirectory = FPaths::Combine(
 			FPaths::ProjectSavedDir(),
 			TEXT("Automation"),
 			TEXT("StateInspector"),
-			FGuid::NewGuid().ToString(EGuidFormats::Digits),
-			RelativeFilename);
-		IFileManager::Get().MakeDirectory(*FPaths::GetPath(AbsoluteFilename), true);
-		if (!FFileHelper::SaveStringToFile(ScriptSource, *AbsoluteFilename))
-		{
-			Test.AddError(FString::Printf(TEXT("StateInspector test should write script file '%s'"), *AbsoluteFilename));
-			return false;
-		}
+			FGuid::NewGuid().ToString(EGuidFormats::Digits));
 
 		FAngelscriptEngineScope EngineScope(Engine);
 		FAngelscriptPreprocessor Preprocessor;
-		Preprocessor.AddFile(RelativeFilename, AbsoluteFilename);
+		for (const FStateInspectorScriptInput& Script : Scripts)
+		{
+			const FString AbsoluteFilename = FPaths::Combine(RootDirectory, Script.RelativeFilename);
+			IFileManager::Get().MakeDirectory(*FPaths::GetPath(AbsoluteFilename), true);
+			if (!FFileHelper::SaveStringToFile(Script.ScriptSource, *AbsoluteFilename))
+			{
+				Test.AddError(FString::Printf(TEXT("StateInspector test should write script file '%s'"), *AbsoluteFilename));
+				return false;
+			}
+
+			Preprocessor.AddFile(Script.RelativeFilename, AbsoluteFilename);
+			if (OutAbsoluteFilenames != nullptr)
+			{
+				OutAbsoluteFilenames->Add(Script.RelativeFilename, AbsoluteFilename);
+			}
+		}
+
 		if (!Preprocessor.Preprocess())
 		{
 			Test.AddError(FString::Printf(TEXT("StateInspector test failed to preprocess script: %s"), *Engine.FormatDiagnostics()));
@@ -106,6 +124,20 @@ namespace AngelscriptEditor_StateInspectorTests_Private
 		return Test.TestTrue(TEXT("StateInspector test should compile at least one module"), CompiledModules.Num() > 0);
 	}
 
+	bool CompileStateInspectorScript(FAutomationTestBase& Test, FAngelscriptEngine& Engine, const FString& ModuleName, const FString& ScriptSource)
+	{
+		const FString RelativeFilename = FString::Printf(TEXT("%s.as"), *ModuleName);
+		return CompileStateInspectorScripts(Test, Engine, { { RelativeFilename, ScriptSource } });
+	}
+
+	const FAngelscriptStateModuleSnapshot* FindModule(const FAngelscriptEngineStateSnapshot& Snapshot, const FString& ModuleName)
+	{
+		return Snapshot.Modules.FindByPredicate([&ModuleName](const FAngelscriptStateModuleSnapshot& Candidate)
+		{
+			return Candidate.ModuleName == ModuleName;
+		});
+	}
+
 	const FAngelscriptStateScriptClassSnapshot* FindScriptClass(const FAngelscriptEngineStateSnapshot& Snapshot, const FString& ClassName)
 	{
 		return Snapshot.ScriptClasses.FindByPredicate([&ClassName](const FAngelscriptStateScriptClassSnapshot& Candidate)
@@ -119,6 +151,30 @@ namespace AngelscriptEditor_StateInspectorTests_Private
 		return Members.ContainsByPredicate([&Name](const FAngelscriptStateMemberSnapshot& Member)
 		{
 			return Member.Name == Name;
+		});
+	}
+
+	bool HasModuleFile(const TArray<FAngelscriptStateModuleFileSnapshot>& Files, const FString& RelativeFilename)
+	{
+		return Files.ContainsByPredicate([&RelativeFilename](const FAngelscriptStateModuleFileSnapshot& File)
+		{
+			return File.RelativeFilename == RelativeFilename && !File.AbsoluteFilename.IsEmpty() && File.CodeHash != 0;
+		});
+	}
+
+	bool HasModuleSymbol(const TArray<FAngelscriptStateModuleSymbolSnapshot>& Symbols, const FString& Kind, const FString& Name)
+	{
+		return Symbols.ContainsByPredicate([&Kind, &Name](const FAngelscriptStateModuleSymbolSnapshot& Symbol)
+		{
+			return Symbol.Kind == Kind && Symbol.Name == Name && !Symbol.SearchText.IsEmpty();
+		});
+	}
+
+	bool HasModuleDiagnostic(const TArray<FAngelscriptStateModuleDiagnosticSnapshot>& Diagnostics, const FString& Severity, const FString& Message)
+	{
+		return Diagnostics.ContainsByPredicate([&Severity, &Message](const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic)
+		{
+			return Diagnostic.Severity == Severity && Diagnostic.Message.Contains(Message);
 		});
 	}
 
@@ -254,6 +310,167 @@ class AStateInspectorSampleActor : AActor
 	TestTrue(TEXT("StateInspector snapshot should report at least one AS object type"), Snapshot.Overview.ScriptObjectTypeCount > 0);
 	TestTrue(TEXT("StateInspector snapshot should report bind registrations"), Snapshot.BindRegistrations.Num() > 0);
 	return TestTrue(TEXT("StateInspector snapshot should report registered AS type details"), Snapshot.RegisteredTypes.Num() > 0);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptEditorStateInspectorModuleBrowserSnapshotTest,
+	"Angelscript.Editor.StateInspector.CapturesModuleBrowserDetails",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptEditorStateInspectorModuleBrowserSnapshotTest::RunTest(const FString& Parameters)
+{
+	TArray<FAngelscriptEngine*> SavedStack = FAngelscriptEngineContextStack::SnapshotAndClear();
+	TUniquePtr<FAngelscriptEngine> Engine = MakeStateInspectorTestEngine();
+	ON_SCOPE_EXIT
+	{
+		FAngelscriptEngineContextStack::RestoreSnapshot(MoveTemp(SavedStack));
+	};
+
+	if (!TestNotNull(TEXT("StateInspector module browser test should create a testing engine"), Engine.Get()))
+	{
+		return false;
+	}
+
+	const FString DependencyFilename = TEXT("Editor.StateInspector.Dependency.as");
+	const FString MainFilename = TEXT("Editor.StateInspector.ModuleBrowser.as");
+	const FString DependencyModuleName = TEXT("Editor.StateInspector.Dependency");
+	const FString MainModuleName = TEXT("Editor.StateInspector.ModuleBrowser");
+	const FString DependencyScript = TEXT(R"AS(
+enum EStateInspectorDependencyMode
+{
+	Ready,
+	Blocked
+}
+)AS");
+	const FString MainScript = TEXT(R"AS(
+import Editor.StateInspector.Dependency;
+
+delegate void FStateInspectorModuleSignal(int Value);
+
+struct FStateInspectorModulePayload
+{
+	UPROPERTY()
+	int Amount = 3;
+}
+
+class AStateInspectorModuleBrowserActor : AActor
+{
+	UPROPERTY()
+	int Value = 11;
+
+	UFUNCTION()
+	int GetValue() const
+	{
+		return Value;
+	}
+}
+)AS");
+
+	TMap<FString, FString> AbsoluteFilenames;
+	if (!CompileStateInspectorScripts(
+			*this,
+			*Engine,
+			{
+				{ DependencyFilename, DependencyScript },
+				{ MainFilename, MainScript }
+			},
+			&AbsoluteFilenames))
+	{
+		return false;
+	}
+
+	TSharedPtr<FAngelscriptModuleDesc> MainModule = Engine->GetModuleByModuleName(MainModuleName);
+	if (!TestTrue(TEXT("StateInspector module browser test should resolve the main module"), MainModule.IsValid()))
+	{
+		return false;
+	}
+
+	FAngelscriptTestDesc UnitTestDesc;
+	UnitTestDesc.Function = nullptr;
+	UnitTestDesc.bIsComplexTest = false;
+	UnitTestDesc.ComplexTestParam.Reset();
+	MainModule->UnitTestFunctions.Add(TEXT("UnitTest_StateInspectorModuleBrowser"), UnitTestDesc);
+	MainModule->IntegrationTestFunctions.Add(TEXT("IntegrationTest_StateInspectorModuleBrowser"), UnitTestDesc);
+
+	FAngelscriptEngine::FDiagnostics& MainDiagnostics = Engine->Diagnostics.FindOrAdd(AbsoluteFilenames[MainFilename]);
+	MainDiagnostics.Filename = AbsoluteFilenames[MainFilename];
+	FAngelscriptEngine::FDiagnostic& Diagnostic = MainDiagnostics.Diagnostics.AddDefaulted_GetRef();
+	Diagnostic.Message = TEXT("Synthetic module browser diagnostic");
+	Diagnostic.Row = 6;
+	Diagnostic.Column = 2;
+	Diagnostic.bIsError = false;
+	Diagnostic.bIsInfo = false;
+
+	const FAngelscriptEngineStateSnapshot Snapshot = FAngelscriptEngineStateSnapshot::Capture(Engine.Get());
+	const FAngelscriptStateModuleSnapshot* MainSnapshot = FindModule(Snapshot, MainModuleName);
+	const FAngelscriptStateModuleSnapshot* DependencySnapshot = FindModule(Snapshot, DependencyModuleName);
+	if (!TestNotNull(TEXT("StateInspector module browser snapshot should include the main module"), MainSnapshot)
+		|| !TestNotNull(TEXT("StateInspector module browser snapshot should include the imported module"), DependencySnapshot))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("StateInspector module browser snapshot should record module code hash"), MainSnapshot->CodeHash != 0);
+	TestTrue(TEXT("StateInspector module browser snapshot should record dependency hash"), MainSnapshot->CombinedDependencyHash != 0);
+	TestTrue(TEXT("StateInspector module browser snapshot should record module files"), HasModuleFile(MainSnapshot->Files, MainFilename));
+	TestTrue(TEXT("StateInspector module browser snapshot should record imported modules"), MainSnapshot->ImportedModules.Contains(DependencyModuleName));
+	TestTrue(TEXT("StateInspector module browser snapshot should record reverse imported-by modules"), DependencySnapshot->ImportedByModules.Contains(MainModuleName));
+	TestTrue(TEXT("StateInspector module browser snapshot should include class symbols"), HasModuleSymbol(MainSnapshot->Symbols, TEXT("Class"), TEXT("AStateInspectorModuleBrowserActor")));
+	TestTrue(TEXT("StateInspector module browser snapshot should include struct symbols"), HasModuleSymbol(MainSnapshot->Symbols, TEXT("Struct"), TEXT("FStateInspectorModulePayload")));
+	TestTrue(TEXT("StateInspector module browser snapshot should include enum symbols"), HasModuleSymbol(DependencySnapshot->Symbols, TEXT("Enum"), TEXT("EStateInspectorDependencyMode")));
+	TestTrue(TEXT("StateInspector module browser snapshot should include delegate symbols"), HasModuleSymbol(MainSnapshot->Symbols, TEXT("Delegate"), TEXT("FStateInspectorModuleSignal")));
+	TestTrue(TEXT("StateInspector module browser snapshot should include unit test symbols"), HasModuleSymbol(MainSnapshot->Symbols, TEXT("UnitTest"), TEXT("UnitTest_StateInspectorModuleBrowser")));
+	TestTrue(TEXT("StateInspector module browser snapshot should include integration test symbols"), HasModuleSymbol(MainSnapshot->Symbols, TEXT("IntegrationTest"), TEXT("IntegrationTest_StateInspectorModuleBrowser")));
+	TestTrue(TEXT("StateInspector module browser snapshot should record module diagnostics"), HasModuleDiagnostic(MainSnapshot->Diagnostics, TEXT("Warning"), TEXT("Synthetic module browser diagnostic")));
+	TestEqual(TEXT("StateInspector module browser snapshot should count diagnostics per module"), MainSnapshot->DiagnosticCount, 1);
+	return TestEqual(TEXT("StateInspector module browser snapshot should count warning diagnostics per module"), MainSnapshot->WarningCount, 1);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FAngelscriptEditorStateInspectorModuleBrowserFilterTest,
+	"Angelscript.Editor.StateInspector.ModuleDetailsFilterSupportsTokens",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAngelscriptEditorStateInspectorModuleBrowserFilterTest::RunTest(const FString& Parameters)
+{
+	FAngelscriptStateModuleFileSnapshot File;
+	File.RelativeFilename = TEXT("Editor.StateInspector.ModuleBrowser.as");
+	File.AbsoluteFilename = TEXT("C:/Project/Script/Editor.StateInspector.ModuleBrowser.as");
+	File.CodeHash = 42;
+
+	FAngelscriptStateModuleSymbolSnapshot ClassSymbol;
+	ClassSymbol.Kind = TEXT("Class");
+	ClassSymbol.Name = TEXT("AStateInspectorModuleBrowserActor");
+	ClassSymbol.Declaration = TEXT("class AStateInspectorModuleBrowserActor : AActor");
+	ClassSymbol.SourceFilename = File.RelativeFilename;
+	ClassSymbol.SearchText = TEXT("Class AStateInspectorModuleBrowserActor AActor Editor.StateInspector.ModuleBrowser.as");
+
+	FAngelscriptStateModuleSymbolSnapshot EnumSymbol;
+	EnumSymbol.Kind = TEXT("Enum");
+	EnumSymbol.Name = TEXT("EStateInspectorModuleMode");
+	EnumSymbol.Declaration = TEXT("enum EStateInspectorModuleMode");
+	EnumSymbol.SourceFilename = File.RelativeFilename;
+	EnumSymbol.SearchText = TEXT("Enum EStateInspectorModuleMode Editor.StateInspector.ModuleBrowser.as");
+
+	FAngelscriptStateModuleDiagnosticSnapshot Diagnostic;
+	Diagnostic.Filename = File.AbsoluteFilename;
+	Diagnostic.Severity = TEXT("Error");
+	Diagnostic.Message = TEXT("Synthetic compile failure");
+
+	FAngelscriptStateInspectorModuleDetailsFilter ClassFilter = FAngelscriptStateInspectorModuleDetailsFilter::Parse(TEXT("kind:class symbol:BrowserActor"));
+	TestTrue(TEXT("StateInspector module details filter should match class kind and symbol tokens"), ClassFilter.MatchesSymbol(ClassSymbol));
+	TestFalse(TEXT("StateInspector module details filter should reject non-matching symbol kinds"), ClassFilter.MatchesSymbol(EnumSymbol));
+
+	FAngelscriptStateInspectorModuleDetailsFilter FileFilter = FAngelscriptStateInspectorModuleDetailsFilter::Parse(TEXT("kind:file file:ModuleBrowser.as"));
+	TestTrue(TEXT("StateInspector module details filter should match file tokens"), FileFilter.MatchesFile(File));
+	TestFalse(TEXT("StateInspector module details filter should not match symbols for file-only filters"), FileFilter.MatchesSymbol(ClassSymbol));
+
+	FAngelscriptStateInspectorModuleDetailsFilter DiagnosticFilter = FAngelscriptStateInspectorModuleDetailsFilter::Parse(TEXT("kind:diagnostic diag:error failure"));
+	TestTrue(TEXT("StateInspector module details filter should match diagnostic severity and text tokens"), DiagnosticFilter.MatchesDiagnostic(Diagnostic));
+	TestFalse(TEXT("StateInspector module details filter should not match imports for diagnostic-only filters"), DiagnosticFilter.MatchesImport(TEXT("Editor.StateInspector.Dependency")));
+
+	FAngelscriptStateInspectorModuleDetailsFilter ImportFilter = FAngelscriptStateInspectorModuleDetailsFilter::Parse(TEXT("kind:import import:Dependency"));
+	return TestTrue(TEXT("StateInspector module details filter should match import tokens"), ImportFilter.MatchesImport(TEXT("Editor.StateInspector.Dependency")));
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

@@ -44,6 +44,11 @@ namespace
 		return Value.IsEmpty() ? TEXT("<none>") : Value;
 	}
 
+	FString FormatHash(const int64 Hash)
+	{
+		return FString::Printf(TEXT("0x%016llx"), static_cast<unsigned long long>(Hash));
+	}
+
 	FString JoinSearchText(const TArray<FString>& Values)
 	{
 		return FString::Join(Values, TEXT("\n"));
@@ -127,6 +132,76 @@ namespace
 		for (const FAngelscriptStateBindMethodSnapshot& Method : Methods)
 		{
 			Parts.Add(BuildBindMethodSearchText(Method));
+		}
+		return JoinSearchText(Parts);
+	}
+
+	FString BuildModuleFileSearchText(const FAngelscriptStateModuleFileSnapshot& File)
+	{
+		return JoinSearchText({
+			File.RelativeFilename,
+			File.AbsoluteFilename,
+			FString::Printf(TEXT("%lld"), File.CodeHash),
+			FString::Printf(TEXT("%d"), File.DiagnosticCount)
+		});
+	}
+
+	FString BuildModuleSymbolSearchText(const FAngelscriptStateModuleSymbolSnapshot& Symbol)
+	{
+		if (!Symbol.SearchText.IsEmpty())
+		{
+			return Symbol.SearchText;
+		}
+
+		return JoinSearchText({
+			Symbol.Kind,
+			Symbol.Name,
+			Symbol.Declaration,
+			Symbol.Details,
+			Symbol.SourceFilename,
+			FString::Printf(TEXT("%d"), Symbol.LineNumber)
+		});
+	}
+
+	FString BuildModuleDiagnosticSearchText(const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic)
+	{
+		return JoinSearchText({
+			Diagnostic.Filename,
+			FString::Printf(TEXT("%d:%d"), Diagnostic.Row, Diagnostic.Column),
+			Diagnostic.Severity,
+			Diagnostic.Message
+		});
+	}
+
+	FString JoinModuleFileSearchText(const TArray<FAngelscriptStateModuleFileSnapshot>& Files)
+	{
+		TArray<FString> Parts;
+		Parts.Reserve(Files.Num());
+		for (const FAngelscriptStateModuleFileSnapshot& File : Files)
+		{
+			Parts.Add(BuildModuleFileSearchText(File));
+		}
+		return JoinSearchText(Parts);
+	}
+
+	FString JoinModuleSymbolSearchText(const TArray<FAngelscriptStateModuleSymbolSnapshot>& Symbols)
+	{
+		TArray<FString> Parts;
+		Parts.Reserve(Symbols.Num());
+		for (const FAngelscriptStateModuleSymbolSnapshot& Symbol : Symbols)
+		{
+			Parts.Add(BuildModuleSymbolSearchText(Symbol));
+		}
+		return JoinSearchText(Parts);
+	}
+
+	FString JoinModuleDiagnosticSearchText(const TArray<FAngelscriptStateModuleDiagnosticSnapshot>& Diagnostics)
+	{
+		TArray<FString> Parts;
+		Parts.Reserve(Diagnostics.Num());
+		for (const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic : Diagnostics)
+		{
+			Parts.Add(BuildModuleDiagnosticSearchText(Diagnostic));
 		}
 		return JoinSearchText(Parts);
 	}
@@ -427,6 +502,235 @@ namespace
 		return Box;
 	}
 
+	int32 CountVisibleModuleFiles(const TArray<FAngelscriptStateModuleFileSnapshot>& Files, const FAngelscriptStateInspectorModuleDetailsFilter& Filter)
+	{
+		int32 VisibleCount = 0;
+		for (const FAngelscriptStateModuleFileSnapshot& File : Files)
+		{
+			if (Filter.MatchesFile(File))
+			{
+				++VisibleCount;
+			}
+		}
+		return VisibleCount;
+	}
+
+	int32 CountVisibleModuleSymbols(const TArray<FAngelscriptStateModuleSymbolSnapshot>& Symbols, const FAngelscriptStateInspectorModuleDetailsFilter& Filter)
+	{
+		int32 VisibleCount = 0;
+		for (const FAngelscriptStateModuleSymbolSnapshot& Symbol : Symbols)
+		{
+			if (Filter.MatchesSymbol(Symbol))
+			{
+				++VisibleCount;
+			}
+		}
+		return VisibleCount;
+	}
+
+	int32 CountVisibleModuleDiagnostics(const TArray<FAngelscriptStateModuleDiagnosticSnapshot>& Diagnostics, const FAngelscriptStateInspectorModuleDetailsFilter& Filter)
+	{
+		int32 VisibleCount = 0;
+		for (const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic : Diagnostics)
+		{
+			if (Filter.MatchesDiagnostic(Diagnostic))
+			{
+				++VisibleCount;
+			}
+		}
+		return VisibleCount;
+	}
+
+	int32 CountVisibleModuleStrings(const TArray<FString>& Values, const FAngelscriptStateInspectorModuleDetailsFilter& Filter)
+	{
+		int32 VisibleCount = 0;
+		for (const FString& Value : Values)
+		{
+			if (Filter.MatchesImport(Value))
+			{
+				++VisibleCount;
+			}
+		}
+		return VisibleCount;
+	}
+
+	TSharedRef<SWidget> BuildModuleFileList(const TArray<FAngelscriptStateModuleFileSnapshot>& Files, const FAngelscriptStateInspectorModuleDetailsFilter& Filter, const FString& EmptyText)
+	{
+		TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
+		int32 VisibleCount = 0;
+		for (const FAngelscriptStateModuleFileSnapshot& File : Files)
+		{
+			if (!Filter.MatchesFile(File))
+			{
+				continue;
+			}
+
+			TSharedRef<SVerticalBox> Entry = SNew(SVerticalBox);
+			AddNameValueLine(Entry, TEXT("Relative"), DisplayOrNone(File.RelativeFilename));
+			AddNameValueLine(Entry, TEXT("Absolute"), DisplayOrNone(File.AbsoluteFilename));
+			AddNameValueLine(Entry, TEXT("CodeHash"), FormatHash(File.CodeHash));
+			AddNameValueLine(Entry, TEXT("Diagnostics"), FString::Printf(
+				TEXT("%d total / %d errors / %d warnings / %d info"),
+				File.DiagnosticCount,
+				File.ErrorCount,
+				File.WarningCount,
+				File.InfoCount));
+			Box->AddSlot()
+				.AutoHeight()
+				.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+					.Padding(6.0f)
+					[
+						Entry
+					]
+				];
+			++VisibleCount;
+		}
+
+		if (VisibleCount == 0)
+		{
+			AddTextRow(Box, Files.IsEmpty() ? EmptyText : TEXT("No files match the details filter."));
+		}
+
+		return Box;
+	}
+
+	TSharedRef<SWidget> BuildModuleSymbolList(const TArray<FAngelscriptStateModuleSymbolSnapshot>& Symbols, const FAngelscriptStateInspectorModuleDetailsFilter& Filter, const FString& EmptyText)
+	{
+		TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
+		int32 VisibleCount = 0;
+		for (const FAngelscriptStateModuleSymbolSnapshot& Symbol : Symbols)
+		{
+			if (!Filter.MatchesSymbol(Symbol))
+			{
+				continue;
+			}
+
+			TSharedRef<SVerticalBox> Entry = SNew(SVerticalBox);
+			Entry->AddSlot()
+				.AutoHeight()
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.0f)
+					.VAlign(VAlign_Center)
+					[
+						SNew(STextBlock)
+						.Text(FText::FromString(DisplayOrNone(Symbol.Name)))
+						.Font(FAppStyle::GetFontStyle("BoldFont"))
+						.AutoWrapText(true)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+					[
+						BuildBindTag(Symbol.Kind, FSlateColor(FLinearColor(0.34f, 0.62f, 0.88f)))
+					]
+				];
+			AddNameValueLine(Entry, TEXT("Declaration"), DisplayOrNone(Symbol.Declaration));
+			AddNameValueLine(Entry, TEXT("Details"), DisplayOrNone(Symbol.Details));
+			AddNameValueLine(Entry, TEXT("File"), DisplayOrNone(Symbol.SourceFilename));
+			AddNameValueLine(Entry, TEXT("Line"), Symbol.LineNumber > 0 ? FString::FromInt(Symbol.LineNumber) : FString());
+			Box->AddSlot()
+				.AutoHeight()
+				.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+					.Padding(6.0f)
+					[
+						Entry
+					]
+				];
+			++VisibleCount;
+		}
+
+		if (VisibleCount == 0)
+		{
+			AddTextRow(Box, Symbols.IsEmpty() ? EmptyText : TEXT("No symbols match the details filter."));
+		}
+
+		return Box;
+	}
+
+	TSharedRef<SWidget> BuildModuleDiagnosticList(const TArray<FAngelscriptStateModuleDiagnosticSnapshot>& Diagnostics, const FAngelscriptStateInspectorModuleDetailsFilter& Filter, const FString& EmptyText)
+	{
+		TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
+		int32 VisibleCount = 0;
+		for (const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic : Diagnostics)
+		{
+			if (!Filter.MatchesDiagnostic(Diagnostic))
+			{
+				continue;
+			}
+
+			TSharedRef<SVerticalBox> Entry = SNew(SVerticalBox);
+			AddNameValueLine(Entry, TEXT("Severity"), Diagnostic.Severity);
+			AddNameValueLine(Entry, TEXT("Location"), FString::Printf(TEXT("%d:%d"), Diagnostic.Row, Diagnostic.Column));
+			AddNameValueLine(Entry, TEXT("File"), DisplayOrNone(Diagnostic.Filename));
+			AddNameValueLine(Entry, TEXT("Message"), DisplayOrNone(Diagnostic.Message));
+			Box->AddSlot()
+				.AutoHeight()
+				.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+					.Padding(6.0f)
+					[
+						Entry
+					]
+				];
+			++VisibleCount;
+		}
+
+		if (VisibleCount == 0)
+		{
+			AddTextRow(Box, Diagnostics.IsEmpty() ? EmptyText : TEXT("No diagnostics match the details filter."));
+		}
+
+		return Box;
+	}
+
+	TSharedRef<SWidget> BuildModuleImportList(const TArray<FString>& Values, const FAngelscriptStateInspectorModuleDetailsFilter& Filter, const FString& EmptyText)
+	{
+		TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
+		int32 VisibleCount = 0;
+		for (const FString& Value : Values)
+		{
+			if (!Filter.MatchesImport(Value))
+			{
+				continue;
+			}
+
+			AddTextRow(Box, FString::Printf(TEXT("- %s"), *Value));
+			++VisibleCount;
+		}
+
+		if (VisibleCount == 0)
+		{
+			AddTextRow(Box, Values.IsEmpty() ? EmptyText : TEXT("No imports match the details filter."));
+		}
+
+		return Box;
+	}
+
+	TSharedRef<SWidget> BuildModuleTestList(const TArray<FAngelscriptStateModuleSymbolSnapshot>& Symbols, const FAngelscriptStateInspectorModuleDetailsFilter& Filter, const FString& EmptyText)
+	{
+		TArray<FAngelscriptStateModuleSymbolSnapshot> TestSymbols;
+		for (const FAngelscriptStateModuleSymbolSnapshot& Symbol : Symbols)
+		{
+			if (Symbol.Kind == TEXT("UnitTest") || Symbol.Kind == TEXT("IntegrationTest"))
+			{
+				TestSymbols.Add(Symbol);
+			}
+		}
+
+		return BuildModuleSymbolList(TestSymbols, Filter, EmptyText);
+	}
+
 	TSharedRef<SWidget> BuildStringList(const TArray<FString>& Values, const FString& EmptyText)
 	{
 		TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
@@ -581,7 +885,7 @@ namespace
 			switch (Section)
 			{
 			case SAngelscriptEngineStateWidget::ESection::Modules:
-				return LOCTEXT("ModuleClassesColumn", "Classes");
+				return LOCTEXT("ModuleSymbolsColumn", "Symbols");
 			case SAngelscriptEngineStateWidget::ESection::ScriptClasses:
 			case SAngelscriptEngineStateWidget::ESection::RegisteredTypes:
 			case SAngelscriptEngineStateWidget::ESection::BindDatabase:
@@ -596,7 +900,7 @@ namespace
 			switch (Section)
 			{
 			case SAngelscriptEngineStateWidget::ESection::Modules:
-				return LOCTEXT("ModuleMethodsColumn", "Methods");
+				return LOCTEXT("ModuleDiagnosticsColumn", "Diags");
 			case SAngelscriptEngineStateWidget::ESection::ScriptClasses:
 			case SAngelscriptEngineStateWidget::ESection::RegisteredTypes:
 			case SAngelscriptEngineStateWidget::ESection::BindDatabase:
@@ -815,6 +1119,117 @@ bool FAngelscriptStateInspectorBindDetailsFilter::MatchesMethod(const FAngelscri
 	return ContainsAllTerms(BuildBindMethodSearchText(Method), PlainTerms);
 }
 
+FAngelscriptStateInspectorModuleDetailsFilter FAngelscriptStateInspectorModuleDetailsFilter::Parse(const FString& InText)
+{
+	FAngelscriptStateInspectorModuleDetailsFilter Filter;
+	Filter.RawText = InText;
+
+	TArray<FString> Tokens;
+	InText.ParseIntoArrayWS(Tokens, nullptr, true);
+	for (const FString& Token : Tokens)
+	{
+		FString Prefix;
+		FString Value;
+		if (Token.Split(TEXT(":"), &Prefix, &Value, ESearchCase::IgnoreCase, ESearchDir::FromStart) && !Value.IsEmpty())
+		{
+			if (Prefix.Equals(TEXT("kind"), ESearchCase::IgnoreCase))
+			{
+				Filter.KindTerms.Add(Value);
+				continue;
+			}
+			if (Prefix.Equals(TEXT("file"), ESearchCase::IgnoreCase))
+			{
+				Filter.FileTerms.Add(Value);
+				continue;
+			}
+			if (Prefix.Equals(TEXT("symbol"), ESearchCase::IgnoreCase))
+			{
+				Filter.SymbolTerms.Add(Value);
+				continue;
+			}
+			if (Prefix.Equals(TEXT("diag"), ESearchCase::IgnoreCase) || Prefix.Equals(TEXT("diagnostic"), ESearchCase::IgnoreCase))
+			{
+				Filter.DiagnosticTerms.Add(Value);
+				continue;
+			}
+			if (Prefix.Equals(TEXT("import"), ESearchCase::IgnoreCase))
+			{
+				Filter.ImportTerms.Add(Value);
+				continue;
+			}
+		}
+
+		Filter.PlainTerms.Add(Token);
+	}
+
+	return Filter;
+}
+
+bool FAngelscriptStateInspectorModuleDetailsFilter::MatchesFile(const FAngelscriptStateModuleFileSnapshot& File) const
+{
+	if (!ContainsAllTerms(TEXT("file"), KindTerms))
+	{
+		return false;
+	}
+	if (!SymbolTerms.IsEmpty() || !DiagnosticTerms.IsEmpty() || !ImportTerms.IsEmpty())
+	{
+		return false;
+	}
+
+	const FString FileText = BuildModuleFileSearchText(File);
+	return ContainsAllTerms(FileText, FileTerms)
+		&& ContainsAllTerms(FileText, PlainTerms);
+}
+
+bool FAngelscriptStateInspectorModuleDetailsFilter::MatchesSymbol(const FAngelscriptStateModuleSymbolSnapshot& Symbol) const
+{
+	if (!ContainsAllTerms(Symbol.Kind, KindTerms))
+	{
+		return false;
+	}
+	if (!DiagnosticTerms.IsEmpty() || !ImportTerms.IsEmpty())
+	{
+		return false;
+	}
+
+	const FString SymbolText = BuildModuleSymbolSearchText(Symbol);
+	return ContainsAllTerms(Symbol.SourceFilename, FileTerms)
+		&& ContainsAllTerms(SymbolText, SymbolTerms)
+		&& ContainsAllTerms(SymbolText, PlainTerms);
+}
+
+bool FAngelscriptStateInspectorModuleDetailsFilter::MatchesDiagnostic(const FAngelscriptStateModuleDiagnosticSnapshot& Diagnostic) const
+{
+	if (!ContainsAllTerms(TEXT("diagnostic"), KindTerms))
+	{
+		return false;
+	}
+	if (!SymbolTerms.IsEmpty() || !ImportTerms.IsEmpty())
+	{
+		return false;
+	}
+
+	const FString DiagnosticText = BuildModuleDiagnosticSearchText(Diagnostic);
+	return ContainsAllTerms(Diagnostic.Filename, FileTerms)
+		&& ContainsAllTerms(DiagnosticText, DiagnosticTerms)
+		&& ContainsAllTerms(DiagnosticText, PlainTerms);
+}
+
+bool FAngelscriptStateInspectorModuleDetailsFilter::MatchesImport(const FString& ImportName) const
+{
+	if (!ContainsAllTerms(TEXT("import"), KindTerms))
+	{
+		return false;
+	}
+	if (!FileTerms.IsEmpty() || !SymbolTerms.IsEmpty() || !DiagnosticTerms.IsEmpty())
+	{
+		return false;
+	}
+
+	return ContainsAllTerms(ImportName, ImportTerms)
+		&& ContainsAllTerms(ImportName, PlainTerms);
+}
+
 void SAngelscriptEngineStateWidget::Construct(const FArguments& InArgs)
 {
 	ActiveSection = InArgs._InitialSection;
@@ -941,6 +1356,7 @@ FReply SAngelscriptEngineStateWidget::SelectSection(const ESection Section)
 		ActiveSection = Section;
 		SelectedRow.Reset();
 		BindDetailsSearchText.Reset();
+		ModuleDetailsSearchText.Reset();
 		SortColumn = AngelscriptStateInspectorColumns::Name;
 		SortMode = EColumnSortMode::Ascending;
 		RebuildContent();
@@ -967,6 +1383,17 @@ void SAngelscriptEngineStateWidget::OnBindDetailsSearchTextChanged(const FText& 
 	}
 }
 
+void SAngelscriptEngineStateWidget::OnModuleDetailsSearchTextChanged(const FText& NewText)
+{
+	ModuleDetailsSearchText = NewText.ToString();
+	RebuildDetailsPanel();
+
+	if (ModuleDetailsSearchBox.IsValid())
+	{
+		FSlateApplication::Get().SetKeyboardFocus(ModuleDetailsSearchBox, EFocusCause::SetDirectly);
+	}
+}
+
 void SAngelscriptEngineStateWidget::RefreshSnapshotData()
 {
 	Snapshot = FAngelscriptEngineStateSnapshot::CaptureCurrent();
@@ -981,6 +1408,8 @@ void SAngelscriptEngineStateWidget::RebuildContent()
 
 	RowListView.Reset();
 	DetailsBox.Reset();
+	BindDetailsSearchBox.Reset();
+	ModuleDetailsSearchBox.Reset();
 
 	if (ActiveSection == ESection::Overview)
 	{
@@ -1019,11 +1448,39 @@ void SAngelscriptEngineStateWidget::RebuildRows()
 			Row->Name = Module.ModuleName;
 			Row->Context = FString::Printf(TEXT("%d"), Module.CodeFileCount);
 			Row->Type = FString::Printf(TEXT("%d"), Module.ImportedModuleCount);
-			Row->CountA = FString::Printf(TEXT("%d"), Module.ClassCount);
-			Row->CountB = FString::Printf(TEXT("%d"), Module.MethodCount);
-			Row->Status = Module.bCompileError ? TEXT("Compile error") : (Module.bLoadedPrecompiledCode ? TEXT("Precompiled") : TEXT("Ready"));
-			Row->SearchText = JoinSearchText({ Module.ModuleName, Module.CodeFiles, Row->Status });
-			Row->bWarning = Module.bCompileError;
+			Row->CountA = FString::Printf(TEXT("%d"), Module.SymbolCount);
+			Row->CountB = FString::Printf(TEXT("%d"), Module.DiagnosticCount);
+			if (Module.bCompileError)
+			{
+				Row->Status = TEXT("Compile error");
+			}
+			else if (Module.bModuleSwapInError)
+			{
+				Row->Status = TEXT("Swap-in error");
+			}
+			else if (Module.bLoadedPrecompiledCode)
+			{
+				Row->Status = TEXT("Precompiled");
+			}
+			else
+			{
+				Row->Status = TEXT("Ready");
+			}
+			Row->SearchText = JoinSearchText({
+				Module.ModuleName,
+				Module.CodeFiles,
+				JoinStringArraySearchText(Module.ImportedModules),
+				JoinStringArraySearchText(Module.ImportedByModules),
+				JoinStringArraySearchText(Module.UnitTestFunctions),
+				JoinStringArraySearchText(Module.IntegrationTestFunctions),
+				JoinModuleFileSearchText(Module.Files),
+				JoinModuleSymbolSearchText(Module.Symbols),
+				JoinModuleDiagnosticSearchText(Module.Diagnostics),
+				Row->Status,
+				FormatHash(Module.CodeHash),
+				FormatHash(Module.CombinedDependencyHash)
+			});
+			Row->bWarning = Module.bCompileError || Module.bModuleSwapInError || Module.ErrorCount > 0 || Module.WarningCount > 0;
 			AddRowIfMatched(Row);
 		}
 		break;
@@ -1212,16 +1669,66 @@ void SAngelscriptEngineStateWidget::RebuildDetailsPanel()
 		{
 			const FAngelscriptStateModuleSnapshot& Module = Snapshot.Modules[Index];
 			AddDetailsHeader(Module.ModuleName);
+			AddDetailsRow(TEXT("CodeHash"), FormatHash(Module.CodeHash));
+			AddDetailsRow(TEXT("CombinedDependencyHash"), FormatHash(Module.CombinedDependencyHash));
 			AddDetailsRow(TEXT("Code files"), FString::FromInt(Module.CodeFileCount));
 			AddDetailsRow(TEXT("Imported modules"), FString::FromInt(Module.ImportedModuleCount));
+			AddDetailsRow(TEXT("Imported by"), FString::FromInt(Module.ImportedByModuleCount));
 			AddDetailsRow(TEXT("Classes"), FString::FromInt(Module.ClassCount));
 			AddDetailsRow(TEXT("Properties"), FString::FromInt(Module.PropertyCount));
 			AddDetailsRow(TEXT("Methods"), FString::FromInt(Module.MethodCount));
 			AddDetailsRow(TEXT("Enums"), FString::FromInt(Module.EnumCount));
 			AddDetailsRow(TEXT("Delegates"), FString::FromInt(Module.DelegateCount));
+			AddDetailsRow(TEXT("Symbols"), FString::FromInt(Module.SymbolCount));
+			AddDetailsRow(TEXT("Tests"), FString::Printf(TEXT("%d unit / %d integration"), Module.UnitTestFunctionCount, Module.IntegrationTestFunctionCount));
+			AddDetailsRow(TEXT("Diagnostics"), FString::Printf(
+				TEXT("%d total / %d errors / %d warnings / %d info"),
+				Module.DiagnosticCount,
+				Module.ErrorCount,
+				Module.WarningCount,
+				Module.InfoCount));
 			AddDetailsRow(TEXT("Compile error"), BoolToDisplayString(Module.bCompileError));
 			AddDetailsRow(TEXT("Precompiled"), BoolToDisplayString(Module.bLoadedPrecompiledCode));
-			AddDetailsRow(TEXT("Files"), DisplayOrNone(Module.CodeFiles));
+			AddDetailsRow(TEXT("Swap-in error"), BoolToDisplayString(Module.bModuleSwapInError));
+
+			const FAngelscriptStateInspectorModuleDetailsFilter DetailsFilter = FAngelscriptStateInspectorModuleDetailsFilter::Parse(ModuleDetailsSearchText);
+			const int32 VisibleFileCount = CountVisibleModuleFiles(Module.Files, DetailsFilter);
+			const int32 VisibleImportCount = CountVisibleModuleStrings(Module.ImportedModules, DetailsFilter);
+			const int32 VisibleImportedByCount = CountVisibleModuleStrings(Module.ImportedByModules, DetailsFilter);
+			const int32 VisibleSymbolCount = CountVisibleModuleSymbols(Module.Symbols, DetailsFilter);
+			const int32 VisibleDiagnosticCount = CountVisibleModuleDiagnostics(Module.Diagnostics, DetailsFilter);
+
+			DetailsBox->AddSlot()
+				.Padding(0.0f, 10.0f, 0.0f, 2.0f)
+				[
+					SNew(SBox)
+					.WidthOverride(380.0f)
+					[
+						SAssignNew(ModuleDetailsSearchBox, SSearchBox)
+						.InitialText(FText::FromString(ModuleDetailsSearchText))
+						.HintText(LOCTEXT("ModuleDetailsSearchHint", "Search, kind:, file:, symbol:, diag:, import:"))
+						.OnTextChanged(this, &SAngelscriptEngineStateWidget::OnModuleDetailsSearchTextChanged)
+					]
+				];
+
+			AddDetailsWidget(
+				FString::Printf(TEXT("Files (%s)"), *FormatVisibleCount(VisibleFileCount, Module.Files.Num())),
+				BuildModuleFileList(Module.Files, DetailsFilter, TEXT("No files.")));
+			AddDetailsWidget(
+				FString::Printf(TEXT("Imports (%s)"), *FormatVisibleCount(VisibleImportCount, Module.ImportedModules.Num())),
+				BuildModuleImportList(Module.ImportedModules, DetailsFilter, TEXT("No imported modules.")));
+			AddDetailsWidget(
+				FString::Printf(TEXT("Imported By (%s)"), *FormatVisibleCount(VisibleImportedByCount, Module.ImportedByModules.Num())),
+				BuildModuleImportList(Module.ImportedByModules, DetailsFilter, TEXT("No modules import this module.")));
+			AddDetailsWidget(
+				FString::Printf(TEXT("Symbols (%s)"), *FormatVisibleCount(VisibleSymbolCount, Module.Symbols.Num())),
+				BuildModuleSymbolList(Module.Symbols, DetailsFilter, TEXT("No symbols.")));
+			AddDetailsWidget(
+				FString::Printf(TEXT("Diagnostics (%s)"), *FormatVisibleCount(VisibleDiagnosticCount, Module.Diagnostics.Num())),
+				BuildModuleDiagnosticList(Module.Diagnostics, DetailsFilter, TEXT("No diagnostics.")));
+			AddDetailsWidget(
+				FString::Printf(TEXT("Tests (%d)"), Module.UnitTestFunctionCount + Module.IntegrationTestFunctionCount),
+				BuildModuleTestList(Module.Symbols, DetailsFilter, TEXT("No tests.")));
 		}
 		break;
 	case ESection::ScriptClasses:
@@ -1603,6 +2110,10 @@ void SAngelscriptEngineStateWidget::OnRowSelectionChanged(TSharedPtr<FAngelscrip
 	{
 		BindDetailsSearchText.Reset();
 	}
+	if (ActiveSection == ESection::Modules && SelectedRow != Row)
+	{
+		ModuleDetailsSearchText.Reset();
+	}
 
 	SelectedRow = Row;
 	RebuildDetailsPanel();
@@ -1635,7 +2146,7 @@ FText SAngelscriptEngineStateWidget::GetSectionTitle(const ESection Section) con
 	case ESection::Overview:
 		return LOCTEXT("OverviewSection", "Overview");
 	case ESection::Modules:
-		return LOCTEXT("ModulesSection", "Modules");
+		return LOCTEXT("ModulesSection", "Module Browser");
 	case ESection::ScriptClasses:
 		return LOCTEXT("ScriptClassesSection", "Script Classes");
 	case ESection::RegisteredTypes:

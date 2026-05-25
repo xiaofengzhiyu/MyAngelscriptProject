@@ -8,6 +8,7 @@
 
 #include "Misc/DateTime.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "UObject/UnrealType.h"
 
 namespace
@@ -139,6 +140,84 @@ namespace
 			*FunctionDesc.FunctionName,
 			*FormatArguments(FunctionDesc.Arguments),
 			FunctionDesc.bIsConstMethod ? TEXT(" const") : TEXT(""));
+	}
+
+	FString NormalizeFilenameKey(const FString& Filename)
+	{
+		if (Filename.IsEmpty())
+		{
+			return FString();
+		}
+
+		FString Normalized = FPaths::ConvertRelativePathToFull(Filename);
+		FPaths::NormalizeFilename(Normalized);
+		return Normalized.ToLower();
+	}
+
+	FString FormatHash(const int64 Hash)
+	{
+		return FString::Printf(TEXT("0x%016llx"), static_cast<unsigned long long>(Hash));
+	}
+
+	FString GetCodeSectionDisplayFilename(const FAngelscriptModuleDesc::FCodeSection& CodeSection)
+	{
+		return !CodeSection.RelativeFilename.IsEmpty() ? CodeSection.RelativeFilename : CodeSection.AbsoluteFilename;
+	}
+
+	FString GetPrimaryModuleSourceFilename(const FAngelscriptModuleDesc& Module)
+	{
+		if (Module.Code.IsEmpty())
+		{
+			return FString();
+		}
+
+		return GetCodeSectionDisplayFilename(Module.Code[0]);
+	}
+
+	void AddModuleSymbol(
+		FAngelscriptStateModuleSnapshot& ModuleSnapshot,
+		const FString& Kind,
+		const FString& Name,
+		const FString& Declaration,
+		const FString& Details,
+		const FString& SourceFilename,
+		const int32 LineNumber)
+	{
+		FAngelscriptStateModuleSymbolSnapshot Symbol;
+		Symbol.Kind = Kind;
+		Symbol.Name = Name;
+		Symbol.Declaration = Declaration;
+		Symbol.Details = Details;
+		Symbol.SourceFilename = SourceFilename;
+		Symbol.LineNumber = LineNumber;
+		Symbol.SearchText = JoinSearchText({
+			Symbol.Kind,
+			Symbol.Name,
+			Symbol.Declaration,
+			Symbol.Details,
+			Symbol.SourceFilename,
+			FString::Printf(TEXT("%d"), Symbol.LineNumber)
+		});
+		ModuleSnapshot.Symbols.Add(MoveTemp(Symbol));
+	}
+
+	void AddModuleTestSymbols(
+		FAngelscriptStateModuleSnapshot& ModuleSnapshot,
+		const TMap<FString, FAngelscriptTestDesc>& Tests,
+		TArray<FString>& TestNames,
+		const FString& Kind,
+		const FString& SourceFilename)
+	{
+		Tests.GetKeys(TestNames);
+		TestNames.Sort();
+		for (const FString& TestName : TestNames)
+		{
+			const FAngelscriptTestDesc* TestDesc = Tests.Find(TestName);
+			const FString Details = TestDesc != nullptr && TestDesc->bIsComplexTest
+				? FString::Printf(TEXT("Complex: %s"), *TestDesc->ComplexTestParam)
+				: FString(TEXT("Single"));
+			AddModuleSymbol(ModuleSnapshot, Kind, TestName, TestName, Details, SourceFilename, 0);
+		}
 	}
 
 	FString GetObjectNameFromPath(const FString& ObjectPath)
@@ -443,6 +522,8 @@ namespace
 		{
 			FAngelscriptStateModuleSnapshot ModuleSnapshot;
 			ModuleSnapshot.ModuleName = Module->ModuleName;
+			ModuleSnapshot.CodeHash = Module->CodeHash;
+			ModuleSnapshot.CombinedDependencyHash = Module->CombinedDependencyHash;
 			ModuleSnapshot.CodeFileCount = Module->Code.Num();
 			ModuleSnapshot.ImportedModuleCount = Module->ImportedModules.Num();
 			ModuleSnapshot.ClassCount = Module->Classes.Num();
@@ -450,15 +531,32 @@ namespace
 			ModuleSnapshot.DelegateCount = Module->Delegates.Num();
 			ModuleSnapshot.bCompileError = Module->bCompileError;
 			ModuleSnapshot.bLoadedPrecompiledCode = Module->bLoadedPrecompiledCode;
+			ModuleSnapshot.bModuleSwapInError = Module->bModuleSwapInError;
 
 			TArray<FString> CodeFiles;
 			CodeFiles.Reserve(Module->Code.Num());
 			for (const FAngelscriptModuleDesc::FCodeSection& CodeSection : Module->Code)
 			{
-				CodeFiles.Add(!CodeSection.RelativeFilename.IsEmpty() ? CodeSection.RelativeFilename : CodeSection.AbsoluteFilename);
+				FAngelscriptStateModuleFileSnapshot FileSnapshot;
+				FileSnapshot.RelativeFilename = CodeSection.RelativeFilename;
+				FileSnapshot.AbsoluteFilename = CodeSection.AbsoluteFilename;
+				FileSnapshot.CodeHash = CodeSection.CodeHash;
+				ModuleSnapshot.Files.Add(MoveTemp(FileSnapshot));
+				CodeFiles.Add(GetCodeSectionDisplayFilename(CodeSection));
 			}
 			CodeFiles.Sort();
 			ModuleSnapshot.CodeFiles = JoinStrings(CodeFiles);
+			ModuleSnapshot.Files.Sort([](const FAngelscriptStateModuleFileSnapshot& A, const FAngelscriptStateModuleFileSnapshot& B)
+			{
+				const FString AName = !A.RelativeFilename.IsEmpty() ? A.RelativeFilename : A.AbsoluteFilename;
+				const FString BName = !B.RelativeFilename.IsEmpty() ? B.RelativeFilename : B.AbsoluteFilename;
+				return AName < BName;
+			});
+
+			ModuleSnapshot.ImportedModules = Module->ImportedModules;
+			ModuleSnapshot.ImportedModules.Sort();
+			ModuleSnapshot.ImportedModuleCount = ModuleSnapshot.ImportedModules.Num();
+			const FString PrimarySourceFilename = GetPrimaryModuleSourceFilename(*Module);
 
 			TArray<TSharedRef<FAngelscriptClassDesc>> Classes = Module->Classes;
 			Classes.Sort([](const TSharedRef<FAngelscriptClassDesc>& A, const TSharedRef<FAngelscriptClassDesc>& B)
@@ -480,6 +578,17 @@ namespace
 				ClassSnapshot.ConfigName = ClassDesc->ConfigName;
 				ClassSnapshot.CodeSuperClass = GetPathNameSafe(ClassDesc->CodeSuperClass);
 				ClassSnapshot.LineNumber = ClassDesc->LineNumber;
+
+				AddModuleSymbol(
+					ModuleSnapshot,
+					ClassDesc->bIsStruct ? FString(TEXT("Struct")) : FString(TEXT("Class")),
+					ClassDesc->ClassName,
+					ClassDesc->bIsStruct
+						? FString::Printf(TEXT("struct %s"), *ClassDesc->ClassName)
+						: FString::Printf(TEXT("class %s : %s"), *ClassDesc->ClassName, *ClassDesc->SuperClass),
+					ClassSnapshot.Flags,
+					PrimarySourceFilename,
+					ClassDesc->LineNumber);
 
 				TArray<TSharedRef<FAngelscriptPropertyDesc>> Properties = ClassDesc->Properties;
 				Properties.Sort([](const TSharedRef<FAngelscriptPropertyDesc>& A, const TSharedRef<FAngelscriptPropertyDesc>& B)
@@ -518,7 +627,79 @@ namespace
 				Snapshot.ScriptClasses.Add(MoveTemp(ClassSnapshot));
 			}
 
+			TArray<TSharedRef<FAngelscriptEnumDesc>> Enums = Module->Enums;
+			Enums.Sort([](const TSharedRef<FAngelscriptEnumDesc>& A, const TSharedRef<FAngelscriptEnumDesc>& B)
+			{
+				return A->EnumName < B->EnumName;
+			});
+			for (const TSharedRef<FAngelscriptEnumDesc>& EnumDesc : Enums)
+			{
+				AddModuleSymbol(
+					ModuleSnapshot,
+					TEXT("Enum"),
+					EnumDesc->EnumName,
+					FString::Printf(TEXT("enum %s"), *EnumDesc->EnumName),
+					FString::Printf(TEXT("%d values"), EnumDesc->ValueNames.Num()),
+					PrimarySourceFilename,
+					EnumDesc->LineNumber);
+			}
+
+			TArray<TSharedRef<FAngelscriptDelegateDesc>> Delegates = Module->Delegates;
+			Delegates.Sort([](const TSharedRef<FAngelscriptDelegateDesc>& A, const TSharedRef<FAngelscriptDelegateDesc>& B)
+			{
+				return A->DelegateName < B->DelegateName;
+			});
+			for (const TSharedRef<FAngelscriptDelegateDesc>& DelegateDesc : Delegates)
+			{
+				AddModuleSymbol(
+					ModuleSnapshot,
+					TEXT("Delegate"),
+					DelegateDesc->DelegateName,
+					DelegateDesc->Signature.IsValid()
+						? FormatFunctionDeclaration(*DelegateDesc->Signature)
+						: FString::Printf(TEXT("delegate %s"), *DelegateDesc->DelegateName),
+					DelegateDesc->bIsMulticast ? FString(TEXT("Multicast")) : FString(TEXT("Single-cast")),
+					PrimarySourceFilename,
+					DelegateDesc->LineNumber);
+			}
+
+			AddModuleTestSymbols(ModuleSnapshot, Module->UnitTestFunctions, ModuleSnapshot.UnitTestFunctions, TEXT("UnitTest"), PrimarySourceFilename);
+			AddModuleTestSymbols(ModuleSnapshot, Module->IntegrationTestFunctions, ModuleSnapshot.IntegrationTestFunctions, TEXT("IntegrationTest"), PrimarySourceFilename);
+			ModuleSnapshot.UnitTestFunctionCount = ModuleSnapshot.UnitTestFunctions.Num();
+			ModuleSnapshot.IntegrationTestFunctionCount = ModuleSnapshot.IntegrationTestFunctions.Num();
+			ModuleSnapshot.Symbols.Sort([](const FAngelscriptStateModuleSymbolSnapshot& A, const FAngelscriptStateModuleSymbolSnapshot& B)
+			{
+				if (A.Kind != B.Kind)
+				{
+					return A.Kind < B.Kind;
+				}
+				return A.Name < B.Name;
+			});
+			ModuleSnapshot.SymbolCount = ModuleSnapshot.Symbols.Num();
 			Snapshot.Modules.Add(MoveTemp(ModuleSnapshot));
+		}
+
+		TMap<FString, int32> ModuleIndexByName;
+		for (int32 ModuleIndex = 0; ModuleIndex < Snapshot.Modules.Num(); ++ModuleIndex)
+		{
+			ModuleIndexByName.Add(Snapshot.Modules[ModuleIndex].ModuleName, ModuleIndex);
+		}
+
+		for (const FAngelscriptStateModuleSnapshot& Module : Snapshot.Modules)
+		{
+			for (const FString& ImportedModuleName : Module.ImportedModules)
+			{
+				if (const int32* ImportedModuleIndex = ModuleIndexByName.Find(ImportedModuleName))
+				{
+					Snapshot.Modules[*ImportedModuleIndex].ImportedByModules.AddUnique(Module.ModuleName);
+				}
+			}
+		}
+
+		for (FAngelscriptStateModuleSnapshot& Module : Snapshot.Modules)
+		{
+			Module.ImportedByModules.Sort();
+			Module.ImportedByModuleCount = Module.ImportedByModules.Num();
 		}
 	}
 
@@ -681,6 +862,19 @@ namespace
 
 	void CaptureDiagnostics(FAngelscriptEngine& Engine, FAngelscriptEngineStateSnapshot& Snapshot)
 	{
+		TMap<FString, TPair<int32, int32>> ModuleFileByFilename;
+		for (int32 ModuleIndex = 0; ModuleIndex < Snapshot.Modules.Num(); ++ModuleIndex)
+		{
+			FAngelscriptStateModuleSnapshot& Module = Snapshot.Modules[ModuleIndex];
+			for (int32 FileIndex = 0; FileIndex < Module.Files.Num(); ++FileIndex)
+			{
+				const FAngelscriptStateModuleFileSnapshot& File = Module.Files[FileIndex];
+				const TPair<int32, int32> ModuleFileIndex(ModuleIndex, FileIndex);
+				ModuleFileByFilename.Add(NormalizeFilenameKey(File.AbsoluteFilename), ModuleFileIndex);
+				ModuleFileByFilename.Add(NormalizeFilenameKey(File.RelativeFilename), ModuleFileIndex);
+			}
+		}
+
 		TArray<FString> DiagnosticFiles;
 		Engine.Diagnostics.GetKeys(DiagnosticFiles);
 		DiagnosticFiles.Sort();
@@ -701,7 +895,41 @@ namespace
 				DiagnosticSnapshot.Column = Diagnostic.Column;
 				DiagnosticSnapshot.Severity = Diagnostic.bIsError ? TEXT("Error") : (Diagnostic.bIsInfo ? TEXT("Info") : TEXT("Warning"));
 				DiagnosticSnapshot.Message = Diagnostic.Message;
+				const FString Severity = DiagnosticSnapshot.Severity;
 				Snapshot.Diagnostics.Add(MoveTemp(DiagnosticSnapshot));
+
+				TPair<int32, int32>* ModuleFileIndex = ModuleFileByFilename.Find(NormalizeFilenameKey(DiagnosticFile));
+				if (ModuleFileIndex == nullptr)
+				{
+					continue;
+				}
+
+				FAngelscriptStateModuleSnapshot& ModuleSnapshot = Snapshot.Modules[ModuleFileIndex->Key];
+				FAngelscriptStateModuleFileSnapshot& FileSnapshot = ModuleSnapshot.Files[ModuleFileIndex->Value];
+				FAngelscriptStateModuleDiagnosticSnapshot ModuleDiagnosticSnapshot;
+				ModuleDiagnosticSnapshot.Filename = DiagnosticFile;
+				ModuleDiagnosticSnapshot.Row = Diagnostic.Row;
+				ModuleDiagnosticSnapshot.Column = Diagnostic.Column;
+				ModuleDiagnosticSnapshot.Severity = Severity;
+				ModuleDiagnosticSnapshot.Message = Diagnostic.Message;
+				ModuleSnapshot.Diagnostics.Add(MoveTemp(ModuleDiagnosticSnapshot));
+				++ModuleSnapshot.DiagnosticCount;
+				++FileSnapshot.DiagnosticCount;
+				if (Severity == TEXT("Error"))
+				{
+					++ModuleSnapshot.ErrorCount;
+					++FileSnapshot.ErrorCount;
+				}
+				else if (Severity == TEXT("Info"))
+				{
+					++ModuleSnapshot.InfoCount;
+					++FileSnapshot.InfoCount;
+				}
+				else
+				{
+					++ModuleSnapshot.WarningCount;
+					++FileSnapshot.WarningCount;
+				}
 			}
 		}
 	}

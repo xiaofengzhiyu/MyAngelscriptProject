@@ -124,6 +124,7 @@ Angelscript `.as` example scripts demonstrating core patterns (actor lifecycle, 
 | Tencent UnLua | Pull with `Tools\PullReference\PullReference.bat unlua`; defaults to `Reference\UnLua`; use it to compare Lua reflection exposure, event overrides, and sample organization. See `Reference/README.md` |
 | Tencent puerts | Pull with `Tools\PullReference\PullReference.bat puerts`; defaults to `Reference\puerts`; use it to compare TypeScript/JavaScript runtime integration and declaration generation. See `Reference/README.md` |
 | Tencent sluaunreal | Pull with `Tools\PullReference\PullReference.bat sluaunreal`; defaults to `Reference\sluaunreal`; use it to compare Lua static export, performance trade-offs, and hot-update workflow. See `Reference/README.md` |
+| RAD Debugger | Pull with `Tools\PullReference\PullReference.bat raddebugger`; defaults to `Reference\raddebugger` on the `develop` branch; use it to compare native debugger, debug-info, source navigation, and diagnostics interaction design. See `Reference/README.md` |
 
 - When adding new reference repositories, update `Reference/README.md` first, then add an index entry here.
 

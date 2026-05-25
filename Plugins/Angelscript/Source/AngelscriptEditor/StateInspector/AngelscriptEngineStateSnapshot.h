@@ -12,19 +12,68 @@ struct FAngelscriptStateMemberSnapshot
 	int32 LineNumber = 0;
 };
 
+struct FAngelscriptStateModuleFileSnapshot
+{
+	FString RelativeFilename;
+	FString AbsoluteFilename;
+	int64 CodeHash = 0;
+	int32 DiagnosticCount = 0;
+	int32 ErrorCount = 0;
+	int32 WarningCount = 0;
+	int32 InfoCount = 0;
+};
+
+struct FAngelscriptStateModuleSymbolSnapshot
+{
+	FString Kind;
+	FString Name;
+	FString Declaration;
+	FString Details;
+	FString SourceFilename;
+	FString SearchText;
+	int32 LineNumber = 0;
+};
+
+struct FAngelscriptStateModuleDiagnosticSnapshot
+{
+	FString Filename;
+	int32 Row = 0;
+	int32 Column = 0;
+	FString Severity;
+	FString Message;
+};
+
 struct FAngelscriptStateModuleSnapshot
 {
 	FString ModuleName;
 	FString CodeFiles;
+	int64 CodeHash = 0;
+	int64 CombinedDependencyHash = 0;
 	int32 CodeFileCount = 0;
 	int32 ImportedModuleCount = 0;
+	int32 ImportedByModuleCount = 0;
 	int32 ClassCount = 0;
 	int32 PropertyCount = 0;
 	int32 MethodCount = 0;
 	int32 EnumCount = 0;
 	int32 DelegateCount = 0;
+	int32 SymbolCount = 0;
+	int32 UnitTestFunctionCount = 0;
+	int32 IntegrationTestFunctionCount = 0;
+	int32 DiagnosticCount = 0;
+	int32 ErrorCount = 0;
+	int32 WarningCount = 0;
+	int32 InfoCount = 0;
 	bool bCompileError = false;
 	bool bLoadedPrecompiledCode = false;
+	bool bModuleSwapInError = false;
+	TArray<FString> ImportedModules;
+	TArray<FString> ImportedByModules;
+	TArray<FString> UnitTestFunctions;
+	TArray<FString> IntegrationTestFunctions;
+	TArray<FAngelscriptStateModuleFileSnapshot> Files;
+	TArray<FAngelscriptStateModuleSymbolSnapshot> Symbols;
+	TArray<FAngelscriptStateModuleDiagnosticSnapshot> Diagnostics;
 };
 
 struct FAngelscriptStateScriptClassSnapshot

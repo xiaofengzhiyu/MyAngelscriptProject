@@ -60,6 +60,7 @@
 | Tencent UnLua | 使用 `Tools\PullReference\PullReference.bat unlua` 默认拉取到 `Reference\UnLua`；用于参考 Lua 反射接入、事件覆写与示例组织；详情见 `Reference/README.md` |
 | Tencent puerts | 使用 `Tools\PullReference\PullReference.bat puerts` 默认拉取到 `Reference\puerts`；用于参考 TypeScript/JavaScript 脚本运行时与声明生成；详情见 `Reference/README.md` |
 | Tencent sluaunreal | 使用 `Tools\PullReference\PullReference.bat sluaunreal` 默认拉取到 `Reference\sluaunreal`；用于参考 Lua 静态导出、性能取舍与热更新工作流；详情见 `Reference/README.md` |
+| RAD Debugger | 使用 `Tools\PullReference\PullReference.bat raddebugger` 默认拉取到 `Reference\raddebugger` 的 `develop` 分支；用于参考原生调试器、调试信息、源码导航与诊断交互设计；详情见 `Reference/README.md` |
 
 - 后续新增参考仓库时，优先先更新 `Reference/README.md`，再回到本表补索引。
 

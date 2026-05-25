@@ -22,7 +22,7 @@
 | RunTestSuite | `Tools\RunTestSuite.ps1` | 按具名 suite 顺序执行一组标准测试前缀 | `Tools\RunTestSuite.ps1 -Suite Smoke -LabelPrefix smoke -TimeoutMs 600000` | 多个 `Saved/Tests/<Label>/<RunId>/` 子目录 | 只做调度，底层仍调用 `RunTests.ps1` |
 | Get-UbtProcess | `Tools\Diagnostics\powershell\Get-UbtProcess.ps1` | 枚举本机 UBT / `Build.bat` / `RunUBT.bat` 相关进程，帮助排查争用 | `Tools\Diagnostics\Get-UbtProcess.bat -CurrentWorktreeOnly` | 控制台列表 | 用于定位旧流程或残留进程 |
 | GetAutomationReportSummary | `Tools\GetAutomationReportSummary.ps1` | 根据 `Report/` 与 `Automation.log` 生成轻量摘要 | `Tools\GetAutomationReportSummary.ps1 -ReportPath <dir> -LogPath <log>` | `Summary.json` 或 stdout 对象 | 用于识别假绿与失败详情 |
-| PullReference | `Tools\PullReference\PullReference.bat` | 拉取或同步参考仓库 | `Tools\PullReference\PullReference.bat angelscript` / `hazelightdocs` / `unrealcsharp` / `unlua` / `puerts` / `sluaunreal` | `Reference\...` | 不参与默认 build/test 流程 |
+| PullReference | `Tools\PullReference\PullReference.bat` | 拉取或同步参考仓库 | `Tools\PullReference\PullReference.bat angelscript` / `hazelightdocs` / `unrealcsharp` / `unlua` / `puerts` / `sluaunreal` / `raddebugger` | `Reference\...` | 不参与默认 build/test 流程 |
 | GenerateAgentConfigTemplate | `Tools\Bootstrap\GenerateAgentConfigTemplate.bat` | 生成本机模板版 `AgentConfig.ini` | `Tools\Bootstrap\GenerateAgentConfigTemplate.bat` | `AgentConfig.ini` | 仍可用，但新 worktree 更推荐 `Tools\Bootstrap\BootstrapWorktree.bat` |
 | RunAutomationTests (legacy) | `Tools\RunAutomationTests.ps1` / `Tools\RunAutomationTests.bat` | 兼容旧脚本的过渡包装层 | 无 | 兼容旧产物布局 | 保留兼容，不作为官方入口 |
 | RunToolingSmokeTests | `Tools\Tests\RunToolingSmokeTests.ps1` | 自测 bootstrap、模板解析、输出布局、超时与进程清理 | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\Tests\RunToolingSmokeTests.ps1` | 控制台 PASS/FAIL | 不依赖 Pester |
