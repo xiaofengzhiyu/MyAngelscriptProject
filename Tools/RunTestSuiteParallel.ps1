@@ -520,6 +520,7 @@ $suiteDurationMs = [int]((Get-Date) - $suiteStartedAt).TotalMilliseconds
 
 New-Item -ItemType Directory -Path $summaryRoot -Force | Out-Null
 $summaryPath = Join-Path $summaryRoot 'ParallelSuiteSummary.json'
+$shardResults = @($results.ToArray())
 
 $summaryObject = [PSCustomObject]@{
     Strategy          = $Strategy
@@ -536,7 +537,7 @@ $summaryObject = [PSCustomObject]@{
     AggregatedFailed  = $failedTests
     AggregatedTotal   = $totalTests
     WorkerPlan        = if ($null -ne $workerPlan) { ConvertTo-AngelscriptWorkerPlanJson -Plan $workerPlan } else { $null }
-    Shards            = @($results)
+    Shards            = $shardResults
 }
 
 Write-Utf8JsonFile -Path $summaryPath -Value $summaryObject
