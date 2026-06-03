@@ -5,7 +5,7 @@
 - This file is guidance for AI agents working in `AngelscriptProject`.
 - The primary goal is not to extend a regular game project, but to organize, verify, and solidify `Plugins/Angelscript` as a standalone, reusable Angelscript plugin for Unreal Engine. This repository serves as the host project for plugin development and validation; the real deliverable is the `Angelscript` plugin itself.
 - The plugin is **no longer in prototype or foundation-building phase**. It has entered a maturity stage where the core runtime, editor integration, and test infrastructure are established, but external delivery entry points and several key capability closures still need attention.
-- Current baseline: `AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptTest` three-UE-module structure is stable, with `121` `Bind_*.cpp` files, `27+` CSV state export tables, `1518+` automation test definitions across `430` test `.cpp` files, `DebugServer V2` protocol, `CodeCoverage`, `StaticJIT`, and `BlueprintImpact Commandlet` all landed. Only `2` tests remain Disabled (both `#ue57-headless` known limitations).
+- Current baseline: `AngelscriptRuntime` / `AngelscriptEditor` / `AngelscriptTest` three-UE-module structure is stable, with `121` `Bind_*.cpp` files, `27+` CSV state export tables, `1518+` automation test definitions across `430` test `.cpp` files, `DebugServer V2` protocol, `CodeCoverage`, `StaticJIT`, and `BlueprintImpact Commandlet` all landed. GameplayTags support now lives in the optional `AngelscriptGameplayTags` plugin, while `AngelscriptGAS` depends on it for GAS-facing integration. Only `2` tests remain Disabled (both `#ue57-headless` known limitations).
 - AngelScript base version is `2.33 + selective 2.38 compatibility`; the fork has diverged too far for a wholesale upgrade — the strategy is to selectively absorb improvements from higher versions. See `Documents/Guides/AngelscriptForkStrategy.md`.
 - `Plugins/Angelscript/` is the core workspace. The vast majority of implementation, fixes, cleanup, and tests should land here first. `Source/AngelscriptProject/` retains only the minimal host project content — do not push plugin logic back into the project module unless the task explicitly requires it.
 
@@ -42,6 +42,12 @@ AngelscriptProject/
 │       │   └── ContentBrowser/              # .as files in Content Browser
 │       ├── AngelscriptTest/                 # Test module (430 .cpp, 28+ themes)
 │       └── AngelscriptUHTTool/              # UHT C# code gen toolchain
+│
+├── Plugins/AngelscriptGameplayTags/         # Optional GameplayTags extension plugin
+│   ├── Source/
+│   │   ├── AngelscriptGameplayTags/         # Runtime GameplayTag bindings and replay
+│   │   ├── AngelscriptGameplayTagsEditor/   # GameplayTag change listener and reload bridge
+│   │   └── AngelscriptGameplayTagsTest/     # GameplayTags-specific automation tests
 │
 ├── Source/                                  # Host project (minimal, 8 files)
 ├── Script/                                  # AngelScript examples (37 .as)
@@ -122,6 +128,13 @@ AngelscriptRuntime  (Runtime module, no intra-plugin dependencies)
        │
        └──► AngelscriptTest    (Editor module, public dependency on Runtime,
                                 private dependency on Editor when bBuildEditor)
+
+AngelscriptGameplayTags  (Runtime module, public dependency on Runtime; optional)
+       │
+       ├──► AngelscriptGameplayTagsEditor  (Editor module, GameplayTags delegate/reload bridge)
+       └──► AngelscriptGameplayTagsTest    (Editor module, GameplayTags-specific tests)
+
+AngelscriptGAS  (Runtime module, public dependency on Runtime + AngelscriptGameplayTags)
 
 AngelscriptUHTTool  (C# UBT plugin, independent — hooks into Unreal Header Tool pipeline)
 ```
@@ -208,7 +221,7 @@ Angelscript `.as` example scripts demonstrating core patterns (actor lifecycle, 
 
 ## Submodule & Worktree
 
-- The plugin directories (`Plugins/Angelscript`, `Plugins/AngelscriptGAS`) are **git submodules**, not ordinary directories. `git worktree add` does not initialize them.
+- The plugin directories (`Plugins/Angelscript`, `Plugins/AngelscriptGameplayTags`, `Plugins/AngelscriptGAS`) are **git submodules**, not ordinary directories. `git worktree add` does not initialize them.
 - One-shot setup: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\Bootstrap\NewWorktree.ps1 -Name <change-name>` creates the parent worktree, initializes/fallbacks all submodules, writes `AgentConfig.ini`, and scaffolds an empty `openspec/changes/<change-name>/` directory in one step.
 - `BootstrapWorktree.ps1` remains the entry point for re-initializing an *existing* worktree (e.g. after switching engine root). It is invoked internally by `NewWorktree.ps1`; you only need to call it directly when fixing up a worktree that already exists.
 - When the target code lives inside a submodule, it is a dual-repo change: OpenSpec artifacts in the parent, source code in the submodule. Commit submodule first, then update the parent gitlink.

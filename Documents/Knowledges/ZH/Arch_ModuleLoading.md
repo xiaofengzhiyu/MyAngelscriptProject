@@ -326,7 +326,7 @@ void FAngelscriptEditorModule::StartupModule()
     if (FAngelscriptEngine::IsInitialized() && FAngelscriptEngine::Get().IsInitialCompileFinished())
         FComponentTypeRegistry::Get().Invalidate();
 
-    RegisterGameplayTagDelegates();                                     // ④ GameplayTag 多播
+    // ④ GameplayTag 多播：现由 AngelscriptGameplayTagsEditor 模块负责
     if (!GOnPostEngineInitHandle.IsValid())                             // ⑤ ★ OnPostEngineInit
         GOnPostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddStatic(&OnEngineInitDone);
     UScriptEditorMenuExtension::InitializeExtensions();                 // ⑥ 菜单扩展

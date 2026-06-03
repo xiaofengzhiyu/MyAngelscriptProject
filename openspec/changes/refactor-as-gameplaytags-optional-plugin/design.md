@@ -53,6 +53,10 @@ Alternatives considered:
 
 If GAS still needs GameplayTag-facing functionality later, it can depend on the optional plugin or expose its own narrow integration layer. But the core GameplayTag binding surface should not be locked to GAS ownership.
 
+### D5: Name the standalone plugin `AngelscriptGameplayTags`
+
+The plugin name uses Unreal's plural `GameplayTags` naming to match the engine module and the existing `AngelscriptGAS` naming style. `AngelscriptGAS` depends on both `Angelscript` and `AngelscriptGameplayTags`, while `AngelscriptGameplayTags` does not depend on GAS.
+
 ## Risks / Trade-offs
 
 - [The optional plugin introduces one more module boundary] -> Mitigation: keep the plugin small and let it depend only on the runtime extension seam plus `GameplayTags`.
@@ -66,8 +70,8 @@ If GAS still needs GameplayTag-facing functionality later, it can depend on the 
 3. Remove the GameplayTag-specific runtime binding code and its direct `GameplayTags` dependency from the core runtime module if no other runtime code needs it.
 4. Add tests that prove the plugin remains optional and that GameplayTag replay still works when enabled.
 
-## Open Questions
+## Resolved Questions
 
-- Should the optional plugin live under `Plugins/AngelscriptGameplayTags/` or reuse the `AngelscriptGAS` repository as a sibling plugin?
-- Should the extension expose a single replay method or separate methods for initial bind and replay bind?
-- Does the optional plugin need its own test module, or can it reuse the existing Angelscript test infrastructure?
+- The optional plugin lives under `Plugins/AngelscriptGameplayTags/` and has its own remote repository.
+- The public replay API remains `AngelscriptRebindGameplayTagsToCurrentEngine()` for test and compatibility usage; extension attach establishes an engine scope before replay.
+- The optional plugin owns its own `AngelscriptGameplayTagsTest` module and uses the `Angelscript.GameplayTags.*` automation prefix.

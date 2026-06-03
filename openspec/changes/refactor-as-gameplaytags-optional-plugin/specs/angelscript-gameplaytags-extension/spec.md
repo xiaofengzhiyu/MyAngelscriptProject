@@ -22,11 +22,11 @@ The optional GameplayTag extension SHALL preserve the current cached GameplayTag
 - **WHEN** a tag is registered through the extension
 - **THEN** its parent tags SHALL also be cached and made available through the same script binding surface
 
-### Requirement: GameplayTag support can replay to the current engine
-The optional GameplayTag extension SHALL provide a replay path that rebinds cached tags to the currently scoped engine.
+### Requirement: GameplayTag support can replay to the active engine
+The optional GameplayTag extension SHALL provide a replay path that rebinds cached tags to the active engine, including extension attach paths that receive an engine explicitly.
 
 #### Scenario: Rebind to a fresh engine
-- **WHEN** the current engine changes and the GameplayTag extension replays its cached state
+- **WHEN** the active engine changes and the GameplayTag extension replays its cached state
 - **THEN** the cached GameplayTags SHALL be bound again on the new engine
 
 #### Scenario: Rebind works after late engine attachment
@@ -43,6 +43,6 @@ The optional GameplayTag extension SHALL be usable without enabling `Angelscript
 ## Testing Requirements
 
 - Target test layer: Runtime CppTests or Runtime Integration tests, depending on whether the test needs real engine attach/replay behavior.
-- Expected Automation prefix: `Angelscript.TestModule.CppTests.GameplayTags.*`
+- Expected Automation prefix: `Angelscript.GameplayTags.*`
 - Recommended helper/harness: the runtime extension registry test fixture from `as-engine-extension-registry`, plus engine lifecycle helpers that can swap active engines deterministically.
-- Verification entry point: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.TestModule.CppTests.GameplayTags" -Label angelscript-gameplaytags-extension -TimeoutMs 900000`
+- Verification entry point: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools\RunTests.ps1 -TestPrefix "Angelscript.GameplayTags" -Label angelscript-gameplaytags-extension -TimeoutMs 900000`

@@ -33,7 +33,13 @@ AngelscriptRuntime  (Runtime, 无插件内依赖)
     +--> AngelscriptTest    (Editor, public 依赖 Runtime,
                              私有依赖 Editor [仅 bBuildEditor])
 
+AngelscriptGameplayTags (Runtime, 独立插件; public 依赖 AngelscriptRuntime,
+                         GameplayTags)
+    |
+    +--> AngelscriptGameplayTagsTest (Editor, GameplayTags 专项测试)
+
 AngelscriptGAS      (Runtime, 独立插件; public 依赖 AngelscriptRuntime,
+                     AngelscriptGameplayTags,
                      GameplayAbilities / GameplayTasks / GameplayTags)
     |
     +--> AngelscriptGASTest (Editor, GAS 专项测试)
@@ -41,28 +47,30 @@ AngelscriptGAS      (Runtime, 独立插件; public 依赖 AngelscriptRuntime,
 AngelscriptUHTTool  (C# UBT 插件, 独立; 接入 Unreal Header Tool 流水线)
 ```
 
-UE 模块默认在 `PostDefault` 阶段加载。`GameplayTags` 仍保留在主 `Angelscript` 插件；`GameplayAbilities` / `GameplayTasks` 支持拆到可选的 `AngelscriptGAS` 插件。
+UE 模块默认在 `PostDefault` 阶段加载。`GameplayTags` 脚本绑定拆到可选的 `AngelscriptGameplayTags` 插件；`AngelscriptGAS` 同时依赖 `Angelscript`、`AngelscriptGameplayTags` 和 UE 的 `GameplayAbilities` / `GameplayTasks` / `GameplayTags` 模块。
 
 ### 核心子系统（AngelscriptRuntime）
 
 | 子系统 | 目录 | 关键能力 |
 |--------|------|---------|
 | **引擎核心** | `Core/` | `AngelscriptEngine` 单例、4 阶段编译流（parse → preprocess → compile → link）、AS 与 UE 类型映射 |
-| **类型绑定** | `Binds/` | **124** 个 `Bind_*.cpp` 暴露 UE 类型（数学/Actor/Component/Physics/UMG/Delegate/Container/JSON/GameplayTags/EnhancedInput 等）+ `BlueprintCallableReflectiveFallback` 兜底 |
+| **类型绑定** | `Binds/` | `Bind_*.cpp` 暴露核心 UE 类型（数学/Actor/Component/Physics/UMG/Delegate/Container/JSON/EnhancedInput 等）+ `BlueprintCallableReflectiveFallback` 兜底 |
 | **类生成器** | `ClassGenerator/` | AS class → 活跃 UClass/UStruct，支持属性布局、函数 stub、热重载版本链 |
 | **预处理器** | `Preprocessor/` | `#include` / `#if` / 条件编译 / 注释式文档提取 |
 | **Static JIT** | `StaticJIT/` | AS 字节码 → 优化的近原生执行；`PrecompiledData` 负责模块持久化 |
 | **DAP 调试** | `Debugging/` | 兼容 DAP 协议的 TCP 调试服务器（断点/单步/变量检视/调用栈） |
 | **脚本子系统** | `Subsystem/` | `ScriptWorldSubsystem` / `ScriptGameInstanceSubsystem` / `ScriptEngineSubsystem` / `ScriptLocalPlayerSubsystem` |
-| **函数库** | `FunctionLibraries/` | 21+ Mixin 库为数学类型/Actor/Component/GameplayTag/Widget 等增加辅助方法 |
+| **函数库** | `FunctionLibraries/` | Mixin 库为数学类型/Actor/Component/Widget 等增加辅助方法 |
 | **状态导出** | `Dump/` | 27+ CSV 表导出器；纯外部观察者，不入侵运行时 |
 | **代码覆盖率** | `CodeCoverage/` | AngelScript 行级覆盖率追踪 + HTML/JSON 报告 |
 | **第三方 AS 内核** | `ThirdParty/angelscript/` | Vendored AngelScript 2.33 源码 + 本地补丁 |
 
-### 可选扩展插件（AngelscriptGAS）
+### 可选扩展插件（AngelscriptGameplayTags / AngelscriptGAS）
 
 | 插件 | 目录 | 关键能力 |
 |------|------|---------|
+| **AngelscriptGameplayTags** | `Plugins/AngelscriptGameplayTags/Source/AngelscriptGameplayTags/` | `FGameplayTag` / `FGameplayTagContainer` / `FGameplayTagQuery` 脚本绑定、缓存注册与 replay |
+| **AngelscriptGameplayTagsTest** | `Plugins/AngelscriptGameplayTags/Source/AngelscriptGameplayTagsTest/` | `Angelscript.GameplayTags.*` 自动化测试 |
 | **AngelscriptGAS** | `Plugins/AngelscriptGAS/Source/AngelscriptGAS/` | 脚本可继承的 GAS 基类、Ability/Attribute/Effect/Task 绑定与工具库 |
 | **AngelscriptGASTest** | `Plugins/AngelscriptGAS/Source/AngelscriptGASTest/` | `Angelscript.GAS.*` 自动化测试 |
 
@@ -102,6 +110,7 @@ AngelscriptProject/
 │       ├── AngelscriptEditor/   # 编辑器集成
 │       ├── AngelscriptTest/     # 测试模块
 │       └── AngelscriptUHTTool/  # UBT C# 插件
+├── Plugins/AngelscriptGameplayTags/ # 可选 GameplayTags 扩展插件
 ├── Plugins/AngelscriptGAS/      # 可选 GAS 扩展插件
 ├── Source/AngelscriptProject/   # Host Project 模块（最小化，仅为给 UE 一个有效 Target）
 ├── Script/                      # AngelScript 示例脚本（Examples/Core, EnhancedInput, Extended）
