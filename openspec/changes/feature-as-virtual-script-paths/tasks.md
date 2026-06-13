@@ -5,7 +5,7 @@
 ## 2. Virtual Path Value Model
 
 - [x] 2.1 <!-- TDD --> Add focused FileSystem tests for parsing `/Angelscript/Game`, `/Angelscript/Plugin`, `/Angelscript/Memory/Immediate`, invalid path rejection, full virtual path preservation, and module-name derivation.
-- [x] 2.2 <!-- TDD --> Implement `FAngelscriptVirtualScriptPath` and `FAngelscriptScriptSource` under `AngelscriptRuntime/Core`.
+- [x] 2.2 <!-- TDD --> Implement `FAngelscriptVirtualPath` and `FAngelscriptSource` under `AngelscriptRuntime/Core`.
 
 ## 3. Preprocessor Integration
 

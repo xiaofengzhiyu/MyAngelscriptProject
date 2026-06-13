@@ -35,7 +35,7 @@ SourceText optional
 SourceKind
 ```
 
-Existing `FFilenamePair` and `FAngelscriptPreprocessor::AddFile()` remain compatibility adapters. New code can use `FAngelscriptScriptSource` and `FAngelscriptPreprocessor::AddSource()`. `FFilenamePair` carries `VirtualPath` so legacy queues, including editor hot reload, can preserve descriptor identity while keeping their old absolute/relative fields.
+Existing `FFilenamePair` and `FAngelscriptPreprocessor::AddFile()` remain compatibility adapters. New code can use `FAngelscriptSource` and `FAngelscriptPreprocessor::AddSource()`. `FFilenamePair` carries `VirtualPath` so legacy queues, including editor hot reload, can preserve descriptor identity while keeping their old absolute/relative fields.
 
 ### 4. Preserve module compatibility
 
