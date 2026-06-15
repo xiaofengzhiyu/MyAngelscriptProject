@@ -148,13 +148,15 @@
 
 ## 2. Core — 引擎核心
 
-> 源文件：`Core/AngelscriptEngineCoreTests.cpp`、`Core/AngelscriptBindConfigTests.cpp`、`Core/AngelscriptEngineParityTests.cpp`
+> 源文件：`Core/AngelscriptEngineCoreTests.cpp`、`Core/AngelscriptBindConfigTests.cpp`、`Core/AngelscriptEngineParityTests.cpp`、`Core/AngelscriptSnippetExecutionTests.cpp`、`Core/AngelscriptSnippetConsoleTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
 | Engine.CreateDestroy | 引擎创建与销毁生命周期正常 |
 | Engine.CompileSnippet | 代码片段编译 |
 | Engine.ExecuteSnippet | 代码片段执行 |
+| Core.SnippetExecution.* | `/Angelscript/Memory/Immediate` statement/full-source snippet 执行、重复运行隔离、诊断、异常、模块保留与负向入口 |
+| Core.SnippetConsole.* | `as.Snippet.ExecuteFile` 注册、文件执行成功与读文件失败输出 |
 | Engine.BindConfig.GlobalDisabledBindNames | 全局设置中禁用绑定名后，对应绑定不执行 |
 | Engine.BindConfig.EngineDisabledBindNames | 引擎级禁用绑定集合生效 |
 | Engine.BindConfig.UnnamedBindBackwardCompatibility | 未命名绑定的向后兼容行为 |
@@ -507,6 +509,7 @@
 |--------|----------|
 | HotReload.ModuleRecordTracking | 模块记录/追踪热重载相关状态 |
 | HotReload.DiscardModule | 丢弃模块后引擎状态符合预期 |
+| HotReload.DiscardModuleRemovesGlobalFunctionAvailability | 丢弃模块后释放 AS 全局函数可见性，后续模块可复用同签名全局函数 |
 | HotReload.DiscardAndRecompile | 丢弃后能重新编译同一/新模块 |
 | HotReload.ModuleWatcherQueuesFileChanges | 文件监视器将变更入队供重载 |
 | HotReload.AddModifyLookupFlow | 新增并修改模块后，lookup/函数执行结果应更新到最新脚本体 |
@@ -757,6 +760,7 @@
 | FileSystem.SkipRules | 跳过规则（不扫描某些路径） |
 | FileSystem.VirtualScriptPaths.CanonicalRoots | `/Angelscript/Game`、`/Angelscript/Plugin/<PluginName>`、`/Angelscript/Memory/Immediate` 解析、相对路径和模块名规则 |
 | FileSystem.VirtualScriptPaths.InvalidInputs | URI scheme、非 `/Angelscript` 根、大小写错误、非 `.as`、空段、尾部 `/`、`.`/`..` 和反斜杠路径被拒绝 |
+| FileSystem.VirtualScriptPaths.MemorySourceRequiresMemoryRoot | `TryFromMemorySource()` 拒绝 `/Angelscript/Game/...` 和 `/Angelscript/Plugin/...`，只允许 memory-backed source 使用 `/Angelscript/Memory/...` |
 | FileSystem.VirtualScriptPaths.SourceDescriptorsKeepFullNames | Game、Plugin、Plugin 根目录源、Memory source descriptor 保留完整虚拟路径和兼容模块名 |
 | FileSystem.VirtualScriptPaths.DiscoveryFullNames | 磁盘发现为项目/插件脚本输出完整 `/Angelscript/...` 虚拟路径并保留旧 filename discovery 兼容元数据 |
 | FileSystem.VirtualScriptPaths.LegacyRootPathOverrideWinsWhenDescriptorsAreStale | 旧测试/工具只临时覆盖 `AllRootPaths` 时，不会被陈旧 `AllScriptRoots` descriptor 遮蔽 |
@@ -765,7 +769,7 @@
 
 ## 11. Editor — 编辑器
 
-> 源文件：`AngelscriptEditor/Tests/AngelscriptDirectoryWatcherTests.cpp`、`AngelscriptEditor/Tests/AngelscriptDirectoryWatcherRootResolutionTests.cpp`
+> 源文件：`AngelscriptEditor/Tests/AngelscriptDirectoryWatcherTests.cpp`、`AngelscriptEditor/Tests/AngelscriptDirectoryWatcherRootResolutionTests.cpp`、`AngelscriptEditor/Tests/AngelscriptEditorModuleMenuTests.cpp`
 
 | 测试名 | 验证内容 |
 |--------|----------|
@@ -778,6 +782,7 @@
 | Editor.DirectoryWatcher.Queue.PreservesPluginVirtualPath | plugin script root 下的文件事件入队时保留 `/Angelscript/Plugin/<PluginName>/...` |
 | Editor.DirectoryWatcher.GatherLoadedScriptsForFolder.DeduplicatesAndRejectsPrefixCollisions | 删除目录枚举已加载脚本时去重、拒绝前缀碰撞并保留 code section virtual path |
 | Editor.DirectoryWatcher.Queue.DuplicateStormDeduplicatesEntries | 事件风暴下同一路径重复变更保持去重入队 |
+| Editor.Module.RegisterToolsMenuEntriesAddsWorkspaceSnippetAndLegacyBindCommands | Tools -> Programming 注册 VS Code、Snippet Runner 和 Function Tests 入口，并验证 Snippet Runner 打开动作 |
 
 
 > 源文件：`AngelscriptEditor/Tests/AngelscriptBlueprintImpactScannerTests.cpp`
