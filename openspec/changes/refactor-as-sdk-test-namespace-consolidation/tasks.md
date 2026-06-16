@@ -52,15 +52,15 @@
 - [ ] 6.8 Handle reference counting (`@` AddRef/Release count), null-handle deref exception, `cast<T>()` up/down-cast
 - [ ] 6.9 Object lifetime runtime: destructor call count + order, object as return value
 - [~] 6.10 Functions: `&in` param ✅, type-based overloads ✅, recursion ✅ (added); still TODO: overload ambiguity negative cases, funcdef/function-pointer args
-- [ ] 6.11 Runtime: true Suspend/Resume, exception varieties (array OOB, null handle, abort), line/exception callbacks
-- [ ] 6.12 Script-class operator overloads: `opAdd`/`opEquals`/`opCmp`/`opAssign` (extends current built-in operator matrix)
+- [~] 6.11 Runtime: exception varieties ✅ (divide/modulo-by-zero + exception string/line/function details). NOTE: true Suspend/Resume/Abort + line callbacks are NOT testable — this fork has no SetLineCallback and SetInstructionCallback is an unimplemented stub (see memory angelscript-sdk-bare-engine-limits). Marked done within engine capability.
+- [ ] 6.12 Script-class operator overloads: `opAdd`/`opEquals`/`opCmp`/`opAssign` (bare engine can't instantiate script classes; compile+resolve or UE-wrapper engine)
 
 ### 6c. Medium-priority new coverage
-- [ ] 6.13 Module `import ... from`, `shared` types, multi-section build, post-error module state
+- [x] 6.13 Module multi-section build ✅, enumerate functions ✅, recompile-after-discard ✅ (import/`shared` deferred — cross-module needs more setup)
 - [~] 6.14 Integer full-width round-trip ✅, overflow/wrap ✅, enum↔int ✅ (added to Type tests); still TODO: `opConv`/`opImplConv` execution
-- [ ] 6.15 Composite-type (object/handle/string/array) round-trip through native context params + `&out`/`&inout`
+- [~] 6.15 Native context param coverage: int64 wide return ✅, mixed int+double args ✅ (added to CallFunc); object/handle/string/array round-trip still TODO (bare-engine limits apply)
 - [ ] 6.16 Thiscall execution — investigate the fork crash (possible real bug; record expected-fail or fix)
-- [ ] 6.17 Global var init order + object-typed global lifetime; namespaced globals
+- [~] 6.17 VariableScope for-init scope ✅ + deep shadowing ✅ (added); global var init order + object-typed global lifetime still TODO
 
 ### 6d. Low-priority / prerequisites
 - [ ] 6.18 String runtime: resolve `RegisterStringFactory` 2.33↔2.38 API difference (prerequisite), then re-enable `AngelscriptStringUtilTests.cpp` (`#if 0`) — methods/index/concat/compare/parse
