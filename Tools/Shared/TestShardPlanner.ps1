@@ -22,7 +22,6 @@ $script:AngelscriptDefaultPrefixTimingSec = @{
     'Angelscript.TestModule.ClassGenerator'         = 36.9
     'Angelscript.TestModule.FunctionLibraries'      = 35.0
     'Angelscript.TestModule.Component'              = 34.4
-    'Angelscript.TestModule.Learning'               = 33.7
     'Angelscript.TestModule.HotReload'              = 32.8
     'Angelscript.TestModule.Compiler'               = 32.4
     'Angelscript.TestModule.Actor'                  = 32.0
@@ -81,16 +80,18 @@ function Get-AngelscriptTestPrefixTimingHints {
             continue
         }
 
-        if ($null -eq $meta.Target -or [string]::IsNullOrWhiteSpace([string]$meta.Target)) {
+        $targetProperty = $meta.PSObject.Properties['Target']
+        if ($null -eq $targetProperty -or [string]::IsNullOrWhiteSpace([string]$targetProperty.Value)) {
             continue
         }
 
-        $prefix = [string]$meta.Target
-        if ($null -eq $meta.DurationMs) {
+        $prefix = [string]$targetProperty.Value
+        $durationProperty = $meta.PSObject.Properties['DurationMs']
+        if ($null -eq $durationProperty -or $null -eq $durationProperty.Value) {
             continue
         }
 
-        $durationSec = [math]::Round([double]$meta.DurationMs / 1000.0, 1)
+        $durationSec = [math]::Round([double]$durationProperty.Value / 1000.0, 1)
         if ($durationSec -le 0) {
             continue
         }

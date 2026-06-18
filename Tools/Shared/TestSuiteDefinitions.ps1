@@ -22,12 +22,6 @@ $script:AngelscriptTestSuiteDefinitions = [ordered]@{
     Bindings = @(
         @{ Prefix = 'Angelscript.TestModule.Bindings'; Label = 'Bindings'; Tier = 'Heavy' }
     )
-    LearningNative = @(
-        @{ Prefix = 'Angelscript.TestModule.Learning.Native'; Label = 'LearningNative'; Tier = 'Light' }
-    )
-    LearningRuntime = @(
-        @{ Prefix = 'Angelscript.TestModule.Learning.Runtime'; Label = 'LearningRuntime'; Tier = 'Heavy' }
-    )
     HotReload = @(
         @{ Prefix = 'Angelscript.TestModule.HotReload'; Label = 'HotReload'; Tier = 'Heavy' }
     )
@@ -67,7 +61,6 @@ $script:AngelscriptTestSuiteDefinitions = [ordered]@{
         @{ Prefix = 'Angelscript.TestModule.HotReload'; Label = 'HotReload'; Tier = 'Heavy' }
         @{ Prefix = 'Angelscript.TestModule.Inheritance'; Label = 'Inheritance'; Tier = 'Light' }
         @{ Prefix = 'Angelscript.TestModule.Interface'; Label = 'Interface'; Tier = 'Light' }
-        @{ Prefix = 'Angelscript.TestModule.Learning'; Label = 'Learning'; Tier = 'Light' }
         @{ Prefix = 'Angelscript.TestModule.Memory'; Label = 'Memory'; Tier = 'Light' }
         @{ Prefix = 'Angelscript.TestModule.Networking'; Label = 'Networking'; Tier = 'Light' }
         @{ Prefix = 'Angelscript.TestModule.Parity'; Label = 'Parity'; Tier = 'Light' }

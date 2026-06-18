@@ -34,7 +34,6 @@ $AllEntries = @(
     @{ Prefix = 'Angelscript.TestModule.HotReload'; Label = 'HotReload' },
     @{ Prefix = 'Angelscript.TestModule.Inheritance'; Label = 'Inheritance' },
     @{ Prefix = 'Angelscript.TestModule.Interface'; Label = 'Interface' },
-    @{ Prefix = 'Angelscript.TestModule.Learning'; Label = 'Learning' },
     @{ Prefix = 'Angelscript.TestModule.Memory'; Label = 'Memory' },
     @{ Prefix = 'Angelscript.TestModule.Networking'; Label = 'Networking' },
     @{ Prefix = 'Angelscript.TestModule.Parity'; Label = 'Parity' },
