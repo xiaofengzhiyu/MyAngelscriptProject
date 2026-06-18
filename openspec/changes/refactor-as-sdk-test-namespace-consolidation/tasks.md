@@ -33,9 +33,11 @@
 
 ## 5. Test-pattern modernization (named functions instead of Entry())
 
-- [ ] 5.1 Add shared raw-engine invoker (`FSdkFunctionInvoker` / `CallSdkFunction<R>`) on `asIScriptContext` — resolve-by-decl, typed args, typed return
-- [ ] 5.2 Convert `bool Entry()` self-check tests to per-function named calls with typed args/returns (Function, Operator, Type, Conversion, OOP, Object themes)
-- [ ] 5.3 Confirm no remaining single-aggregate-bool `Entry()` pattern in behavioral SDK tests
+- [x] 5.1 Add shared raw-engine invoker (`FSdkFunctionInvoker`) on `asIScriptContext` — resolve-by-decl, typed args, typed return
+- [x] 5.2 Convert `bool Entry()` self-check tests to per-function named calls with typed args/returns in the six behavioral SDK themes (Function, Operator, Type, Conversion, OOP, Object)
+- [x] 5.3 Confirm no remaining single-aggregate-bool `Entry()` pattern in those six behavioral SDK tests
+- [x] 5.4 Add CQTest class-level raw-engine fixtures (`FNativeSdkEngineFixture`, `FNativeSdkAdapterEngineFixture`) using `BEFORE_ALL()` / `AFTER_ALL()` and per-method `BEFORE_EACH()` reset hooks
+- [x] 5.5 Migrate ordinary AngelScriptSDK CQTest classes to shared class-level engine lifecycle; keep per-method engines only where tests validate engine lifecycle/config isolation, bytecode save/load, stack limits, or internal `asCScriptEngine` parser/bytecode state
 
 ## 6. Broader coverage audit & expansion
 
@@ -66,10 +68,11 @@
 - [ ] 6.18 String runtime: resolve `RegisterStringFactory` 2.33↔2.38 API difference (prerequisite), then re-enable `AngelscriptStringUtilTests.cpp` (`#if 0`) — methods/index/concat/compare/parse
 - [ ] 6.19 Dictionary / `TMap` runtime; deep-scope shadowing; GC incremental (`asGC_ONE_STEP`)/weakref/script-driven cycle; TypeRegistry nested templates
 - [ ] 6.20 Update `Documents/Guides/TestCatalog.md` scale + verification snapshot
+- [x] 6.21 Record the SDK audit context, source-level test inventory, and naming rationale in OpenSpec (`sdk-test-audit.md`)
 
 ## 7. Verification
 
-- [x] 7.1 `Tools\RunBuild.ps1` compiles clean under Unity Build (0 errors) — Result: Succeeded, FinalExitCode 0
-- [x] 7.2 `Tools\RunTestSuite.ps1` — AngelScriptSDK tests pass — 306/306 PASS, 0 failed (RunTests prefix Angelscript.TestModule.AngelScriptSDK)
+- [x] 7.1 `Tools\RunBuild.ps1` compiles clean under Unity Build (0 errors) — Result: Succeeded, FinalExitCode 0 (latest run `Saved\Build\build\20260617_204058_413_ff9e4af1`)
+- [x] 7.2 `Tools\RunTests.ps1` — AngelScriptSDK tests pass — 342/342 PASS, 0 failed (RunTests prefix `Angelscript.TestModule.AngelScriptSDK`, latest report `Saved\Tests\Angelscript.TestModule.AngelScriptSDK\20260617_204107_119_1c6dfb52\Report\index.json`)
 - [ ] 7.3 Remove scratch artifacts (`refactor_private_namespaces.sh`, `REFACTORING_*.md`) before finalizing
 - [ ] 7.4 Commit submodule + parent pointer with accurate (non-broken-build) state
