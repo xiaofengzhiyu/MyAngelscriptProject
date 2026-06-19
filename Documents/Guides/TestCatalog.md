@@ -555,10 +555,26 @@
 
 | 测试名 | 验证内容 |
 |--------|----------|
-| AngelScriptSDK.Builder.SingleModulePipeline | 单模块构建管线端到端 |
-| AngelScriptSDK.Builder.CompileErrors | 编译错误收集与报告 |
-| AngelScriptSDK.Builder.RebuildModule | 模块重建行为 |
-| AngelScriptSDK.Builder.ImportBinding | import/绑定导入路径 |
+| AngelScriptSDK.Builder.CompileFunctionUsesProvidedSectionName | `asCBuilder::CompileFunction` 保留 section 名称并写入目标 module |
+| AngelScriptSDK.Builder.CompileFunctionFailureDoesNotLeakFunction | `CompileFunction` 失败时不泄漏 module function |
+| AngelScriptSDK.Builder.ParseScriptsCreatesParserNodes | 分阶段解析创建 parser 节点，且未提前注册全局函数 |
+| AngelScriptSDK.Builder.GenerateTypesRegistersDeclarations | 类型生成阶段注册 class、namespace class 与 enum |
+| AngelScriptSDK.Builder.GenerateFunctionsRegistersGlobalsAndFunctions | 函数生成阶段注册全局函数与 const global |
+| AngelScriptSDK.Builder.LayoutAndCompileProduceExecutableBytecode | layout/codegen 后产出可执行字节码 |
+| AngelScriptSDK.Builder.StageFailureStopsBeforeExecutableCode | parse 失败时停止在可执行代码生成前 |
+
+### ScriptModule 脚本模块
+
+> 源文件：`AngelScriptSDK/AngelscriptScriptModuleTests.cpp`、`AngelScriptSDK/AngelscriptScriptModuleImportTests.cpp`、`AngelScriptSDK/AngelscriptScriptModuleNamespaceTests.cpp`、`AngelScriptSDK/AngelscriptScriptModuleSectionDiagnosticsTests.cpp`
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| AngelScriptSDK.ScriptModule.SingleModulePipeline | `asIScriptModule` 单模块构建与执行 |
+| AngelScriptSDK.ScriptModule.RebuildModule | 同名 module 重建后执行最新函数体 |
+| AngelScriptSDK.ScriptModule.MultiSectionBuild | 多 section 构建与跨 section 调用 |
+| AngelScriptSDK.ScriptModule.Import.* | import 元数据、手动绑定、签名不匹配、解绑重绑与 `BindAllImportedFunctions` |
+| AngelScriptSDK.ScriptModule.Namespace.* | module default namespace、显式 namespace 与非法 namespace 边界 |
+| AngelScriptSDK.ScriptModule.SectionDiagnostics.* | section 名称、line offset 与跨 section function 归属 |
 
 ### Restore 序列化
 
