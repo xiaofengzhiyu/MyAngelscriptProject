@@ -25,11 +25,11 @@ The runtime SHALL assign supported script sources a canonical `/Angelscript/...`
 - **THEN** it SHALL be valid without a physical filename
 - **AND** its virtual path SHALL be under `/Angelscript/Memory/<Provider>/`
 
-#### Scenario: Immediate memory source path is reserved
+#### Scenario: Immediate memory source path hosts realtime snippets
 
-- **WHEN** future realtime snippets provide memory-backed sources
-- **THEN** their default source identity SHOULD be under `/Angelscript/Memory/Immediate/`
-- **AND** this change SHALL NOT expose a snippet execution API
+- **WHEN** realtime snippets create memory-backed sources
+- **THEN** their source identity SHALL be under `/Angelscript/Memory/Immediate/`
+- **AND** the source SHALL NOT require a physical filename
 
 #### Scenario: Invalid virtual path is rejected
 

@@ -27,7 +27,7 @@ Angelscript C++ automation test `.cpp` files SHALL NOT use `using namespace` dir
 - **THEN** the helper is referenced with explicit namespace qualification
 
 ### Requirement: CQTest-owned helpers live inside the CQTest class
-Angelscript C++ automation test `.cpp` files SHOULD NOT define file-level namespaces ending in `_Private` when those helpers are used by a single `TEST_CLASS_WITH_FLAGS` class. Those helpers SHOULD be declared inside the owning CQTest class under `private:` as static functions, constants, nested structs, or ordinary fixture state as appropriate.
+Angelscript C++ automation test `.cpp` files SHALL NOT define file-level namespaces ending in `_Private` when those helpers are used by a single `TEST_CLASS_WITH_FLAGS` class. Those helpers MUST be declared inside the owning CQTest class under `private:` as static functions, constants, nested structs, or ordinary fixture state as appropriate.
 
 #### Scenario: Helper used only by one CQTest class
 - **WHEN** a helper constant, nested struct, or function is used only by one `TEST_CLASS_WITH_FLAGS` class
