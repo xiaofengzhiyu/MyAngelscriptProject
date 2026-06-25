@@ -545,6 +545,44 @@
 | HotReload.AnalyzeReload.ClassRemoved | 删除类对分析结果的影响 |
 | HotReload.AnalyzeReload.FunctionSignatureChanged | 函数签名变化对重载分析的影响 |
 
+### 重载决策矩阵
+
+> 源文件：`HotReload/AngelscriptHotReloadDecisionMatrixTests.cpp`
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| HotReload.DecisionMatrix.FunctionDefaultArgumentChangeSuggestsFullReload | `UFUNCTION` 默认参数变化应建议 full reload |
+| HotReload.DecisionMatrix.FunctionMetadataChangeSuggestsFullReload | `UFUNCTION` metadata 变化应建议 full reload |
+| HotReload.DecisionMatrix.FunctionBlueprintSpecifierChangeRequiresFullReload | Blueprint 相关函数定义变化应要求 full reload |
+| HotReload.DecisionMatrix.FunctionAddedSuggestsFullReload | 新增普通 `UFUNCTION` 应建议 full reload |
+| HotReload.DecisionMatrix.FunctionRemovedRequiresFullReload | 删除 `UFUNCTION` 应要求 full reload |
+| HotReload.DecisionMatrix.FunctionArgumentNameChangeSuggestsFullReload | 参数名变化应建议 full reload |
+| HotReload.DecisionMatrix.BlueprintEventAddedRequiresFullReload | 新增 `BlueprintEvent` 应要求 full reload |
+| HotReload.DecisionMatrix.DelegateAddedSuggestsFullReload | 新增 delegate 类型应建议 full reload |
+| HotReload.DecisionMatrix.DelegateKindChangeRequiresFullReload | delegate/event kind 变化应要求 full reload |
+| HotReload.DecisionMatrix.DefaultStatementChangeSuggestsFullReload | `default` 语句代码变化应建议 full reload |
+| HotReload.DecisionMatrix.EnumMetadataChangeSuggestsFullReload | enum value metadata 变化应建议 full reload |
+| HotReload.DecisionMatrix.ClassMetadataChangeSuggestsFullReload | class metadata 变化应建议 full reload |
+| HotReload.DecisionMatrix.ClassFlagChangeSuggestsFullReload | class flag 变化应建议 full reload |
+
+### Blueprint 子类热重载
+
+> 源文件：`HotReload/AngelscriptHotReloadBlueprintChildTests.cpp`
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| HotReload.BlueprintChild.EditSpecifierReloadKeepsBlueprintChildInstanceAlive | AS 父类属性从 `NotEditable` 改为 `EditAnywhere` 后，已有 Blueprint 子类实例仍可用 |
+| HotReload.BlueprintChild.SoftReloadKeepsBlueprintChildInstanceOnUpdatedParentBody | 已有 Blueprint 子类和 actor 实例存在时，AS 父类 body-only soft reload 不把 `UBlueprintGeneratedClass` 当作 `UASClass`，并能执行更新后的父类函数 |
+
+### HotReload 序列场景
+
+> 源文件：`HotReload/Sequence/AngelscriptHotReloadSequenceTests.cpp`
+
+| 测试名 | 验证内容 |
+|--------|----------|
+| HotReload.Sequence.MultipleSoftReloadsUpdateRunningBlueprintChildFunction | 同一个已 BeginPlay 的 Blueprint 子类 actor 经历多次 AS 函数体 soft reload 后，函数调用结果持续更新且运行态状态不重置 |
+| HotReload.Sequence.StructuralReloadKeepsBlueprintChildRecoverable | AS 父类结构性 full reload 后，Blueprint 子类仍能通过 AS parent chain 解析到最新类，并可重新 spawn actor 验证新属性/默认值/函数行为 |
+
 ---
 
 ## 6. AngelScriptSDK — 内部机制
